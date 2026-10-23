@@ -1,0 +1,9 @@
+{
+  "name": "Synergym",
+  "short_name": "Synergym",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05294C",
+  "theme_color": "#05294C",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
