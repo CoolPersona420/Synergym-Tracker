@@ -562,7 +562,7 @@ function renderNav() {
   <button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>
   <div class="nav-foot"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span data-sync class="lbl sync"></span>${themeBtn()}</div></div>`;
 }
-function pageTop(title, extra = '', logo = true) {
+function pageTop(title, extra = '', logo = false) {
   const now = new Date();
   return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="muted">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()].slice(0, 3)}</span></div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
 }
