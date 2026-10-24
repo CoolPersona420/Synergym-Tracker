@@ -618,3 +618,24 @@ h2,h3,.ex-h h3,.sh-h h3,.row .t{font-weight:800;letter-spacing:-.02em}
 }
 header.top .ttl{gap:2px}header.top .ttl .brand .mark{width:1.7rem;height:1.7rem}header.top .ttl .wordmark{font-size:1.45rem}header.top .ttl > .muted{font-size:.78rem;padding-left:calc(1.7rem + var(--s-1))}
 header.top .ttl.no-logo > .muted{padding-left:0;font-size:.9rem;font-weight:600;color:var(--ink-2)}
+
+/* ---------- phone: floating new-session button, no + in the Today panel, swipeable dashboard ---------- */
+.dash-dots{display:none}
+@media (max-width:47.99rem){
+  /* the + leaves the dock and floats above it, bottom right */
+  .nav-train{position:absolute;right:var(--gr);bottom:calc(100% + var(--s0));z-index:21}
+  .nav-train .ring{width:3.75rem;height:3.75rem;box-shadow:0 .618rem 1.618rem rgba(0,0,0,.35),0 0 0 4px var(--bg)}
+  .nav-train .ring .ico{width:26px;height:26px}
+  .nav{justify-content:space-around}
+  /* Today panel: no + inside it */
+  .hero-cta .fab{display:none}
+  .hero-cta:has(.what:empty):not(:has(.btn)){display:none}
+  /* dashboard cards become a swipeable carousel */
+  .dash{display:flex;gap:var(--s-1);overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-left:calc(var(--gl) * -1);margin-right:calc(var(--gr) * -1);padding:2px var(--gr) 2px var(--gl);scroll-padding:0 var(--gr) 0 var(--gl)}
+  .dash::-webkit-scrollbar{display:none}
+  .dash > *{flex:0 0 88%;min-width:0;scroll-snap-align:center;scroll-snap-stop:always}
+  .dash > .panel.stats{grid-template-columns:minmax(0,1fr);align-content:start}
+  .dash-dots{display:flex;justify-content:center;gap:8px;margin-top:var(--s0)}
+  .dash-dots button{width:8px;height:8px;border-radius:999px;background:var(--line);transition:width .35s var(--ease),background .35s}
+  .dash-dots button.on{width:22px;background:var(--ink)}
+}

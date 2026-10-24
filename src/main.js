@@ -540,7 +540,17 @@ function render(enter) {
   wake(app && S.view === 'session' && cur() && !cur().endedAt);
   afterRender(enter);
 }
+function wireCarousel() {
+  const d = $('#dash'), dots = $$('#dash-dots button'); if (!d || !dots.length) return;
+  let raf = 0;
+  d.addEventListener('scroll', () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => {
+    const kids = [...d.children], mid = d.scrollLeft + d.clientWidth / 2;
+    let best = 0, bd = Infinity; kids.forEach((k, i) => { const c = k.offsetLeft + k.offsetWidth / 2, dd = Math.abs(c - mid); if (dd < bd) { bd = dd; best = i; } });
+    dots.forEach((b, i) => { b.classList.toggle('on', i === best); b.setAttribute('aria-selected', i === best); });
+  }); }, { passive: true });
+}
 function afterRender(entered) {
+  if (S.view === 'today') wireCarousel();
   if (S.view === 'split' && S.splits.has(S.arg) && !S.recipients.has(S.arg)) loadRecipients(S.arg);
   if (S.view === 'public' && (!S.pub || S.pub.token !== S.arg)) loadPublic(S.arg);
   if (S.view === 'splits' && S.loaded && entered && Date.now() - (S.sharedAt || 0) > 3000) loadShared();
@@ -766,7 +776,7 @@ function vToday() {
     </div>
     <div class="hero-cta">${cta}</div>
   </section>
-  <div class="dash">
+  <div class="dash" id="dash">
     <div class="card rv">
       <div class="card-h"><span class="lbl">Intensity · 30 days</span><span class="lbl">avg ${Math.round(avg)}</span></div>
       ${chart30()}
@@ -786,7 +796,8 @@ function vToday() {
       <div class="term">avg intensity ${Math.round(avg)} · ${prs30} record${prs30 === 1 ? '' : 's'} / 30d</div>
       ${S.profile.restOn ? `<label class="restctl"><span class="lbl" id="restv">rest ${mmss(S.profile.rest * 1000)}</span><input type="range" class="range" data-f="restr" min="15" max="300" step="15" value="${S.profile.rest}" aria-label="Rest between sets"></label>` : `<span class="lbl" style="justify-self:end">rest timer off</span>`}
     </section>
-  </div>`;
+  </div>
+  <div class="dash-dots" id="dash-dots" role="tablist" aria-label="Dashboard cards">${['Intensity', 'Consistency', 'Recent sessions', 'Totals'].map((n, i) => `<button role="tab" data-act="dash-go" data-i="${i}" aria-label="${n}"${i ? '' : ' class="on" aria-selected="true"'}></button>`).join('')}</div>`;
 }
 function rowSession(s) {
   const a = S.A.sess.get(s.id) || { ex: 0, sets: 0, vol: 0, prs: [], int: 0 };
@@ -1474,6 +1485,7 @@ const ACT = {
   'edit-ex': el => editExercise(el.dataset.id),
   'edit-orm': el => editOneRm(el.dataset.id),
   'edit-muscles': editMuscles,
+  'dash-go': el => { const d = $('#dash'), k = d && d.children[+el.dataset.i]; if (k) d.scrollTo({ left: k.offsetLeft - (d.clientWidth - k.offsetWidth) / 2, behavior: reduced ? 'auto' : 'smooth' }); },
   'open-ex': el => { if (!S.link) go('exercise', el.dataset.id); },
   'exm': el => { S.exm = el.dataset.m; $('#exm').innerHTML = muscleChips(); $('#exlist').innerHTML = exList(); },
   'toggle-arch': () => { S.showArchived = !S.showArchived; $('#exlist').innerHTML = exList(); },
