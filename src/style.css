@@ -1126,3 +1126,23 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 .hero-cta .what-pick .wp-d .wp-chip{font-size:var(--t-xs);color:var(--ink-2)}
 /* the exercise list under the up-next selector is hidden everywhere; the picker shows each day's exercises */
 .what-pick > .wp-sub{display:none}
+
+/* headline: each word carries the slant, so lines that wrap stay flush with the left edge */
+.display .ln>span{transform:none!important}
+#view.enter .display .ln>span{animation-name:lineup-flat}
+@keyframes lineup-flat{from{transform:translateY(108%)}}
+.display .w{display:inline-block;transform:skewX(-8deg)}
+
+/* Home action row: one rhythm across states */
+.hero-cta{align-items:center}
+.what-pick.live .wp-d .wp-chip{padding-right:12px}
+.what-pick.live .wp-d .wp-chip::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 1.6s infinite;flex:none}
+@media (max-width:47.99rem){
+  /* the field spans the row so its edges line up with the rest of the page */
+  .hero-cta .what-pick{align-self:stretch;width:100%}
+  .what-pick .wp-m{width:100%}
+  .hero-cta .what-pick .wp-m .wp-chip{width:100%;justify-content:space-between}
+  .what-pick.live .dd{background:var(--solid);color:var(--solid-ink)}
+  .what-pick.live .dd .ico{width:13px;height:13px;margin-left:2px}
+}
+@media (max-width:47.99rem){.hero-cta{align-items:stretch}.hero-cta > div{align-self:flex-start}}

@@ -91,7 +91,8 @@ function big(v) {
   const s = String(v), n = parseFloat(s);
   return s.trim() !== '' && isFinite(n) && /^-?\d+(\.\d+)?$/.test(s) ? `<span class="n count" data-to="${n}" data-dec="${s.includes('.') ? 1 : 0}">${esc(s)}</span>` : `<span class="n">${esc(s)}</span>`;
 }
-const disp = lines => `<h1 class="display">${lines.map((l, k) => `<span class="ln"><span style="--k:${k}">${l}</span></span>`).join('')}</h1>`;
+const slantWords = html => html.replace(/(^|>)([^<]+)/g, (m, a, t) => a + t.split(/(\s+)/).map(w => w.trim() ? `<span class="w">${w}</span>` : w).join(''));
+const disp = lines => `<h1 class="display">${lines.map((l, k) => `<span class="ln"><span style="--k:${k}">${slantWords(l)}</span></span>`).join('')}</h1>`;
 function countUp(root) {
   if (reduced) return;
   for (const el of $$('.count', root)) {
@@ -889,9 +890,9 @@ const QUOTES = [
   ['Small daily improvements over time lead to stunning results.', 'Robin Sharma']
 ];
 /* up-next dropdown: desktop shows a small pill over the day name; phones show one outlined field holding both */
-const pickBtn = (label, day, sub) => `<button class="what what-pick" data-act="next-pick" aria-haspopup="dialog" aria-expanded="false" aria-label="Change what’s up next">
-  <span class="wp-d" aria-hidden="true"><span class="wp-chip"><span class="wp-t">${label}</span><i class="dd">${ICON.down}</i></span><b>${day}</b></span>
-  <span class="wp-m" aria-hidden="true"><span class="wp-chip"><span class="wp-txt"><span class="wp-t">${label}</span><b>${day}</b></span><i class="dd">${ICON.down}</i></span></span>
+const pickBtn = (label, day, sub, o = {}) => `<button class="what what-pick${o.cls ? ' ' + o.cls : ''}" ${o.attrs || 'data-act="next-pick" aria-haspopup="dialog" aria-expanded="false"'} aria-label="${o.aria || 'Change what’s up next'}">
+  <span class="wp-d" aria-hidden="true"><span class="wp-chip"><span class="wp-t">${label}</span>${o.deskIcon === false ? '' : `<i class="dd">${o.icon || ICON.down}</i>`}</span><b>${day}</b></span>
+  <span class="wp-m" aria-hidden="true"><span class="wp-chip"><span class="wp-txt"><span class="wp-t">${label}</span><b>${day}</b></span><i class="dd">${o.icon || ICON.down}</i></span></span>
   <span class="wp-sub">${sub}</span></button>`;
 /* rest days are chosen by hand from Home */
 const isRestToday = () => (S.profile.restDays || []).includes(dayKey(Date.now()));
@@ -913,7 +914,7 @@ function vToday() {
   if (a) {
     const sa = S.A.sess.get(a.id);
     lines = [greet(hi), ...pick([['your session', '<em>is live</em>.'], ['the bar is', '<em>waiting</em>.'], ['finish what', '<em>you started</em>.']], 2)];
-    cta = `<div class="what"><span>In progress</span><b>${esc(sessName(a))}</b><span>${plural(a.items.length, 'exercise')} · ${plural(sa.sets, 'set')} logged</span></div><button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
+    cta = `${pickBtn(`In progress · ${plural(sa.sets, 'set')} logged`, esc(sessName(a)), '', { cls: 'live', attrs: `data-act="resume" data-id="${a.id}"`, aria: 'Resume session', icon: ICON.play, deskIcon: false })}<button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
   } else if (isRestToday()) {
     lines = [greet(hi), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
     cta = nx ? `${pickBtn(`Rest day · up next${nx.picked ? ' · your pick' : ''}`, `${esc(nx.sp.days[nx.i].type || 'Training')}`, `${esc(nx.sp.name)} · day ${nx.i + 1} · waits for tomorrow`)}`
