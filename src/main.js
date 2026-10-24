@@ -70,18 +70,9 @@ function roll(t) { return `<span class="roll"><span data-t="${esc(t)}">${esc(t)}
 let toastT; function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2800); }
 
 /* brand, contour lines, big numerals */
-const MARK = '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#0A5690"/><path d="M21.2 11.4c-.9-1.7-2.8-2.7-5.1-2.7-3 0-5.1 1.6-5.1 4 0 5.3 10.6 2.7 10.6 8.1 0 2.4-2.3 4.1-5.4 4.1-2.4 0-4.5-1.1-5.4-3" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/><circle cx="24.6" cy="7.6" r="2.3" fill="#8CDDF2"/></svg>';
+const MARK = '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect class="m-bg" width="32" height="32" rx="9"/><path class="m-s" d="M21.2 11.4c-.9-1.7-2.8-2.7-5.1-2.7-3 0-5.1 1.6-5.1 4 0 5.3 10.6 2.7 10.6 8.1 0 2.4-2.3 4.1-5.4 4.1-2.4 0-4.5-1.1-5.4-3" fill="none" stroke-width="2.6" stroke-linecap="round"/><circle class="m-d" cx="24.6" cy="7.6" r="2.3"/></svg>';
 const brand = (cls = '') => `<span class="brand ${cls}">${MARK}<span>Synergym</span></span>`;
-function topo(w = 600, h = 420, n = 10, seed = 3) {
-  let r = (seed * 9973) % 2147483647 || 1; const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
-  let d = '';
-  for (let i = 0; i < n; i++) {
-    const y0 = h * (i + .5) / n, amp = 10 + rnd() * 26, f = .8 + rnd() * 1.4, ph = rnd() * 6.283; let p = '';
-    for (let x = -20; x <= w + 20; x += 20) { const y = y0 + Math.sin(x / w * 6.283 * f + ph) * amp + Math.sin(x / w * 6.283 * 3.1 + ph * 1.7) * amp * .22; p += (p ? ' L' : 'M') + x + ' ' + y.toFixed(1); }
-    d += `<path d="${p}"/>`;
-  }
-  return `<svg class="topo-in" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${d}</svg>`;
-}
+const orbs = () => '<div class="orbs" aria-hidden="true"><i class="solid"></i><i class="glass"></i></div>';
 function big(v) {
   const s = String(v), n = parseFloat(s);
   return s.trim() !== '' && isFinite(n) && /^-?\d+(\.\d+)?$/.test(s) ? `<span class="n count" data-to="${n}" data-dec="${s.includes('.') ? 1 : 0}">${esc(s)}</span>` : `<span class="n">${esc(s)}</span>`;
@@ -96,15 +87,38 @@ function countUp(root) {
     el.textContent = (0).toFixed(dec); requestAnimationFrame(step);
   }
 }
-/* theme: system / light / dark, remembered per device */
-const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
-const themePref = () => document.documentElement.dataset.theme || 'system';
+/* themes: Auto follows the system (mono light / mono dark); the rest are named palettes */
+const THEMES = [
+  { id: 'auto', name: 'Auto', note: 'Mono, follows your device', dark: null, c: ['#EDEDED', '#FFFFFF', '#0E0E0E', '#0E0E0E', '#050505'] },
+  { id: 'light', name: 'Mono Light', note: 'Black on white', dark: false, pair: 'dark', c: ['#EDEDED', '#FFFFFF', '#0E0E0E', '#0E0E0E', '#0E0E0E'] },
+  { id: 'dark', name: 'Mono Dark', note: 'White on black', dark: true, pair: 'light', c: ['#050505', '#151515', '#F4F4F4', '#F4F4F4', '#1F1F1F'] },
+  { id: 'solarized-light', name: 'Solarized Light', note: 'Warm paper, blue ink', dark: false, pair: 'solarized-dark', c: ['#FDF6E3', '#FFFCF2', '#073642', '#268BD2', '#073642'] },
+  { id: 'solarized-dark', name: 'Solarized Dark', note: 'Deep teal, cool text', dark: true, pair: 'solarized-light', c: ['#002B36', '#073642', '#EEE8D5', '#268BD2', '#073642'] },
+  { id: 'gruvbox-light', name: 'Gruvbox Light', note: 'Retro cream and rust', dark: false, pair: 'gruvbox-dark', c: ['#FBF1C7', '#F9F5D7', '#3C3836', '#AF3A03', '#3C3836'] },
+  { id: 'gruvbox-dark', name: 'Gruvbox Dark', note: 'Retro charcoal and amber', dark: true, pair: 'gruvbox-light', c: ['#282828', '#32302F', '#EBDBB2', '#FABD2F', '#1D2021'] },
+  { id: 'nord', name: 'Nord', note: 'Arctic blue-grey', dark: true, pair: 'light', c: ['#2E3440', '#3B4252', '#ECEFF4', '#88C0D0', '#3B4252'] },
+  { id: 'dracula', name: 'Dracula', note: 'Night with violet', dark: true, pair: 'light', c: ['#282A36', '#303341', '#F8F8F2', '#BD93F9', '#21222C'] },
+  { id: 'ocean', name: 'Ocean', note: 'The deep blue original', dark: true, pair: 'light', c: ['#073F6F', '#0E4C7E', '#FFFFFF', '#8CDDF2', '#0A5690'] },
+  { id: 'sage', name: 'Sage', note: 'Olive with terracotta', dark: false, pair: 'volt', c: ['#C3C6B1', '#CED1BD', '#1F241D', '#C9583A', '#DE6F4E'] },
+  { id: 'volt', name: 'Volt', note: 'Black with electric lime', dark: true, pair: 'sage', c: ['#0A0A0A', '#161616', '#F2F2F2', '#D4F25A', '#161616'] }
+];
+const themePref = () => document.documentElement.dataset.theme || 'auto';
+const isDark = () => { const t = THEMES.find(x => x.id === themePref()); return t && t.dark != null ? t.dark : matchMedia('(prefers-color-scheme: dark)').matches; };
 function setTheme(t) {
-  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
-  try { t === 'system' ? localStorage.removeItem('sg-theme') : localStorage.setItem('sg-theme', t); } catch {}
-  for (const m of $$('meta[name="theme-color"]')) m.content = isDark() ? '#05294C' : '#EDF3F7';
+  if (!THEMES.some(x => x.id === t)) t = 'auto';
+  if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { t === 'auto' ? localStorage.removeItem('sg-theme') : localStorage.setItem('sg-theme', t); } catch {}
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  for (const m of $$('meta[name="theme-color"]')) m.content = bg || (isDark() ? '#050505' : '#EDEDED');
   render(false);
 }
+function flipTheme() {
+  const t = THEMES.find(x => x.id === themePref());
+  setTheme(t && t.pair ? t.pair : (isDark() ? 'light' : 'dark'));
+}
+const themePicker = () => `<div class="themes">${THEMES.map(t => `<button class="theme-card${themePref() === t.id ? ' on' : ''}" data-act="theme" data-t="${t.id}" aria-pressed="${themePref() === t.id}">
+  <span class="tp" style="background:${t.c[0]}"><b style="background:${t.c[4]}"></b><em style="background:${t.c[1]}"></em><i style="background:${t.c[2]}"></i><u style="background:${t.c[3]}"></u></span>
+  <span>${t.name}<small>${t.note}</small></span></button>`).join('')}</div>`;
 const themeBtn = () => `<button class="theme-btn" data-act="theme-flip" aria-label="Switch to ${isDark() ? 'light' : 'dark'} mode" title="Switch to ${isDark() ? 'light' : 'dark'} mode">${isDark() ? ICON.sun : ICON.moon}</button>`;
 
 /* ================= sanitising ================= */
@@ -429,7 +443,7 @@ function render(enter) {
   document.body.classList.toggle('bare', bare);
   document.body.classList.toggle('in-session', app && S.view === 'session');
   if (enter) { $$('.rv', v).forEach((el, i) => el.style.setProperty('--i', Math.min(i, 10))); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); scrollTo(0, 0); countUp(v); }
-  else scrollTo(0, y);
+  else { v.classList.remove('enter'); scrollTo(0, y); }
   if (app) renderNav();
   syncUI(); tick();
   wake(app && S.view === 'session' && cur() && !cur().endedAt);
@@ -468,8 +482,8 @@ const vLoadError = () => shell(`<h1>Couldn’t load <em>your log</em>.</h1><p cl
 
 /* ---------- auth ---------- */
 function authSide() {
-  return `<aside class="auth-side">${topo(800, 900, 13, 7)}
-    <div>${brand('sea')}</div>
+  return `<aside class="auth-side">${orbs()}
+    <div>${brand('on-hero')}</div>
     <div><span class="lbl" style="color:var(--sea-ink-2)">Strength training log</span>
     ${disp(['Every set', 'builds you,', '<em>session by session</em>.'])}</div>
     <div class="statgrid">
@@ -663,7 +677,7 @@ function vToday() {
       <div style="display:flex;gap:8px;align-items:center">${last ? `<button class="btn line sm" data-act="repeat" data-id="${last.id}">Repeat</button>` : ''}<button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button></div>`;
   }
   return pageTop('Synergym') + `
-  <section class="hero rv">${topo(700, 520, 11, now.getDate())}
+  <section class="hero rv">${orbs()}
     <div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}</div>
     <div class="statgrid">
       <div class="stat">${big(C.thisWeek)}<span class="l">Sessions this week <small>of ${C.target}</small></span></div>
@@ -970,7 +984,6 @@ function vPrefs() {
   return pageTop('Settings') + `<h1 class="h1 rv" style="margin:10px 0 16px">Settings</h1>
   <div class="dash">
   <section class="card rv">
-    <div class="pref"><span class="k">Appearance<small>Ocean is the dark look; Day is light</small></span><span class="seg"><button class="${themePref() === 'system' ? 'on' : ''}" data-act="theme" data-t="system">Auto</button><button class="${themePref() === 'light' ? 'on' : ''}" data-act="theme" data-t="light">Day</button><button class="${themePref() === 'dark' ? 'on' : ''}" data-act="theme" data-t="dark">Ocean</button></span></div>
     <div class="pref"><span class="k">Units<small>Stored precisely; switch any time</small></span><span class="seg"><button class="${p.unit === 'kg' ? 'on' : ''}" data-act="unit" data-u="kg">kg</button><button class="${p.unit === 'lb' ? 'on' : ''}" data-act="unit" data-u="lb">lb</button></span></div>
     <div class="pref"><span class="k">Weekly target<small>Sessions per week for consistency</small></span><span class="stepper"><button data-act="step" data-k="target" data-d="-1" aria-label="Fewer">−</button><span>${p.target}</span><button data-act="step" data-k="target" data-d="1" aria-label="More">+</button></span></div>
     <div class="pref"><span class="k">Rest timer<small>Counts down after you tick a set</small></span><button class="toggle${p.restOn ? ' on' : ''}" data-act="toggle" data-k="restOn" aria-pressed="${p.restOn}" aria-label="Rest timer"></button></div>
@@ -987,6 +1000,7 @@ function vPrefs() {
     <div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn sm" data-act="export" data-f="json">${roll('Export JSON')}</button><button class="btn ghost sm" data-act="export" data-f="csv">${roll('Export CSV')}</button><button class="btn line sm" data-act="import">${roll('Import JSON')}</button></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="signout">${roll('Sign out')}</button><button class="btn line sm" data-act="delete-account" style="color:var(--bad)">${roll('Delete account')}</button></div>
   </section>
+  <section class="card span rv"><div class="card-h"><span class="lbl">Theme</span><span class="lbl">${esc((THEMES.find(t => t.id === themePref()) || THEMES[0]).name)}</span></div>${themePicker()}</section>
   <section class="card span rv"><div class="card-h"><span class="lbl">How the numbers work</span></div><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
@@ -1405,7 +1419,7 @@ const ACT = {
   export: el => exportData(el.dataset.f),
   import: () => $('#imp').click(),
   close: closeSheet,
-  'theme-flip': () => setTheme(isDark() ? 'light' : 'dark'),
+  'theme-flip': flipTheme,
   theme: el => setTheme(el.dataset.t),
   resend: async () => { if (!S.pendingEmail) return; const { error } = await sb.auth.resend({ type: 'signup', email: S.pendingEmail, options: { emailRedirectTo: location.origin } }); S.authMsg = error ? { text: authErr(error), err: true } : { text: 'Sent again. It can take a minute to arrive.', err: false }; render(false); },
   'ob-unit': el => { S.ob.unit = S.profile.unit = el.dataset.u; render(false); },
@@ -1505,8 +1519,7 @@ async function startApp() {
   route(true);
 }
 function boot() {
-  const bg = $('#topo'); if (bg) bg.innerHTML = topo(1440, 1000, 16, 11);
-  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'system') render(false); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
   route(true);
   if (!sb) return;
