@@ -254,7 +254,7 @@ function syncUI() {
   let txt = 'Synced';
   if (OB.failing) txt = navigator.onLine ? 'Couldn’t save · retrying' : 'Offline · saved on this device';
   else if (busy) txt = 'Saving';
-  const net = $('#net'); if (net) { net.hidden = !OB.failing; if (OB.failing) net.textContent = txt; }
+  const net = $('#net'); if (net && !net.classList.contains('upd')) { net.hidden = !OB.failing; if (OB.failing) net.textContent = txt; }
   const as = $('#autosave'); if (as) as.textContent = autosaveText();
 }
 
@@ -911,7 +911,9 @@ function vToday() {
     cta = `<div class="what"><span>In progress</span><b>${esc(sessName(a))}</b><span>${plural(a.items.length, 'exercise')} · ${plural(sa.sets, 'set')} logged</span></div><button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
   } else if (isRestToday()) {
     lines = [greet(hi), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
-    cta = `<div class="what"><span>Rest day</span><b>Recovery counts</b><span>Logged for today${nx ? ` · ${esc(nx.sp.days[nx.i].type || 'Training')} waits for tomorrow` : ''}</span></div>
+    cta = nx ? `<button class="what what-pick" data-act="next-pick" aria-haspopup="dialog" aria-label="Change what’s up next"><span>Rest day · up next${nx.picked ? ' (your pick)' : ''}<i class="dd">${ICON.down}</i></span><b>${esc(nx.sp.days[nx.i].type || 'Training')}</b><span>${esc(nx.sp.name)} · day ${nx.i + 1} · waits for tomorrow</span></button>`
+      : `<div class="what"><span>Rest day</span><b>Recovery counts</b><span>Logged for today</span></div>`;
+    cta += `
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-undo">Undo rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Train anyway"><span class="fab-l" aria-hidden="true">Train anyway</span>${ICON.plus}</button></div>`;
   } else if (nx) {
     const d = nx.sp.days[nx.i], ty = d.type ? esc(d.type) : 'training day';
@@ -2072,6 +2074,24 @@ addEventListener('scroll', () => { if (scT) return; scT = requestAnimationFrame(
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 let installEvt = null;
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
+
+/* new version check: when the app comes back to the foreground, compare the deployed bundle with the running one.
+   Pull-to-refresh is off, so without this a phone tab could keep running an old build. */
+let updT = 0;
+async function checkUpdate() {
+  if (Date.now() - updT < 60000) return; updT = Date.now();
+  try {
+    const mine = document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src'); if (!mine) return;
+    const html = await (await fetch('/', { cache: 'no-store' })).text(), next = (html.match(/\/assets\/index-[^"']+\.js/) || [])[0];
+    if (!next || next === mine) return;
+    const busy = (S.view === 'session' && activeSession()) || !$('#sheet').hidden || isTyping();
+    if (!busy) { flushAll(); setTimeout(() => location.reload(), 400); return; }
+    const n = $('#net'); if (n) { n.hidden = false; n.classList.add('upd'); n.textContent = 'Update ready · tap to refresh'; n.onclick = () => { flushAll(); setTimeout(() => location.reload(), 300); }; }
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+addEventListener('focus', checkUpdate);
+setInterval(checkUpdate, 10 * 60 * 1000);
 
 /* ================= boot ================= */
 function resetState() {
