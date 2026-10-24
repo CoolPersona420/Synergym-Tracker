@@ -601,9 +601,11 @@ async function loadShared() {
   S.shared = (data || []).map(r => ({ id: r.split_id, name: r.name, description: r.description || '', days: cleanDays(r.days), from: r.from_username, sharedAt: Date.parse(r.shared_at) }));
   if (S.view === 'splits' || S.view === 'shared') soft();
 }
+let navKey = null;
 function renderNav() {
   const a = activeSession(), on = v => S.view === v || (v === 'exercises' && S.view === 'exercise') || (v === 'splits' && (S.view === 'split' || S.view === 'shared'));
-  const it = (v, l, i) => `<button class="nav-i${on(v) ? ' on' : ''}" data-act="nav" data-v="${v}">${i}${roll(l)}</button>`;
+  const key = ['today', 'splits', 'exercises', 'history', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
+  const it = (v, l, i) => `<button class="nav-i${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}">${i}${roll(l)}</button>`;
   $('#nav').innerHTML = `<div class="nav-brand">${brand()}</div>
   ${it('today', 'Today', ICON.today)}${it('splits', 'Splits', ICON.split)}
   <button class="nav-train${a ? ' live' : ''}" data-act="${a ? 'resume' : 'start-menu'}" data-id="${a ? a.id : ''}" aria-label="${a ? 'Resume session' : 'Start session'}"><span class="ring">${a ? ICON.play : ICON.plus}</span><span class="nl">${a ? roll('Resume session') : roll('Start session')}</span></button>
@@ -612,7 +614,7 @@ function renderNav() {
   <div class="nav-foot"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span data-sync class="lbl sync"></span>${themeBtn()}</div></div>`;
 }
 function pageTop(title, extra = '', logo = false) {
-  return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}</div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
+  return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
 }
 const vMissing = msg => `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button></header><div class="empty rv"><b>${esc(msg)}</b>It may have been deleted on another device.</div>`;
 const shell = inner => `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}${themeBtn()}</div>${inner}</div></div>`;
@@ -801,7 +803,7 @@ function vToday() {
   } else {
     lines = list.length ? [`Hey ${hi},`, 'every set', '<em>adds up</em>.'] : [`Hey ${hi},`, 'let’s log your', '<em>first session</em>.'];
     cta = `<div class="what"></div>
-      <div style="display:flex;gap:8px;align-items:center">${last ? `<button class="btn line sm" data-act="repeat" data-id="${last.id}" title="Repeat ${esc(sessName(last))}">Repeat last</button>` : ''}<button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button></div>`;
+      <button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button>`;
   }
   return pageTop('Today', '', false) + `
   <section class="hero rv">${heroArt()}
@@ -1150,6 +1152,7 @@ function vPrefs() {
   <section class="card rv" style="display:flex;flex-direction:column;gap:14px">
     <span class="lbl">Account</span>
     <div class="pref" style="padding-top:0"><span class="k">@${esc(S.profile.username)}<small>${esc(S.user.email || '')}</small></span><button class="btn ghost sm" data-act="change-username">${roll('Change')}</button></div>
+    ${standalone() ? '' : `<div class="pref"><span class="k">Install the app<small>Opens full screen from your home screen</small></span><button class="btn sm" data-act="install">${roll('Install')}</button></div>`}
     <p class="muted" style="font-size:13px">Your sessions, exercises and splits are private to your account. Others only see a split when you share it.</p>
     <span class="lbl" style="margin-top:6px">Your data</span>
     <div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn sm" data-act="export" data-f="json">${roll('Export JSON')}</button><button class="btn ghost sm" data-act="export" data-f="csv">${roll('Export CSV')}</button><button class="btn line sm" data-act="import">${roll('Import JSON')}</button></div>
@@ -1170,7 +1173,23 @@ function vPrefs() {
 
 /* ================= sheets ================= */
 function openSheet(html, mount) { const sh = $('#sheet'); $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
-function closeSheet() { $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; }
+function closeSheet() { $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; const sp = $('#sheet .sp'); sp.style.transform = sp.style.transition = sp.style.animation = ''; }
+/* drag a sheet down from its top to dismiss it, like a native bottom sheet */
+(() => {
+  const sp = $('#sheet .sp'); let y0 = null, dy = 0, t0 = 0;
+  sp.addEventListener('touchstart', e => { if (sp.scrollTop > 0 || e.touches.length > 1 || e.target.closest('input,textarea,select,.range')) return; y0 = e.touches[0].clientY; dy = 0; t0 = performance.now(); }, { passive: true });
+  sp.addEventListener('touchmove', e => {
+    if (y0 == null) return; dy = Math.max(0, e.touches[0].clientY - y0);
+    if (sp.scrollTop > 0) { y0 = null; dy = 0; sp.style.transform = ''; return; }
+    sp.style.animation = 'none'; sp.style.transition = 'none'; sp.style.transform = dy ? `translateY(${dy}px)` : '';
+  }, { passive: true });
+  sp.addEventListener('touchend', () => {
+    if (y0 == null) return; const v = dy / Math.max(1, performance.now() - t0); y0 = null;
+    sp.style.transition = 'transform .32s var(--ease)';
+    if (dy > 120 || (dy > 40 && v > .6)) { sp.style.transform = 'translateY(105%)'; setTimeout(closeSheet, 260); }
+    else sp.style.transform = '';
+  });
+})();
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 function confirmSheet(title, body, yes, fn, no = 'Cancel') {
   openSheet(`<div class="sh-h"><h3>${esc(title)}</h3></div><p class="muted">${esc(body)}</p><div class="btns"><button class="btn ghost" data-act="close">${esc(no)}</button><button class="btn danger" id="cf-yes">${esc(yes)}</button></div>`, r => { r.querySelector('#cf-yes').onclick = () => { closeSheet(); fn(); }; });
@@ -1318,7 +1337,7 @@ function toggleDone(setId) {
   if (st.w == null && st.pw != null) st.w = st.pw;
   if (st.r == null && st.pr != null) st.r = st.pr;
   if (!(+st.r > 0)) { render(false); return toast('Add reps first'); }
-  st.done = true; queue('s:' + s.id, 300);
+  st.done = true; queue('s:' + s.id, 300); buzz(12);
   let nextName = null;
   if (st.g && !s.endedAt) { const g = groupsOf(s).find(x => x.g === st.g); if (g) { const idx = g.m.findIndex(x => x.st.id === st.id); const nxt = g.m.slice(idx + 1).find(x => !x.st.done); if (nxt) nextName = exOf(nxt.it.exId)?.name; } }
   render(false);
@@ -1580,6 +1599,11 @@ const ACT = {
   export: el => exportData(el.dataset.f),
   import: () => $('#imp').click(),
   close: closeSheet,
+  install: async () => {
+    if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); installEvt = null; if (r && r.outcome === 'accepted') toast('Synergym is on your home screen'); return; }
+    const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    openSheet(`<h2 style="margin-bottom:8px">Install Synergym</h2><p class="muted">${ios ? 'In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.' : 'Open your browser menu (⋮) and choose <b>Install app</b> or <b>Add to Home screen</b>.'} It then opens full screen, like any other app.</p><button class="btn lg wide" data-act="close" style="margin-top:16px">Got it</button>`);
+  },
   'theme-flip': flipTheme,
   'd-theme': el => { if (!S.draft) return; S.draft.theme = el.dataset.t; applyTheme(el.dataset.t); render(false); },
   'd-set': el => { if (!S.draft) return; S.draft[el.dataset.k] = el.dataset.v; render(false); },
@@ -1608,9 +1632,13 @@ const ACT = {
     toast(`Welcome to Synergym${p.name ? ', ' + p.name : ''}`);
   }
 };
+/* app feel on phones: a light haptic tick on key taps (Android; iOS has no web vibration) */
+const coarse = matchMedia('(pointer:coarse)');
+const BUZZ = new Set(['nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install']);
+const buzz = (ms = 8) => { if (!coarse.matches || reduced) return; try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
-  const fn = ACT[el.dataset.act]; if (fn) { e.preventDefault(); fn(el, e); }
+  const fn = ACT[el.dataset.act]; if (fn) { e.preventDefault(); if (BUZZ.has(el.dataset.act)) buzz(); fn(el, e); }
 });
 document.addEventListener('input', e => {
   const el = e.target, f = el.dataset && el.dataset.f; if (!f) return; const s = cur();
@@ -1666,6 +1694,13 @@ addEventListener('pointermove', e => {
   if (reduced || e.pointerType !== 'mouse') return; mq = e;
   requestAnimationFrame(() => { if (!mq) return; const p = mq; mq = null; for (const b of $$('.magnet')) { const r = b.getBoundingClientRect(), dx = p.clientX - (r.left + r.width / 2), dy = p.clientY - (r.top + r.height / 2), d = Math.hypot(dx, dy); b.style.transform = d < 130 ? `translate(${dx * .28}px,${dy * .28}px) scale(1.06)` : ''; } });
 }, { passive: true });
+
+/* phones: once the page scrolls, the sticky header shows the page title (native large-title pattern) */
+let scT = 0;
+addEventListener('scroll', () => { if (scT) return; scT = requestAnimationFrame(() => { scT = 0; document.body.classList.toggle('scrolled', scrollY > 56); }); }, { passive: true });
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+let installEvt = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
 
 /* ================= boot ================= */
 function resetState() {

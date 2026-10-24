@@ -705,3 +705,32 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-in-back}
 .lite .nav,.lite .transport{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--bg)}
 .lite .list>.row{content-visibility:auto;contain-intrinsic-size:auto 4.2rem}
 @media (min-width:48rem){.hero .hero-ctl{margin-top:var(--s1);padding-top:var(--s0);border-top:1px solid var(--hero-line);align-self:stretch;align-items:flex-start}.hero-ctl .restctl{padding-top:.45rem}}
+
+/* ---------- phones: feel like an installed app ---------- */
+html{overscroll-behavior-y:none}
+button,a,label,input,select,textarea,[data-act]{touch-action:manipulation}
+.ttl-c{display:none}
+@media (hover:none){
+  /* no sticky hover states after a tap; no text selection or callouts on controls */
+  a:hover .roll>span,button:hover .roll>span{transform:none}
+  .row:hover .tri{transform:none;border-left-color:var(--ink-2)}
+  button,.nav,.chip,.seg,.lbl,.tri,.stat,.hm,.display,.wordmark{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+}
+@media (max-width:47.99rem){
+  /* large title collapses into the sticky header once you scroll */
+  .ttl-c{display:block;font-family:var(--font-display);font-weight:600;font-size:1.618rem;line-height:1;letter-spacing:.02em;text-transform:uppercase;transform:translateY(8px) skewX(-8deg);opacity:0;transition:opacity .25s,transform .35s var(--ease)}
+  body.scrolled header.top .ttl-c{opacity:1;transform:skewX(-8deg)}
+  header.top{transition:box-shadow .25s}
+  body.scrolled header.top{box-shadow:0 1px 0 var(--line)}
+  /* tab bar: active icon sits in a pill, which pops when the tab changes */
+  .nav-i{min-width:0;flex:1;gap:4px;padding-top:6px}
+  .nav-i svg{box-sizing:content-box;padding:4px 16px;border-radius:999px;transition:background .3s}
+  .nav-i.on{color:var(--ink)}
+  .nav-i.on svg{background:var(--surface-2)}
+  .nav-i.pop svg{animation:pill .45s var(--ease) both}
+  .nav-i .roll{height:1.2em;line-height:1.2em;font-size:.68rem}
+  /* bottom sheets read as native: a bigger grab handle */
+  .sheet .grab{width:2.6rem;height:5px;margin:6px auto var(--s0);background:var(--muted);opacity:.5}
+}
+@keyframes pill{from{transform:scaleX(.55);opacity:.3}}
+@media (prefers-reduced-motion:reduce){.nav-i.pop svg{animation:none}}
