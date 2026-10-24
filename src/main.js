@@ -156,7 +156,7 @@ function cleanDays(d) {
     exercises: Array.isArray(x?.exercises) ? x.exercises.slice(0, 30).map(e => ({
       id: safeId(e?.id), exId: e?.exId ? String(e.exId).slice(0, 40) : null, name: String(e?.name || 'Exercise').slice(0, 60),
       muscle: String(e?.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: e?.kind === 'bw' ? 'bw' : 'w',
-      sets: Math.min(20, Math.max(1, parseInt(e?.sets) || 3)), reps: String(e?.reps ?? '8-12').slice(0, 12)
+      sets: Math.min(20, Math.max(1, parseInt(e?.sets) || 3)), reps: String(e?.reps ?? '8-12').slice(0, 12), g: e?.g ? safeId(e.g) : null
     })) : []
   }));
 }
@@ -509,7 +509,7 @@ const TABS = ['today', 'splits', 'exercises', 'history', 'prefs'];
 function route(enter = true) {
   const [v, a] = parsePath();
   const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg, from = S.view, fromArg = S.arg;
-  S.view = v; S.arg = arg; S.link = null;
+  S.view = v; S.arg = arg; S.link = null; S.spLink = null;
   let dir = navDir; navDir = 'fwd';
   /* tab to tab: a sideways slide in the direction of the tab bar */
   const ti = TABS.indexOf(from), tj = TABS.indexOf(v);
@@ -902,9 +902,9 @@ function vToday() {
       ? pick([['every set', '<em>adds up</em>.'], ['show up,', '<em>stack wins</em>.'], ['strength is', '<em>built weekly</em>.'], ['one more', '<em>good session</em>.']], 4)
       : pick([['let’s log your', '<em>first session</em>.'], ['your first', '<em>session awaits</em>.'], ['day one', '<em>starts now</em>.']], 4))];
     cta = `<div class="what"></div>
-      <button class="fab magnet" data-act="start" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button>`;
+      <button class="fab magnet" data-act="start-menu" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button>`;
   }
-  const [qt, qa] = pick(QUOTES, 5), ws = homeWidgets();
+  const [qt, qa] = pick(QUOTES, 5), ents = homeEntries(), spans = packSpans(ents.map(e => WSPAN[e.size])), ws = ents.map(e => e.id);
   return pageTop('Home', '', false) + `
   <section class="hero rv">
     <div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}
@@ -918,7 +918,7 @@ function vToday() {
     </div>
     <div class="hero-cta">${cta}</div>
   </section>
-  ${ws.length ? `<div class="dash" id="dash">${ws.map(id => wCard(id)).join('')}</div>
+  ${ws.length ? `<div class="dash" id="dash">${ents.map((e, i) => wCard(e.id, e.size, spans[i])).join('')}</div>
   <div class="dash-dots" id="dash-dots" role="tablist" aria-label="Home widgets">${ws.map((id, i) => `<button role="tab" data-act="dash-go" data-i="${i}" aria-label="${esc(WIDGETS[id].title)}"${i ? '' : ' class="on" aria-selected="true"'}></button>`).join('')}</div>`
     : `<div class="empty rv"><b>Your home screen is empty.</b>Add widgets to see your training at a glance.</div>`}
   <div class="home-edit rv"><button class="btn ghost sm" data-act="edit-home">${ICON.pen}${roll('Edit home')}</button></div>`;
@@ -926,7 +926,26 @@ function vToday() {
 
 /* ---------- Home widgets ---------- */
 const DEFAULT_WIDGETS = ['intensity', 'consistency', 'recent'];
-const homeWidgets = () => Array.isArray(S.profile.widgets) ? S.profile.widgets.filter(id => WIDGETS[id]) : DEFAULT_WIDGETS;
+/* stored as "id:size" (size s, m or l); older plain ids get the widget's default size */
+const WSIZES = [['s', 'S', 'Small'], ['m', 'M', 'Medium'], ['l', 'L', 'Large']], WSPAN = { s: 2, m: 3, l: 6 };
+function homeEntries() {
+  const raw = Array.isArray(S.profile.widgets) ? S.profile.widgets : DEFAULT_WIDGETS, out = [], seen = new Set();
+  for (const r of raw) { const [id, z] = String(r).split(':'); if (!WIDGETS[id] || seen.has(id)) continue; seen.add(id); out.push({ id, size: WSPAN[z] ? z : (WIDGETS[id].size || 'm') }); }
+  return out;
+}
+const homeWidgets = () => homeEntries().map(e => e.id);
+const saveEntries = list => { S.profile.widgets = list.map(e => e.id + ':' + e.size); queue('p', 400); };
+/* desktop grid is 6 columns: small 2, medium 3, large 6. Rows are packed in order and the last widget in a
+   row stretches to close any gap, so the layout always fits edge to edge. */
+function packSpans(spans) {
+  const out = [...spans]; let used = 0, last = -1;
+  for (let i = 0; i < out.length; i++) {
+    if (used + out[i] > 6) { if (last >= 0) out[last] += 6 - used; used = 0; }
+    used += out[i]; last = i; if (used === 6) used = 0;
+  }
+  if (used && last >= 0) out[last] += 6 - used;
+  return out;
+}
 const WOPT = (() => { try { return JSON.parse(localStorage.getItem('sg-wopt') || '{}') || {}; } catch { return {}; } })();
 const wopt = id => { const o = WIDGETS[id].opts; if (!o) return null; return o.some(x => x[0] === WOPT[id]) ? WOPT[id] : o[0][0]; };
 const sessIn = days => { const t = days ? Date.now() - days * 864e5 : 0; return sorted().filter(s => s.items.length && s.startedAt >= t); };
@@ -935,16 +954,17 @@ const wHead = (l, r, open) => `<div class="card-h"><span class="lbl">${l}</span>
 const kvs = pairs => `<div class="kv wf-kv">${pairs.map(([k, v]) => `<div><span class="lbl">${k}</span><div class="term">${v}</div></div>`).join('')}</div>`;
 const wSect = (t, html) => `<section class="card wf-sec"><div class="card-h"><span class="lbl">${t}</span></div>${html}</section>`;
 const nothing = t => `<div class="empty">${t}</div>`;
-function wCard(id) {
+function wCard(id, size = 'm', span = WSPAN[size]) {
   const W = WIDGETS[id], open = !!W.full, focus = S.morphW === id;
-  return `<section class="card w${W.wide ? ' span' : ''}${focus ? '' : ' rv'}" data-w="${id}"${open ? ` data-act="w-open" data-id="${id}" role="button" tabindex="0" aria-label="Open ${esc(W.title)}"` : ''}${focus ? ' style="view-transition-name:wfocus"' : ''}>${W.card(open)}</section>`;
+  return `<section class="card w w-${size}${focus ? '' : ' rv'}" data-w="${id}"${open ? ` data-act="w-open" data-id="${id}" role="button" tabindex="0" aria-label="Open ${esc(W.title)}"` : ''} style="--span:${span}${focus ? ';view-transition-name:wfocus' : ''}">${W.card(open, size)}</section>`;
 }
 function vWidget() {
   const id = S.arg, W = WIDGETS[id]; if (!W || !W.full) return vMissing('That widget doesn’t exist.');
-  const o = wopt(id);
+  const o = wopt(id), ent = homeEntries().find(e => e.id === id);
   return `<div class="wfull" style="view-transition-name:wfocus">
     <header class="wf-top"><div><span class="lbl">${esc(W.desc)}</span><h1 class="h1">${esc(W.title)}</h1></div><button class="iconbtn" data-act="w-close" aria-label="Close">${ICON.x}</button></header>
-    ${W.opts ? `<div class="wf-opts"><span class="seg" role="group" aria-label="Range">${W.opts.map(([v, l]) => `<button class="${o === v ? 'on' : ''}" data-act="w-opt" data-id="${id}" data-v="${v}">${l}</button>`).join('')}</span></div>` : ''}
+    <div class="wf-opts">${W.opts ? `<span class="seg" role="group" aria-label="Range">${W.opts.map(([v, l]) => `<button class="${o === v ? 'on' : ''}" data-act="w-opt" data-id="${id}" data-v="${v}">${l}</button>`).join('')}</span>` : ''}
+    ${ent ? `<span class="wf-size"><span class="lbl">Size on home</span><span class="seg" role="group" aria-label="Size on home">${WSIZES.map(([z, l, t]) => `<button class="${ent.size === z ? 'on' : ''}" data-act="w-size" data-id="${id}" data-v="${z}" aria-label="${t}">${l}</button>`).join('')}</span></span>` : ''}</div>
     <div class="wf-body">${W.full(o)}</div></div>`;
 }
 function chartDays(days) {
@@ -1004,10 +1024,17 @@ const topLifts = () => [...S.A.ex].map(([id, e]) => ({ ex: exOf(id), e })).filte
 const liftRow = ({ ex, e }) => `<button class="row" data-act="open-ex" data-id="${ex.id}"><span class="tri"></span><span class="row-m"><span class="t">${esc(ex.name)}</span><span class="sub">${plural(e.n, 'session')} · ${ex.oneRm > 0 ? 'saved 1RM' : 'est. 1RM'}</span></span><span class="row-r"><span class="d">${fmtW(roundW(ex.oneRm > 0 ? ex.oneRm : e.best))}</span><span class="ichip">${unit()}</span></span></button>`;
 const planDays = (nx, full) => `<div class="plan${full ? ' full' : ''}">${nx.sp.days.map((d, i) => `<div class="pd${i === nx.i ? ' next' : ''}${isRestDay(d) ? ' rest' : ''}"><span class="lbl">Day ${i + 1}${i === nx.i ? ' · next' : ''}</span><b>${esc(isRestDay(d) ? 'Rest' : d.type || 'Training')}</b>${full && !isRestDay(d) ? `<span class="sub">${d.exercises.map(x => esc(x.name)).join(' · ') || 'No exercises yet'}</span>` : ''}</div>`).join('')}</div>`;
 
+const wTile = (label, value, caption, open) => `<div class="card-h"><span class="lbl">${label}</span>${open ? `<span class="w-ex" aria-hidden="true">${ICON.expand}</span>` : ''}</div><div class="tile"><span class="tile-n">${value}</span><span class="tile-c">${caption}</span></div>`;
+const mkv = pairs => `<div class="mkv">${pairs.map(([k, v]) => `<div><b>${v}</b><span class="lbl">${k}</span></div>`).join('')}</div>`;
 const WIDGETS = {
   intensity: {
     title: 'Intensity', desc: 'How hard each training day was', opts: [[30, '30d'], [90, '90d'], [365, '1y']],
-    card: open => wHead('Intensity · 30d', `avg ${Math.round(avgInt(sessIn(30)))}`, open) + chartDays(30),
+    card: (open, z) => { const L = sessIn(30), av = avgInt(L);
+      if (z === 's') return wTile('Intensity', L.some(s => s.endedAt) ? Math.round(av) : '–', '30-day average', open);
+      const base = wHead('Intensity · 30d', `avg ${Math.round(av)}`, open) + chartDays(30);
+      if (z !== 'l') return base;
+      const iv = s => S.A.sess.get(s.id)?.int || 0, hard = L.filter(s => s.endedAt).reduce((m, s) => Math.max(m, iv(s)), 0);
+      return base + mkv([['sessions', L.length], ['hardest', hard ? Math.round(hard) : '–'], ['records', L.reduce((x, s) => x + (S.A.sess.get(s.id)?.prs.length || 0), 0)]]); },
     full: d => {
       const L = sessIn(d), done = L.filter(s => s.endedAt), iv = s => S.A.sess.get(s.id)?.int || 0;
       const tiers = [['Max effort', 88, 1e9], ['Hard', 75, 88], ['Moderate', 60, 75], ['Easy', 0.001, 60]].map(([k, lo, hi]) => [k, done.filter(s => iv(s) >= lo && iv(s) < hi).length]).filter(t => t[1]);
@@ -1018,7 +1045,10 @@ const WIDGETS = {
   },
   consistency: {
     title: 'Consistency', desc: 'Training days against your weekly target', opts: [[18, '18w'], [52, '52w']],
-    card: open => { const C = consistency(); return wHead('Consistency · 18w', `${C.target}/wk target`, open) + heatWeeks(18) + `<div class="heat-f"><span class="lbl">less</span><span class="lbl">more intense</span></div>`; },
+    card: (open, z) => { const C = consistency();
+      if (z === 's') return wTile('Consistency', C.score == null ? '–' : Math.round(C.score), `${plural(C.streak, 'week')} streak`, open);
+      const wk = z === 'l' ? 26 : 18, base = wHead(`Consistency · ${wk}w`, `${C.target}/wk target`, open) + heatWeeks(wk) + `<div class="heat-f"><span class="lbl">less</span><span class="lbl">more intense</span></div>`;
+      return z === 'l' ? base + mkv([['this week', `${C.thisWeek}/${C.target}`], ['streak', plural(C.streak, 'wk')], ['best streak', plural(bestStreak(), 'wk')]]) : base; },
     full: w => {
       const C = consistency(), m = weekCounts(), cw = weekStart(Date.now()); let hit = 0; for (let i = 0; i < w; i++) if ((m.get(shiftWeek(cw, -i)) || 0) >= C.target) hit++;
       return `<section class="card">${heatWeeks(w)}<div class="heat-f"><span class="lbl">less</span><span class="lbl">more intense</span></div></section>`
@@ -1027,13 +1057,22 @@ const WIDGETS = {
     }
   },
   recent: {
-    title: 'Recent sessions', desc: 'Your latest workouts', wide: true,
-    card: () => { const list = sorted(); return `<div class="card-h"><span class="lbl">Recent sessions</span><button class="lbl" data-act="nav" data-v="history">${roll('All history')}</button></div>
-      <div class="list">${list.length ? list.slice(0, 6).map(rowSession).join('') : `<div class="empty"><b>No sessions yet.</b>Tap + to start, or open Splits to plan your week. Intensity calibrates once each exercise has a couple of sessions.</div>`}</div>`; }
+    title: 'Recent sessions', desc: 'Your latest workouts', size: 'l',
+    card: (open, z) => { const list = sorted();
+      if (z === 's') { const s = list[0], a = s && S.A.sess.get(s.id);
+        return s ? `<div class="card-h"><span class="lbl">Last session</span></div><button class="tile tile-btn" data-act="open" data-id="${s.id}"><span class="tile-n">${a && a.int ? Math.round(a.int) : '–'}</span><span class="tile-c">${esc(sessName(s))} · ${fmtDate(s.startedAt)}</span></button>`
+          : wTile('Last session', '–', 'Nothing logged yet', false); }
+      return `<div class="card-h"><span class="lbl">Recent sessions</span><button class="lbl" data-act="nav" data-v="history">${roll('All history')}</button></div>
+      <div class="list">${list.length ? list.slice(0, z === 'l' ? 8 : 4).map(rowSession).join('') : `<div class="empty"><b>No sessions yet.</b>Tap + to start, or open Splits to plan your week. Intensity calibrates once each exercise has a couple of sessions.</div>`}</div>`; }
   },
   volume: {
     title: 'Weekly volume', desc: 'Weight × reps, week by week', opts: [[8, '8w'], [26, '26w'], [52, '52w']],
-    card: open => { const v = weeklyVol(8); return wHead('Volume · 8w', `${fmtVol(v[v.length - 1].v)} this wk`, open) + volBars(8); },
+    card: (open, z) => { const n = z === 'l' ? 12 : 8, v = weeklyVol(n), now = v[v.length - 1].v;
+      if (z === 's') return wTile('Volume', now ? fmtVol(now) : '–', 'this week', open);
+      const base = wHead(`Volume · ${n}w`, `${fmtVol(now)} this wk`, open) + volBars(n);
+      if (z !== 'l') return base;
+      const tot = v.reduce((x, d) => x + d.v, 0), best = v.reduce((b, d) => Math.max(b, d.v), 0);
+      return base + mkv([['12-week total', fmtVol(tot)], ['best week', best ? fmtVol(best) : '–'], ['sessions', v.reduce((x, d) => x + d.n, 0)]]); },
     full: w => {
       const v = weeklyVol(w), tot = v.reduce((x, d) => x + d.v, 0), best = v.reduce((b, d) => d.v > b.v ? d : b, v[0]), act = v.filter(d => d.v).length;
       return `<section class="card">${volBars(w)}</section>` + kvs([['Total', fmtVol(tot)], ['Per active week', fmtVol(act ? tot / act : 0)], ['Best week', best.v ? fmtVol(best.v) : '–'], ['Sessions', v.reduce((x, d) => x + d.n, 0)]])
@@ -1042,22 +1081,32 @@ const WIDGETS = {
   },
   muscles: {
     title: 'Muscle focus', desc: 'Working sets per muscle group', opts: [[7, '7d'], [30, '30d'], [90, '90d']],
-    card: open => { const r = muscleSets(30); return wHead('Muscles · 30d', plural(r.reduce((x, y) => x + y[1], 0), 'set'), open) + (hbars(r.slice(0, 5)) || nothing('Log a session to see which muscles you train most.')); },
+    card: (open, z) => { const r = muscleSets(30), tot = r.reduce((x, y) => x + y[1], 0);
+      if (z === 's') return wTile('Muscles', r.length ? esc(r[0][0]) : '–', r.length ? `${plural(r[0][1], 'set')} · top of 30d` : 'Nothing logged yet', open);
+      return wHead('Muscles · 30d', plural(tot, 'set'), open) + (hbars(r.slice(0, z === 'l' ? 8 : 5)) || nothing('Log a session to see which muscles you train most.')); },
     full: d => { const r = muscleSets(d), tot = r.reduce((x, y) => x + y[1], 0); return kvs([['Working sets', tot], ['Groups trained', r.length], ['Most trained', r.length ? esc(r[0][0]) : '–']]) + wSect('Sets per muscle group', hbars(r) || nothing('No sets logged in this range.')); }
   },
   prs: {
     title: 'Records', desc: 'New best estimated 1RMs', opts: [[30, '30d'], [90, '90d'], [0, 'All']],
-    card: open => { const e = prEvents(30); return wHead('Records · 30d', plural(e.length, 'PR'), open) + (e.length ? `<div class="list">${e.slice(0, 3).map(prRow).join('')}</div>` : nothing('Beat a previous best and it lands here.')); },
+    card: (open, z) => { const e = prEvents(30);
+      if (z === 's') return wTile('Records', e.length, 'last 30 days', open);
+      return wHead('Records · 30d', plural(e.length, 'PR'), open) + (e.length ? `<div class="list">${e.slice(0, z === 'l' ? 6 : 3).map(prRow).join('')}</div>` : nothing('Beat a previous best and it lands here.')); },
     full: d => { const e = prEvents(d); return kvs([['Records', e.length], ['Exercises', new Set(e.map(x => x.exId)).size]]) + wSect('All records', e.length ? `<div class="list">${e.map(prRow).join('')}</div>` : nothing('No records in this range yet.')); }
   },
   lifts: {
     title: 'Top lifts', desc: 'Your 1RM on the lifts you train most',
-    card: open => { const t = topLifts(); return wHead('Top lifts', `1RM · ${unit()}`, open) + (t.length ? `<div class="list">${t.slice(0, 4).map(liftRow).join('')}</div>` : nothing('Your best lifts show up after your first session.')); },
+    card: (open, z) => { const t = topLifts();
+      if (z === 's') { const x = t[0]; return wTile('Top lift', x ? `${fmtW(roundW(x.ex.oneRm > 0 ? x.ex.oneRm : x.e.best))}<small>${unit()}</small>` : '–', x ? esc(x.ex.name) : 'Nothing logged yet', open); }
+      return wHead('Top lifts', `1RM · ${unit()}`, open) + (t.length ? `<div class="list">${t.slice(0, z === 'l' ? 7 : 4).map(liftRow).join('')}</div>` : nothing('Your best lifts show up after your first session.')); },
     full: () => { const t = topLifts(); return wSect('Every exercise you’ve logged', t.length ? `<div class="list">${t.map(liftRow).join('')}</div>` : nothing('Nothing logged yet.')); }
   },
   plan: {
-    title: 'Your week', desc: 'The split you’re following', wide: true,
-    card: open => { const nx = nextSplitDay(); return nx ? wHead('Your week', esc(nx.sp.name), open) + planDays(nx, false) : wHead('Your week', '', false) + `<div class="empty">No split yet. <button class="linkbtn" data-act="nav" data-v="splits">Plan one in Splits</button></div>`; },
+    title: 'Your week', desc: 'The split you’re following', size: 'l',
+    card: (open, z) => { const nx = nextSplitDay();
+      if (!nx) return (z === 's' ? wTile('Next up', '–', 'No split yet', false) : wHead('Your week', '', false) + `<div class="empty">No split yet. <button class="linkbtn" data-act="nav" data-v="splits">Plan one in Splits</button></div>`);
+      const d = nx.sp.days[nx.i];
+      if (z === 's') return wTile('Next up', esc(d.type || 'Training'), `${esc(nx.sp.name)} · day ${nx.i + 1}`, open);
+      return wHead('Your week', esc(nx.sp.name), open) + planDays(nx, z === 'l'); },
     full: () => { const nx = nextSplitDay(); if (!nx) return nothing('No split yet. Plan one in the Splits tab.'); return planDays(nx, true) + `<div class="wf-actions"><button class="btn line" data-act="open-split" data-id="${nx.sp.id}">${roll('Open split')}</button><button class="btn" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}">${roll('Start day ' + (nx.i + 1))}</button></div>`; }
   }
 };
@@ -1067,19 +1116,21 @@ function editHome() {
   const body = $('#sheet-body');
   const draw = () => {
     const rects = new Map($$('.wrow', body).map(r => [r.dataset.id, r.getBoundingClientRect().top])), prev = fluidCapture(body);
-    const on = homeWidgets(), all = [...on, ...Object.keys(WIDGETS).filter(id => !on.includes(id))];
+    const ents = homeEntries(), on = ents.map(e => e.id), sizes = new Map(ents.map(e => [e.id, e.size])), all = [...on, ...Object.keys(WIDGETS).filter(id => !on.includes(id))];
     body.innerHTML = `<div class="sh-h"><h3>Edit home</h3><button class="btn sm" data-act="close">Done</button></div>
-    <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">Choose your widgets and their order. Tap a widget on Home to open it full screen. Changes save automatically.</p>
+    <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">Choose your widgets, their order and size (S, M, L). Home fits them to your screen. Tap a widget on Home to open it full screen. Changes save automatically.</p>
     <div class="sg-b wlist">${all.map(id => { const W = WIDGETS[id], i = on.indexOf(id), shown = i >= 0;
-      return `<div class="srow wrow${shown ? '' : ' off'}" data-id="${id}"><span class="k">${esc(W.title)}<small>${esc(W.desc)}</small></span><span class="wctl">${shown ? `<button class="iconbtn sm" data-wmv="${id}" data-d="-1"${i === 0 ? ' disabled' : ''} aria-label="Move ${esc(W.title)} up">${ICON.up}</button><button class="iconbtn sm" data-wmv="${id}" data-d="1"${i === on.length - 1 ? ' disabled' : ''} aria-label="Move ${esc(W.title)} down">${ICON.down}</button>` : ''}<button class="toggle${shown ? ' on' : ''}" data-wtg="${id}" aria-pressed="${shown}" aria-label="Show ${esc(W.title)}"></button></span></div>`; }).join('')}</div>
+      const z = shown ? sizes.get(id) : null;
+      return `<div class="srow wrow${shown ? '' : ' off'}" data-id="${id}"><span class="k">${esc(W.title)}<small>${esc(W.desc)}</small>${shown ? `<span class="seg wsz" role="group" aria-label="${esc(W.title)} size">${WSIZES.map(([v, l, t]) => `<button class="${z === v ? 'on' : ''}" data-wsz="${id}" data-v="${v}" aria-label="${t}">${l}</button>`).join('')}</span>` : ''}</span><span class="wctl">${shown ? `<button class="iconbtn sm" data-wmv="${id}" data-d="-1"${i === 0 ? ' disabled' : ''} aria-label="Move ${esc(W.title)} up">${ICON.up}</button><button class="iconbtn sm" data-wmv="${id}" data-d="1"${i === on.length - 1 ? ' disabled' : ''} aria-label="Move ${esc(W.title)} down">${ICON.down}</button>` : ''}<button class="toggle${shown ? ' on' : ''}" data-wtg="${id}" aria-pressed="${shown}" aria-label="Show ${esc(W.title)}"></button></span></div>`; }).join('')}</div>
     <div class="btns" style="margin-top:var(--s0)"><button class="btn line" id="wh-reset">Reset to default</button></div>`;
     fluidApply(body, prev);
     for (const r of $$('.wrow', body)) { const y = rects.get(r.dataset.id); if (y == null) continue; const dy = y - r.getBoundingClientRect().top; if (!dy || reduced) continue; r.style.transform = `translateY(${dy}px)`; r.style.transition = 'none'; requestAnimationFrame(() => { r.style.transition = 'transform .5s var(--spring)'; r.style.transform = ''; }); }
     body.querySelectorAll('[data-wtg]').forEach(b => b.onclick = () => { const id = b.dataset.wtg, cur = homeWidgets(); save(cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]); });
     body.querySelectorAll('[data-wmv]').forEach(b => b.onclick = () => { const cur = [...homeWidgets()], i = cur.indexOf(b.dataset.wmv), j = i + +b.dataset.d; if (j < 0 || j >= cur.length) return; [cur[i], cur[j]] = [cur[j], cur[i]]; save(cur); });
-    body.querySelector('#wh-reset').onclick = () => save([...DEFAULT_WIDGETS]);
+    body.querySelector('#wh-reset').onclick = () => { S.profile.widgets = null; save([...DEFAULT_WIDGETS]); };
+    body.querySelectorAll('[data-wsz]').forEach(b => b.onclick = () => { const list = homeEntries(), e = list.find(x => x.id === b.dataset.wsz); if (!e) return; e.size = b.dataset.v; saveEntries(list); buzz(); draw(); if (S.view === 'today') render(false); });
   };
-  const save = next => { S.profile.widgets = next; queue('p', 400); buzz(); draw(); if (S.view === 'today' || S.view === 'prefs') render(false); };
+  const save = ids => { const cur = new Map(homeEntries().map(e => [e.id, e.size])); saveEntries(ids.map(id => ({ id, size: cur.get(id) || WIDGETS[id].size || 'm' }))); buzz(); draw(); if (S.view === 'today' || S.view === 'prefs') render(false); };
   openSheet('', null); draw();
 }
 
@@ -1254,17 +1305,22 @@ function dayBar(days, next = -1) {
 }
 function vSplits() {
   const mine = [...S.splits.values()].sort((a, b) => b.updatedAt - a.updatedAt), nx = nextSplitDay();
-  const card = sp => { const tr = sp.days.filter(d => !isRestDay(d)), exn = tr.reduce((x, d) => x + d.exercises.length, 0);
-    return `<button class="split-card rv" data-act="open-split" data-id="${sp.id}"><div><h3>${esc(sp.name)}</h3><div class="muted" style="font-size:13px;margin-top:2px">${plural(sp.days.length, 'day')} · ${tr.length} training · ${plural(exn, 'exercise')}${sp.copiedFrom ? ` · from ${esc(sp.copiedFrom)}` : ''}</div></div>
-    ${dayBar(sp.days, nx && nx.sp.id === sp.id ? nx.i : -1)}<div class="lbl">${sp.shareToken ? 'link on · ' : ''}${(S.recipients.get(sp.id) || []).length ? plural(S.recipients.get(sp.id).length, 'person') + ' · ' : ''}edit ↗</div></button>`; };
+  const card = sp => { const tr = sp.days.filter(d => !isRestDay(d)), exn = tr.reduce((x, d) => x + d.exercises.length, 0), shared = (S.recipients.get(sp.id) || []).length;
+    return `<div class="split-card rv"><button class="sc-main" data-act="open-split" data-id="${sp.id}"><div><h3>${esc(sp.name)}</h3><div class="muted" style="font-size:13px;margin-top:2px">${plural(sp.days.length, 'day')} · ${tr.length} training · ${plural(exn, 'exercise')}${sp.copiedFrom ? ` · from ${esc(sp.copiedFrom)}` : ''}${sp.shareToken || shared ? ` · shared` : ''}</div></div>
+    ${dayBar(sp.days, nx && nx.sp.id === sp.id ? nx.i : -1)}</button>
+    <div class="sc-acts"><button class="btn ghost sm" data-act="open-split" data-id="${sp.id}">${ICON.pen}${roll('Edit')}</button><button class="btn ghost sm" data-act="dup-split" data-id="${sp.id}">${roll('Duplicate')}</button><button class="btn ghost sm" data-act="share-split" data-id="${sp.id}">${ICON.share}${roll('Share')}</button></div></div>`; };
+  const tcard = t => `<button class="split-card tpl rv" data-act="tpl-view" data-id="${t.id}"><div><h3>${esc(t.name)}</h3><div class="muted" style="font-size:13px;margin-top:2px">${esc(t.desc)}</div></div>${dayBar(t.plan.map(([ty, ex]) => ({ type: ty, rest: !ex, exercises: [] })))}<div class="lbl">preview & use ↗</div></button>`;
   const shcard = sp => `<button class="split-card rv" data-act="open-shared" data-id="${sp.id}"><div><h3>${esc(sp.name)}</h3><div class="from" style="margin-top:4px">from @${esc(sp.from || 'someone')} · ${fmtDate(sp.sharedAt)}</div></div>${dayBar(sp.days)}<div class="lbl">view ↗</div></button>`;
   return pageTop('Splits') + `
-  <div class="rv pagehead" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 6px"><h1 class="h1">Splits</h1><button class="btn" data-act="new-split">${roll('New split')}</button></div>
+  <div class="rv pagehead" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 6px"><h1 class="h1">Splits</h1><button class="btn" data-act="new-split">${ICON.plus}${roll('New split')}</button></div>
   <p class="muted rv" style="font-size:13px;max-width:60ch">Plan your week: how many days, what each day trains, and the exercises with sets and reps. Start any day as a session, and share the plan with other lifters.</p>
   <div class="mgroup rv"><span class="lbl">Your splits</span><span class="lbl">${mine.length}</span></div>
   <div class="split-grid" style="margin-top:12px">${mine.map(card).join('') || `<div class="empty rv"><b>No splits yet.</b>Create one to plan your training days. Push / Pull / Legs is a good place to start.</div>`}</div>
   <div class="mgroup rv" style="margin-top:18px"><span class="lbl">Shared with you</span><span class="lbl">${S.shared.length}</span></div>
-  <div class="split-grid" style="margin-top:12px">${S.shared.map(shcard).join('') || `<div class="empty rv">When someone shares a split with @${esc(S.profile.username)}, it shows up here.</div>`}</div>`;
+  <div class="split-grid" style="margin-top:12px">${S.shared.map(shcard).join('') || `<div class="empty rv">When someone shares a split with @${esc(S.profile.username)}, it shows up here.</div>`}</div>
+  <div class="mgroup rv" style="margin-top:18px"><span class="lbl">Templates</span><span class="lbl">${TEMPLATES.length}</span></div>
+  <p class="muted rv" style="font-size:13px;margin-top:8px">Start from a proven plan. Using one makes your own copy to edit.</p>
+  <div class="split-grid" style="margin-top:12px">${TEMPLATES.map(tcard).join('')}</div>`;
 }
 function vSplit() {
   const sp = S.splits.get(S.arg), rec = S.recipients.get(sp.id), tr = sp.days.filter(d => !isRestDay(d)).length;
@@ -1277,24 +1333,37 @@ function vSplit() {
   ${dayBar(sp.days)}
   <div class="days">${sp.days.map((d, i) => dayCard(d, i, false)).join('')}</div>`;
 }
+/* split days: exercises can be linked like session sets (superset, giant set, or one exercise's sets as a drop set) */
+function dayGroups(d) {
+  const map = new Map(); d.exercises.forEach((x, j) => { if (x.g) { if (!map.has(x.g)) map.set(x.g, []); map.get(x.g).push(j); } });
+  const out = new Map(); let n = 0;
+  for (const [g, js] of map) { const t = js.length >= 3 ? ['Giant set', 'GS'] : js.length === 2 ? ['Superset', 'SS'] : ['Drop set', 'DS']; out.set(g, { g, js, type: t[0], ab: t[1], letter: String.fromCharCode(65 + (n++ % 26)) }); }
+  return out;
+}
+const spLinkType = n => n >= 3 ? 'Giant set' : n === 2 ? 'Superset' : 'Drop set';
 function dayCard(d, i, ro) {
-  const rest = isRestDay(d);
+  const rest = isRestDay(d), groups = dayGroups(d), lk = !ro && S.spLink && S.spLink.day === i ? S.spLink : null;
   const head = ro
     ? `<div class="day-h"><span class="day-n">DAY ${i + 1}</span><span class="day-type" style="display:flex;align-items:center">${esc(d.type || (rest ? 'Rest' : 'Training'))}</span></div>`
     : `<div class="day-h"><span class="day-n">DAY ${i + 1}</span><input class="day-type" data-f="dtype" data-day="${i}" value="${esc(d.type)}" maxlength="40" placeholder="Session type" aria-label="Day ${i + 1} session type">${rest ? '' : `<button class="iconbtn" data-act="start-day" data-sp="${S.arg}" data-day="${i}" aria-label="Start day ${i + 1} as a session" title="Start this day">${ICON.play}</button>`}</div>
       <div class="types">${DAY_TYPES.map(t => `<button class="chip${d.type === t ? ' on' : ''}" data-act="dtype-pick" data-day="${i}" data-t="${esc(t)}">${t}</button>`).join('')}</div>`;
   if (rest) return `<div class="day rest${ro ? ' ro' : ''} rv">${head}<p class="muted" style="font-size:13px">Rest day. Recovery is part of the plan.</p>${ro ? '' : `<div class="day-f"><button class="btn line sm" data-act="day-train" data-day="${i}">${roll('Make it a training day')}</button></div>`}</div>`;
   const rows = d.exercises.map((x, j) => {
-    const e = !ro && x.exId && exOf(x.exId), name = e ? e.name : x.name, muscle = e ? e.muscle : x.muscle;
-    return ro ? `<div class="dex"><div class="nm"><b>${esc(name)}</b><small>${esc(muscle)}</small></div><span class="ro">${x.sets}</span><span class="ro">${esc(x.reps)}</span><span></span></div>`
-      : `<div class="dex"><div class="nm"><b>${esc(name)}</b><small>${esc(muscle)}</small></div>
+    const e = !ro && x.exId && exOf(x.exId), name = e ? e.name : x.name, muscle = e ? e.muscle : x.muscle, gr = x.g && groups.get(x.g);
+    const tag = gr ? `<span class="gtag">${gr.ab}·${gr.letter}</span> ` : '';
+    return ro ? `<div class="dex${gr ? ' linked' : ''}"><div class="nm"><b>${esc(name)}</b><small>${tag}${esc(muscle)}</small></div><span class="ro">${x.sets}</span><span class="ro">${esc(x.reps)}</span><span></span></div>`
+      : `<div class="dex${gr ? ' linked' : ''}${lk && lk.sel.has(j) ? ' sel' : ''}"${lk ? ` data-act="sp-link-pick" data-x="${j}" role="button" tabindex="0"` : ''}><div class="nm"><b>${esc(name)}</b><small>${tag}${esc(muscle)}</small></div>
         <input data-f="dsets" data-day="${i}" data-x="${j}" inputmode="numeric" value="${x.sets}" aria-label="Sets for ${esc(name)}">
         <input data-f="dreps" data-day="${i}" data-x="${j}" value="${esc(x.reps)}" maxlength="12" aria-label="Reps for ${esc(name)}">
         <button class="iconbtn" data-act="dex-menu" data-day="${i}" data-x="${j}" aria-label="Options for ${esc(name)}">${ICON.dots}</button></div>`;
   }).join('');
-  return `<div class="day${ro ? ' ro' : ''} rv">${head}
+  const glist = [...groups.values()].map(g => `<div class="grp"><span class="gtag">${g.ab}·${g.letter}</span><span><b style="font-weight:500">${g.type}</b> <span class="muted">· ${esc(g.js.map(j => d.exercises[j].name).join(' + '))}</span></span>${ro ? '' : `<button class="gx lbl" data-act="sp-unlink" data-day="${i}" data-g="${g.g}">${roll('Unlink')}</button>`}</div>`).join('');
+  const foot = ro ? '' : lk
+    ? `<div class="sp-linkbar"><button class="iconbtn" data-act="sp-link-cancel" aria-label="Cancel linking">${ICON.x}</button><div class="tlink"><b>${lk.sel.size ? spLinkType(lk.sel.size) : 'Select exercises to link'}</b><span class="muted">${lk.sel.size ? (lk.sel.size === 1 ? 'all its sets run back to back' : `set 1 of each, then set 2…`) : 'tap 2+ for a superset, or 1 for a drop set'}</span></div><button class="btn sm" data-act="sp-link-do"${lk.sel.size ? '' : ' disabled'}>Link</button></div>`
+    : `<div class="day-f"><button class="btn ghost sm" data-act="dex-add" data-day="${i}">${roll('+ Exercise')}</button>${d.exercises.length ? `<button class="btn ghost sm" data-act="sp-link" data-day="${i}">${ICON.link}${roll('Link sets')}</button>` : ''}<button class="btn line sm" data-act="day-rest" data-day="${i}">${roll('Make it a rest day')}</button></div>`;
+  return `<div class="day${ro ? ' ro' : ''}${lk ? ' linking' : ''} rv">${head}
     ${d.exercises.length ? `<div class="dex-h lbl"><span>Exercise</span><span>Sets</span><span>Reps</span><span></span></div>${rows}` : `<p class="muted" style="font-size:13px">No exercises yet.</p>`}
-    ${ro ? '' : `<div class="day-f"><button class="btn ghost sm" data-act="dex-add" data-day="${i}">${roll('+ Exercise')}</button><button class="btn line sm" data-act="day-rest" data-day="${i}">${roll('Make it a rest day')}</button></div>`}</div>`;
+    ${glist ? `<div class="groups">${glist}</div>` : ''}${foot}</div>`;
 }
 function vShared() {
   const sp = S.shared.find(x => x.id === S.arg);
@@ -1487,11 +1556,26 @@ function newSession(extra = {}) {
 function startSession() { const a = activeSession(); if (a) return go('session', a.id); newSession(); }
 function startMenu() {
   const a = activeSession(); if (a) return go('session', a.id);
-  const nx = nextSplitDay();
-  if (!nx) return startSession();
-  const items = [{ label: `Day ${nx.i + 1} · ${nx.sp.days[nx.i].type || 'Training'}`, hint: nx.sp.name, fn: () => startFromSplit(nx.sp.id, nx.i) }, { label: 'Empty session', fn: startSession }];
-  for (const sp of S.splits.values()) if (sp.id !== nx.sp.id && sp.days.some(d => !isRestDay(d))) items.push({ label: `Pick a day from ${sp.name}`, fn: () => go('split', sp.id) });
-  menuSheet('Start a session', items);
+  const splits = [...S.splits.values()].filter(sp => sp.days.some(d => !isRestDay(d))).sort((x, y) => y.updatedAt - x.updatedAt);
+  const nx = nextSplitDay(); let sel = nx ? nx.sp.id : splits[0]?.id;
+  const body = $('#sheet-body');
+  const draw = () => {
+    const prev = fluidCapture(body), sp = S.splits.get(sel);
+    body.innerHTML = `<div class="sh-h"><h3>Start a session</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+    ${sp ? `${splits.length > 1 ? `<span class="lbl">Split</span><div class="hscroll st-splits">${splits.map(x => `<button class="chip${x.id === sel ? ' on' : ''}" data-st-sp="${x.id}">${esc(x.name)}</button>`).join('')}</div>` : `<span class="lbl">${esc(sp.name)}</span>`}
+      <span class="lbl st-q">Which day is it?</span>
+      <div class="st-days">${sp.days.map((d, i) => { if (isRestDay(d)) return ''; const isNext = nx && nx.sp.id === sp.id && nx.i === i, g = dayGroups(d).size;
+        return `<button class="st-day${isNext ? ' next' : ''}" data-st-day="${i}"><span class="lbl">Day ${i + 1}${isNext ? ' · up next' : ''}</span><b>${esc(d.type || 'Training')}</b><span class="sub">${d.exercises.length ? esc(d.exercises.slice(0, 4).map(x => x.name).join(' · ')) + (d.exercises.length > 4 ? ` +${d.exercises.length - 4}` : '') : 'No exercises yet'}${g ? ` · ${plural(g, 'linked group')}` : ''}</span></button>`; }).join('')}</div>
+      <p class="muted st-note">The session is filled in from that day. Change anything once it starts.</p>`
+    : `<p class="muted" style="margin-bottom:var(--s0)">Plan a split and its days show up here, ready to start with sets and reps filled in.</p>`}
+    <div class="btns st-foot"><button class="btn line" id="st-empty">Empty session</button>${sp ? '' : '<button class="btn" id="st-plan">Plan a split</button>'}</div>`;
+    fluidApply(body, prev);
+    body.querySelectorAll('[data-st-sp]').forEach(b => b.onclick = () => { sel = b.dataset.stSp; buzz(); draw(); });
+    body.querySelectorAll('[data-st-day]').forEach(b => b.onclick = () => { closeSheet(); startFromSplit(sel, +b.dataset.stDay); });
+    body.querySelector('#st-empty').onclick = () => { closeSheet(); startSession(); };
+    body.querySelector('#st-plan')?.addEventListener('click', () => { closeSheet(); go('splits'); });
+  };
+  openSheet('', null); draw();
 }
 function ensureExercise(x) {
   let e = x.exId && exOf(x.exId);
@@ -1502,10 +1586,17 @@ function ensureExercise(x) {
 function startFromSplit(spid, di) {
   const a = activeSession(); if (a) { toast('Finish your current session first'); return go('session', a.id); }
   const sp = S.splits.get(spid), d = sp && sp.days[di]; if (!d) return;
+  const groups = dayGroups(d), gid = new Map();
   const items = d.exercises.map(x => {
-    const e = ensureExercise(x), last = lastSetsFor(e.id), r0 = parseInt(String(x.reps)) || null;
-    return { id: sid(), exId: e.id, sets: Array.from({ length: x.sets }, (_, i) => { const l = last && last[Math.min(i, last.length - 1)]; return { id: sid(), w: null, r: null, pw: l ? l.w : null, pr: r0 ?? (l ? l.r : null), done: false, g: null }; }) };
+    const e = ensureExercise(x), last = lastSetsFor(e.id), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g);
+    return { id: sid(), exId: e.id, sets: Array.from({ length: x.sets }, (_, i) => {
+      const l = last && last[Math.min(i, last.length - 1)];
+      /* superset / giant set: set i of each linked exercise forms round i; a single linked exercise links all its sets */
+      let g = null; if (gr) { const key = gr.js.length > 1 ? x.g + ':' + i : x.g; if (!gid.has(key)) gid.set(key, sid()); g = gid.get(key); }
+      return { id: sid(), w: null, r: null, pw: l ? l.w : null, pr: r0 ?? (l ? l.r : null), done: false, g };
+    }) };
   });
+  const tmp = { items }; cleanGroups(tmp);
   newSession({ name: d.type || null, items, splitId: spid, splitDay: di });
   toast(`Day ${di + 1} loaded. Last weights show as hints.`);
 }
@@ -1609,14 +1700,30 @@ function newSplit() {
 }
 const curSplit = () => S.splits.get(S.arg);
 function touchSplit(sp, delay = 800) { sp.updatedAt = Date.now(); queue('sp:' + sp.id, delay); }
+function dupSplit(id) {
+  const sp = S.splits.get(id); if (!sp) return;
+  const c = { ...clone(sp), id: uuid(), name: (sp.name + ' copy').slice(0, 60), shareToken: null, copiedFrom: null, updatedAt: Date.now() };
+  S.splits.set(c.id, c); queue('sp:' + c.id, 0); go('split', c.id); toast('Duplicated. Edit away.');
+}
+function templateSheet(tid) {
+  const t = TEMPLATES.find(x => x.id === tid); if (!t) return;
+  openSheet(`<div class="sh-h"><h3>${esc(t.name)}</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+    <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">${esc(t.desc)} Using it makes your own copy that you can rename, re-order and edit freely.</p>
+    <div class="tpl-days">${t.plan.map(([ty, exs], i) => `<div class="pd${exs ? '' : ' rest'}"><span class="lbl">Day ${i + 1}</span><b>${esc(ty)}</b>${exs ? `<span class="sub">${exs.map(e => `${esc(e[0])} ${e[1]}×${esc(e[2])}`).join(' · ')}</span>` : ''}</div>`).join('')}</div>
+    <div class="btns" style="margin-top:var(--s0)"><button class="btn lg" id="tpl-use">Use this template</button></div>`, r => {
+    r.querySelector('#tpl-use').onclick = () => { closeSheet(); const sp = splitFromTemplate(t); go('split', sp.id); toast('Template added. Make it yours.'); };
+  });
+}
 function splitMenu(id) {
   const sp = S.splits.get(id); if (!sp) return;
   menuSheet(sp.name, [
     { label: 'Share', fn: () => shareSheet(id) },
-    { label: 'Duplicate', fn: () => { const c = { ...clone(sp), id: uuid(), name: (sp.name + ' copy').slice(0, 60), shareToken: null, copiedFrom: null, updatedAt: Date.now() }; S.splits.set(c.id, c); queue('sp:' + c.id, 0); go('split', c.id); } },
+    { label: 'Duplicate', fn: () => dupSplit(id) },
     { label: 'Delete split', warn: true, fn: () => confirmSheet('Delete split?', 'This deletes the plan and stops sharing it. Sessions you logged from it are kept.', 'Delete', () => { S.splits.delete(id); queue('sp:' + id, 0); go('splits', null, { replace: true }); toast('Split deleted'); }) }
   ]);
 }
+/* when a superset loses a member and one exercise is left, unlink it rather than turn it into a drop set */
+function tidySplitGroups(d, g, before) { if (!g || before < 2) return; const left = d.exercises.filter(x => x.g === g); if (left.length === 1) left[0].g = null; }
 function dexMenu(di, xi) {
   const sp = curSplit(), d = sp && sp.days[di], x = d && d.exercises[xi]; if (!x) return;
   const mv = k => { const j = xi + k; if (j < 0 || j >= d.exercises.length) return; [d.exercises[xi], d.exercises[j]] = [d.exercises[j], d.exercises[xi]]; touchSplit(sp, 300); render(false); };
@@ -1624,7 +1731,9 @@ function dexMenu(di, xi) {
   if (xi > 0) items.push({ label: 'Move up', fn: () => mv(-1) });
   if (xi < d.exercises.length - 1) items.push({ label: 'Move down', fn: () => mv(1) });
   for (let k = 0; k < sp.days.length; k++) if (k !== di && !isRestDay(sp.days[k])) items.push({ label: `Copy to day ${k + 1}`, hint: sp.days[k].type, fn: () => { sp.days[k].exercises.push({ ...clone(x), id: sid() }); touchSplit(sp, 300); render(false); toast(`Copied to day ${k + 1}`); } });
-  items.push({ label: 'Remove from this day', warn: true, fn: () => { d.exercises.splice(xi, 1); touchSplit(sp, 300); render(false); } });
+  const g0 = x.g, n0 = g0 ? d.exercises.filter(y => y.g === g0).length : 0;
+  if (x.g) items.push({ label: 'Unlink', hint: 'Take it out of its linked group', fn: () => { x.g = null; tidySplitGroups(d, g0, n0); touchSplit(sp, 300); render(false); } });
+  items.push({ label: 'Remove from this day', warn: true, fn: () => { d.exercises.splice(xi, 1); tidySplitGroups(d, g0, n0); touchSplit(sp, 300); render(false); } });
   menuSheet(x.name, items);
 }
 async function shareSheet(id) {
@@ -1792,6 +1901,17 @@ const ACT = {
   'day-rest': el => { const sp = curSplit(), d = sp && sp.days[+el.dataset.day]; if (!d) return; d.rest = true; if (!d.type || DAY_TYPES.includes(d.type)) d.type = 'Rest'; touchSplit(sp, 300); render(false); },
   'day-train': el => { const sp = curSplit(), d = sp && sp.days[+el.dataset.day]; if (!d) return; d.rest = false; if (/^rest$/i.test(d.type)) d.type = ''; touchSplit(sp, 300); render(false); },
   'dex-add': el => openPicker('split', { split: S.arg, day: +el.dataset.day }),
+  'sp-link': el => { S.spLink = { day: +el.dataset.day, sel: new Set() }; render(false); },
+  'sp-link-cancel': () => { S.spLink = null; render(false); },
+  'sp-link-pick': el => { const L = S.spLink; if (!L) return; const j = +el.dataset.x; L.sel.has(j) ? L.sel.delete(j) : L.sel.add(j); buzz(6); render(false); },
+  'sp-link-do': () => { const sp = curSplit(), L = S.spLink, d = sp && L && sp.days[L.day]; if (!d || !L.sel.size) return; const g = sid(), t = spLinkType(L.sel.size);
+    const old = new Map(); for (const j of L.sel) { const og = d.exercises[j]?.g; if (og && !old.has(og)) old.set(og, d.exercises.filter(y => y.g === og).length); }
+    for (const j of L.sel) if (d.exercises[j]) d.exercises[j].g = g;
+    for (const [og, n] of old) tidySplitGroups(d, og, n);
+    S.spLink = null; touchSplit(sp, 300); render(false); toast(t + ' linked'); },
+  'sp-unlink': el => { const sp = curSplit(), d = sp && sp.days[+el.dataset.day]; if (!d) return; for (const x of d.exercises) if (x.g === el.dataset.g) x.g = null; touchSplit(sp, 300); render(false); toast('Unlinked'); },
+  'dup-split': el => dupSplit(el.dataset.id),
+  'tpl-view': el => templateSheet(el.dataset.id),
   'dex-menu': el => dexMenu(+el.dataset.day, +el.dataset.x),
   'copy-shared': el => { const sp = S.shared.find(x => x.id === el.dataset.id); if (sp) copySplit(sp, sp.from); },
   'remove-shared': el => confirmSheet('Remove shared split?', 'It disappears from your list. The owner keeps it.', 'Remove', async () => {
@@ -1808,6 +1928,7 @@ const ACT = {
   'w-open': el => { S.homeRestore = { y: scrollY, x: $('#dash')?.scrollLeft || 0 }; go('widget', el.dataset.id); },
   'w-opt': el => { WOPT[el.dataset.id] = +el.dataset.v; try { localStorage.setItem('sg-wopt', JSON.stringify(WOPT)); } catch {} render(false); },
   'w-close': () => back(),
+  'w-size': el => { const list = homeEntries(), e = list.find(x => x.id === el.dataset.id); if (!e) return; e.size = el.dataset.v; saveEntries(list); buzz(); render(false); },
   'edit-home': () => editHome(),
   how: () => openSheet(HOW),
   install: async () => {
