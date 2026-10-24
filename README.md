@@ -75,7 +75,7 @@ your list as a custom exercise.
 
 | Table | Holds | Who can see it |
 |---|---|---|
-| `profiles` | username, name, units, rest timer, bodyweight, experience, goal | owner |
+| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets | owner |
 | `exercises` | each user's own exercise list (seeded from `default_exercises`) | owner |
 | `sessions` | one row per workout; sets are stored as JSON inside it | owner |
 | `splits` | training plans: days, session types, exercises with sets × reps | owner |

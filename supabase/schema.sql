@@ -32,6 +32,8 @@ alter table public.profiles add column if not exists goal text check (goal in ('
 alter table public.profiles add column if not exists onboarded boolean not null default false;
 alter table public.profiles add column if not exists theme text check (char_length(theme) <= 30);
 alter table public.profiles add column if not exists muscles jsonb check (muscles is null or (jsonb_typeof(muscles) = 'array' and jsonb_array_length(muscles) <= 40));
+-- Home screen widgets, in order (ids from the app's widget catalog)
+alter table public.profiles add column if not exists widgets jsonb check (widgets is null or (jsonb_typeof(widgets) = 'array' and jsonb_array_length(widgets) <= 20));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (

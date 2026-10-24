@@ -880,3 +880,109 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
   .hero-cta{flex-direction:column;align-items:flex-start;gap:var(--s-1)}
   .hero-cta .btn{margin-right:auto}
 }
+
+/* ======================================================================
+   Home v3: board without dots, quote, five stats, widgets, fluid controls
+   ====================================================================== */
+.hero-art{display:none}
+.statgrid{grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--s1) var(--s0)}
+.stat{grid-column:span 2;min-width:0}
+.stat.hi{grid-column:span 3}
+.stat:not(.hi) .n{font-size:clamp(1.9rem,7vw,2.4rem)}
+.stat:not(.hi) .l{font-size:.85rem}
+.quote{margin:var(--s1) 0 0;max-width:34rem;padding-left:var(--s0);border-left:2px solid var(--line)}
+.quote blockquote{margin:0;font-family:var(--font-serif);font-style:italic;font-weight:300;font-size:clamp(1.02rem,3.6vw,1.2rem);line-height:1.45;color:var(--ink-2)}
+.quote blockquote::before{content:"“"}.quote blockquote::after{content:"”"}
+.quote figcaption{margin-top:6px;font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.quote figcaption::before{content:"— "}
+#view.enter .quote{animation:rise 1s var(--ease) .45s both}
+
+/* widgets */
+@media (min-width:48rem){#dash{grid-auto-flow:row dense}}
+.card.w[data-act]{cursor:pointer}
+.w-r{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.w-ex{display:inline-grid;place-items:center;width:1.6rem;height:1.6rem;border-radius:50%;background:var(--surface-2);color:var(--muted);transition:transform .45s var(--spring),color .2s,background .2s}
+.w-ex .ico{width:13px;height:13px;stroke-width:2}
+@media (hover:hover){.card.w[data-act]:hover .w-ex{color:var(--ink);transform:scale(1.12)}}
+.card.w[data-act]:active{transform:scale(.985)}
+.home-edit{display:flex;justify-content:center;margin:var(--s1) 0 var(--s0)}
+.home-edit .btn .ico{width:15px;height:15px}
+.heat.dense{gap:2px}.heat.dense i{border-radius:2px}
+.chart .vb{fill:var(--ink);opacity:.85}.chart .vb.now{fill:var(--accent);opacity:1}.chart .vb0{fill:var(--line)}
+.hbars{display:grid;gap:10px}
+.hb{display:grid;grid-template-columns:minmax(5.5rem,34%) minmax(0,1fr) auto;align-items:center;gap:10px;font-size:.88rem}
+.hb-k{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
+.hb-t{height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.hb-t i{display:block;height:100%;border-radius:inherit;background:var(--ink);transform-origin:left;animation:grow .9s var(--ease) both}
+.hb-v{font-variant-numeric:tabular-nums;font-weight:700;min-width:2.5ch;text-align:right}
+@keyframes grow{from{transform:scaleX(0)}}
+.plan{display:grid;grid-template-columns:repeat(auto-fill,minmax(6.5rem,1fr));gap:8px}
+.pd{display:flex;flex-direction:column;gap:2px;padding:.6rem .75rem;border-radius:var(--r-sm);background:var(--surface-2);min-width:0}
+.pd b{font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pd.rest{opacity:.55}
+.pd.next{background:var(--solid);color:var(--solid-ink)}.pd.next .lbl{color:inherit;opacity:.75}
+.plan.full{grid-template-columns:minmax(0,1fr)}.plan.full .pd{padding:var(--s0)}.plan.full .sub{font-size:.85rem;color:var(--muted);white-space:normal}.plan.full .pd.next .sub{color:inherit;opacity:.8}
+
+/* full-screen widget */
+.wfull{min-height:calc(100vh - 2rem);padding-bottom:var(--s3);background:var(--bg)}
+.wf-top{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s0);padding-top:var(--s0)}
+.wf-top .h1{margin-top:4px}
+.wf-top .iconbtn{width:3rem;height:3rem;flex:none}
+.wf-opts{margin:var(--s0) 0}
+.wf-body{display:grid;gap:var(--s0);margin-top:var(--s0)}
+.wf-body .chart svg{height:11rem}
+.wf-kv .term{font-size:var(--t2)!important;line-height:1}
+.wf-note{font-size:.85rem;max-width:60ch}
+.wf-actions{display:flex;gap:8px;flex-wrap:wrap}
+@media (min-width:48rem){.wf-body .chart svg{height:15rem}}
+@media (max-width:47.99rem){body.in-full .nav{display:none}body.in-full #view{padding-bottom:var(--s2)}}
+
+/* edit home */
+.wlist .srow{transition:opacity .3s}
+.wrow.off .k{opacity:.55}
+.wctl{display:flex;align-items:center;gap:6px;flex:none}
+.iconbtn.sm{width:2.2rem;height:2.2rem}.iconbtn.sm .ico{width:16px;height:16px}
+.iconbtn:disabled{opacity:.3}
+
+/* settings autosave */
+.autosave{margin:0 0 var(--s0);color:var(--muted)}
+.field.bad{border-color:var(--bad)!important;background:color-mix(in srgb,var(--bad) 8%,transparent)}
+
+/* ---------- fluid controls ---------- */
+.seg{position:relative;isolation:isolate}
+.seg button{position:relative;transition:color .35s var(--ease),transform .45s var(--spring)}
+.seg.pill button.on{background:transparent!important;color:var(--solid-ink)}
+.seg.pill::before{content:"";position:absolute;z-index:-1;top:3px;bottom:3px;left:0;width:var(--w,0);transform:translateX(var(--x,0));border-radius:999px;background:var(--solid);box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform .6s var(--spring),width .6s var(--spring)}
+.seg.nt::before{transition:none}
+.toggle{transition:background .4s var(--ease),box-shadow .4s}
+.toggle::after{transition:transform .6s var(--spring),width .3s var(--ease),background .35s}
+.toggle:active::after{width:1.95rem}
+.toggle.on:active::after{transform:translateX(.8rem)}
+.toggle.nt,.toggle.nt::after{transition:none!important}
+.pop-on{animation:pop-on .55s var(--spring)}
+@keyframes pop-on{from{transform:scale(.86)}}
+.chip,.daysel button,.theme-card,.opt{transition:background .35s var(--ease),color .35s,border-color .35s,transform .45s var(--spring)}
+
+/* ---------- transitions: tabs slide sideways, widgets grow out of their card ---------- */
+html[data-nav="tab-fwd"]::view-transition-old(root){animation:tab-out-l .38s var(--ease) both}
+html[data-nav="tab-fwd"]::view-transition-new(root){animation:tab-in-r .55s var(--ease) both}
+html[data-nav="tab-back"]::view-transition-old(root){animation:tab-out-r .38s var(--ease) both}
+html[data-nav="tab-back"]::view-transition-new(root){animation:tab-in-l .55s var(--ease) both}
+@keyframes tab-out-l{to{opacity:0;transform:translateX(-4%)}}
+@keyframes tab-out-r{to{opacity:0;transform:translateX(4%)}}
+@keyframes tab-in-r{from{opacity:0;transform:translateX(5%)}}
+@keyframes tab-in-l{from{opacity:0;transform:translateX(-5%)}}
+html[data-nav="widget"]::view-transition-old(root){animation:fade-out .35s var(--ease) both}
+html[data-nav="widget"]::view-transition-new(root){animation:fade .45s var(--ease) .1s both}
+::view-transition-group(wfocus){animation-duration:.6s;animation-timing-function:var(--ease-io);overflow:clip;border-radius:var(--r-lg)}
+::view-transition-old(wfocus),::view-transition-new(wfocus){height:100%;object-fit:none;object-position:0 0;animation-duration:.45s}
+.no-vt #view.enter{animation:fade .35s var(--ease) both}
+@media (prefers-reduced-motion:reduce){
+  html[data-nav]::view-transition-old(root),html[data-nav]::view-transition-new(root),::view-transition-group(wfocus),::view-transition-old(wfocus),::view-transition-new(wfocus){animation-duration:.01s!important}
+  .seg.pill::before,.toggle::after{transition-duration:.01s}
+}
+.card.w .card-h{flex-wrap:nowrap;align-items:center}
+.card.w .card-h > .lbl,.card.w .w-r .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.card.w .card-h > .lbl{flex:none}
+.wf-kv .term{background:none!important;border:0!important;padding:0!important;border-radius:0!important}
+.wlist .srow .k small{display:block}
