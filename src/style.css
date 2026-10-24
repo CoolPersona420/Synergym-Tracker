@@ -1079,3 +1079,11 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   .hero-top .quote{justify-self:end;max-width:24rem;margin-bottom:.4rem}
 }
 .hero .hero-cta{margin-top:var(--s1)}
+
+/* phones: no top title bar on any page; a solid strip keeps content from showing behind the status bar */
+@media (max-width:47.99rem){
+  header.top{display:none!important}
+  body:not(.bare):not(.in-session) #view{padding-top:var(--s1)}
+  html::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30;pointer-events:none}
+}
+.daybar span{display:block;line-height:2.1rem;text-align:center;padding:0 3px}
