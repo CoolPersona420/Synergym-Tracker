@@ -1088,23 +1088,39 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 }
 .daybar span{display:block;line-height:2.1rem;text-align:center;padding:0 3px}
 
-/* Home: the up-next selector. One soft outlined field holds the split/day line and the day name,
-   with the chevron on the right, like the site's other controls; the exercise list sits below it. */
-.what-pick{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:0;margin:0;background:none;text-align:left;min-width:0;max-width:100%;-webkit-tap-highlight-color:transparent}
-.hero-cta .what-pick > span.wp-chip{display:inline-flex;align-items:center;gap:var(--s0);max-width:100%;padding:.7rem .7rem .7rem 1.1rem;border-radius:1.4rem;box-shadow:inset 0 0 0 1px var(--line);color:var(--ink);transition:background .4s var(--ease),box-shadow .4s var(--ease),transform .5s var(--spring)}
-.wp-txt{display:flex;flex-direction:column;gap:4px;min-width:0}
-.hero-cta .what-pick .wp-t{font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hero-cta .what-pick .wp-txt b{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;padding:0;background:none}
-.what-pick .dd{display:inline-grid;place-items:center;flex:none;width:2rem;height:2rem;border-radius:50%;background:var(--surface-2);color:var(--ink);font-style:normal;transition:transform .55s var(--spring),background .3s,color .3s}
-.what-pick .dd .ico{width:14px;height:14px;stroke-width:2.4}
-.what-pick:active .wp-chip{transform:scale(.97)}
-.what-pick.open .wp-chip{background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--ink-2)}
+/* Home: the up-next dropdown */
+.what-pick{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:0;margin:0;background:none;text-align:left;min-width:0;max-width:100%;-webkit-tap-highlight-color:transparent}
+.what-pick .wp-d,.what-pick .wp-m{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;max-width:100%}
+.what-pick .wp-sub{font-size:.88rem;color:var(--hero-ink-2)}
+.what-pick .dd{display:inline-grid;place-items:center;flex:none;border-radius:50%;background:var(--surface-2);color:var(--ink);font-style:normal;transition:transform .55s var(--spring),background .3s,color .3s}
 .what-pick.open .dd{transform:rotate(180deg);background:var(--solid);color:var(--solid-ink)}
-.what-pick:focus-visible{outline:none}.what-pick:focus-visible .wp-chip{box-shadow:inset 0 0 0 2px var(--accent)}
+.what-pick:focus-visible{outline:none}.what-pick:focus-visible .wp-chip{box-shadow:inset 0 0 0 2px var(--accent)!important}
+
+/* desktop: a soft pill names the split and day; the day name underlines on hover */
+.wp-d .wp-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:5px 6px 5px 12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);transition:background .4s var(--ease),box-shadow .4s var(--ease),transform .5s var(--spring)}
+.wp-d .wp-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;font-size:inherit!important;color:inherit!important}
+.wp-d .dd{width:1.3rem;height:1.3rem}.wp-d .dd .ico{width:11px;height:11px;stroke-width:2.6}
+.hero-cta .what-pick .wp-d > b{display:inline-block;max-width:100%;color:var(--ink);background-image:linear-gradient(currentColor,currentColor);background-repeat:no-repeat;background-position:0 100%;background-size:0% 2px;padding-bottom:3px;transition:background-size .7s var(--ease)}
+.what-pick:active .wp-d .wp-chip{transform:scale(.96)}
+.what-pick.open .wp-d .wp-chip{background:var(--surface);box-shadow:inset 0 0 0 1px var(--ink-2)}
+.hero-cta .what-pick.open .wp-d > b{background-size:100% 2px}
+
+/* phones: one soft outlined field holds the split/day line and the day name, chevron on the right */
+.wp-m .wp-chip{display:inline-flex;align-items:center;gap:var(--s0);max-width:100%;padding:.7rem .7rem .7rem 1.1rem;border-radius:1.4rem;box-shadow:inset 0 0 0 1px var(--line);color:var(--ink);transition:background .4s var(--ease),box-shadow .4s var(--ease),transform .5s var(--spring)}
+.wp-m .wp-txt{display:flex;flex-direction:column;gap:4px;min-width:0;color:var(--ink)}
+.hero-cta .what-pick .wp-m .wp-t{font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-cta .what-pick .wp-m .wp-txt b{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;color:var(--ink)}
+.wp-m .dd{width:2rem;height:2rem}.wp-m .dd .ico{width:14px;height:14px;stroke-width:2.4}
+.what-pick:active .wp-m .wp-chip{transform:scale(.97)}
+.what-pick.open .wp-m .wp-chip{background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--ink-2)}
+.what-pick > span.wp-sub{margin-top:4px}
+
+@media (min-width:48rem){.what-pick .wp-m{display:none}}
+@media (max-width:47.99rem){.what-pick .wp-d{display:none}}
 @media (hover:hover){
   .what-pick:hover .wp-chip{background:var(--surface);box-shadow:inset 0 0 0 1px var(--ink-2)}
   .what-pick:hover .dd{transform:translateY(2px)}
   .what-pick.open:hover .dd{transform:rotate(180deg)}
+  .hero-cta .what-pick:hover .wp-d > b{background-size:100% 2px}
 }
-.hero-cta .what-pick .wp-txt{color:var(--ink)}
-.hero-cta .what-pick .wp-txt b{color:var(--ink)}
+.hero-cta .what-pick .wp-d .wp-chip{font-size:var(--t-xs);color:var(--ink-2)}
