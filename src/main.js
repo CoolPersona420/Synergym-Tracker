@@ -25,6 +25,7 @@ if (LITE) document.documentElement.classList.add('lite');
 
 
 const ICON={
+ home:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg>',
  today:'<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
  hist:'<svg class="ico" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h8"/></svg>',
  ex:'<svg class="ico" viewBox="0 0 24 24"><path d="M3 10v4M6.5 7.5v9M17.5 7.5v9M21 10v4M6.5 12h11"/></svg>',
@@ -608,7 +609,7 @@ function renderNav() {
   const key = ['today', 'splits', 'exercises', 'history', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
   const it = (v, l, i) => `<button class="nav-i${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}">${i}${roll(l)}</button>`;
   $('#nav').innerHTML = `<div class="nav-brand">${brand()}</div>
-  ${it('today', 'Today', ICON.today)}${it('splits', 'Splits', ICON.split)}
+  ${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}
   <button class="nav-train${a ? ' live' : ''}" data-act="${a ? 'resume' : 'start-menu'}" data-id="${a ? a.id : ''}" aria-label="${a ? 'Resume session' : 'Start session'}"><span class="ring">${a ? ICON.play : ICON.plus}</span><span class="nl">${a ? roll('Resume session') : roll('Start session')}</span></button>
   ${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}
   <button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>
@@ -806,7 +807,7 @@ function vToday() {
     cta = `<div class="what"></div>
       <button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button>`;
   }
-  return pageTop('Today', '', false) + `
+  return pageTop('Home', '', false) + `
   <section class="hero rv">${heroArt()}
     <div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}</div>
     <div class="statgrid">
