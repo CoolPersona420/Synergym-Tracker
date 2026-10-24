@@ -1042,3 +1042,40 @@ html[data-nav="widget"]::view-transition-new(root){animation:fade .45s var(--eas
 .st-note{font-size:12px;margin:var(--s0) 0 0}
 .st-foot{margin-top:var(--s0)}
 @media (max-width:47.99rem){#dash{align-items:flex-start}#dash > .w-s .tile{min-height:7.5rem}}
+
+/* ---------- rest days ---------- */
+.heat i.rd{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
+.heat-f .rd-key{display:inline-block;width:9px;height:9px;border-radius:2px;box-shadow:inset 0 0 0 1.5px var(--muted);margin-right:5px;vertical-align:-1px}
+
+/* ---------- split days: reorder ---------- */
+.day-mv{display:inline-flex;flex-direction:column;gap:2px;flex:none}
+.day-mv .iconbtn.sm{width:1.7rem;height:1.35rem;border-radius:6px;background:var(--surface-2)}
+.day-mv .iconbtn.sm .ico{width:13px;height:13px;stroke-width:2.2}
+
+/* ---------- chip rows: nothing hidden ---------- */
+.hscroll,.types{-webkit-mask-size:100% 100%;mask-size:100% 100%;transition:-webkit-mask-image .2s,mask-image .2s}
+.hscroll.more-r,.types.more-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 3rem),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 3rem),transparent)}
+.hscroll.more-l,.types.more-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3rem);mask-image:linear-gradient(90deg,transparent,#000 3rem)}
+.hscroll.more-l.more-r,.types.more-l.more-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3rem,#000 calc(100% - 3rem),transparent);mask-image:linear-gradient(90deg,transparent,#000 3rem,#000 calc(100% - 3rem),transparent)}
+.hscroll > *,.types > *{flex:none}
+@media (min-width:48rem){
+  /* wide screens have room: chip rows wrap instead of scrolling */
+  .hscroll,.types{flex-wrap:wrap;overflow:visible;-webkit-mask-image:none!important;mask-image:none!important;padding-bottom:0}
+}
+.display .ln>span{max-width:100%;overflow-wrap:anywhere}
+.daybar span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflow-wrap:anywhere}
+/* day strips never force their card (or the page) wider than the screen */
+.daybar span{width:0;flex:1 1 0}
+.split-card{min-width:0}
+.split-card > *{min-width:0;max-width:100%}
+
+/* Home board without the stat block: greeting and quote share the top row, the + row sits below */
+.hero{display:block!important}
+.hero-top{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s1)}
+.hero-top .quote{margin-top:0}
+@media (min-width:48rem){
+  .hero-top{grid-template-columns:minmax(0,1.618fr) minmax(0,1fr);align-items:end;gap:var(--s2)}
+  .hero-top .quote{justify-self:end;max-width:24rem;margin-bottom:.4rem}
+}
+.hero .hero-cta{margin-top:var(--s1)}

@@ -49,7 +49,7 @@ const ICON={
 };
 
 /* ================= state ================= */
-const DEFAULT_PROFILE = { widgets: null, muscles: null, theme: null, username: null, name: '', exp: null, goal: null, onboarded: false, unit: 'kg', target: 3, rest: 90, restOn: true, sound: true, bw: 75 };
+const DEFAULT_PROFILE = { restDays: [], widgets: null, muscles: null, theme: null, username: null, name: '', exp: null, goal: null, onboarded: false, unit: 'kg', target: 3, rest: 90, restOn: true, sound: true, bw: 75 };
 const S = {
   authReady: false, user: null, loaded: false, loadError: null,
   profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(),
@@ -162,8 +162,8 @@ function cleanDays(d) {
 }
 
 /* ================= db mapping ================= */
-const profFromDb = r => ({ widgets: Array.isArray(r.widgets) ? r.widgets.filter(id => typeof id === 'string').slice(0, 20) : null, muscles: Array.isArray(r.muscles) ? r.muscles.filter(m => typeof m === 'string' && m.trim()).map(m => m.trim().slice(0, 30)).slice(0, 40) : null, theme: r.theme || null, username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75 });
-const profToDb = p => ({ widgets: Array.isArray(p.widgets) ? p.widgets.slice(0, 20) : null, muscles: Array.isArray(p.muscles) && p.muscles.length ? p.muscles : null, theme: p.theme || null, display_name: (p.name || '').slice(0, 40) || null, experience: p.exp || null, goal: p.goal || null, onboarded: !!p.onboarded, unit: p.unit, weekly_target: p.target, rest_seconds: p.rest, rest_enabled: p.restOn, rest_sound: p.sound, bodyweight: Math.round(p.bw * 100) / 100 });
+const profFromDb = r => ({ restDays: Array.isArray(r.rest_days) ? r.rest_days.filter(d => typeof d === 'string' && /^\d{4}-\d{1,2}-\d{1,2}$/.test(d)).slice(-400) : [], widgets: Array.isArray(r.widgets) ? r.widgets.filter(id => typeof id === 'string').slice(0, 20) : null, muscles: Array.isArray(r.muscles) ? r.muscles.filter(m => typeof m === 'string' && m.trim()).map(m => m.trim().slice(0, 30)).slice(0, 40) : null, theme: r.theme || null, username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75 });
+const profToDb = p => ({ rest_days: Array.isArray(p.restDays) && p.restDays.length ? p.restDays.slice(-400) : null, widgets: Array.isArray(p.widgets) ? p.widgets.slice(0, 20) : null, muscles: Array.isArray(p.muscles) && p.muscles.length ? p.muscles : null, theme: p.theme || null, display_name: (p.name || '').slice(0, 40) || null, experience: p.exp || null, goal: p.goal || null, onboarded: !!p.onboarded, unit: p.unit, weekly_target: p.target, rest_seconds: p.rest, rest_enabled: p.restOn, rest_sound: p.sound, bodyweight: Math.round(p.bw * 100) / 100 });
 const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: r.kind === 'bw' ? 'bw' : 'w', archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null });
 const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null });
 const sessFromDb = r => cleanSession({ id: r.id, name: r.name, startedAt: Date.parse(r.started_at), endedAt: r.ended_at ? Date.parse(r.ended_at) : null, notes: r.notes, items: r.items, splitId: r.split_id, splitDay: r.split_day });
@@ -543,7 +543,17 @@ function fluidCapture(root) {
     pop: $$(POPSEL, root).map(e => e.classList.contains('on'))
   };
 }
+/* text boxes that wrap and grow instead of cutting long text off */
+const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+function wireScrollers(root) {
+  for (const t of $$('textarea.autosize', root)) { grow(t); if (!t._ag) { t._ag = 1; t.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } }); } }
+  for (const el of $$('.hscroll, .types', root)) {
+    const upd = () => { const max = el.scrollWidth - el.clientWidth; el.classList.toggle('more-l', el.scrollLeft > 4); el.classList.toggle('more-r', max - el.scrollLeft > 4); };
+    upd(); if (!el._sw) { el._sw = 1; el.addEventListener('scroll', upd, { passive: true }); }
+  }
+}
 function fluidApply(root, prev) {
+  wireScrollers(root);
   $$('.seg', root).forEach((s, i) => {
     const b = s.querySelector('button.on'); s.classList.add('pill');
     if (!b) { s.style.setProperty('--w', '0px'); return; }
@@ -559,7 +569,7 @@ function fluidApply(root, prev) {
   $$(POPSEL, root).forEach((e, i) => { if (prev.pop[i] === false && e.classList.contains('on')) e.classList.add('pop-on'); });
 }
 let fluidT = 0;
-addEventListener('resize', () => { clearTimeout(fluidT); fluidT = setTimeout(() => fluidApply($('#view'), null), 150); }, { passive: true });
+addEventListener('resize', () => { clearTimeout(fluidT); fluidT = setTimeout(() => { fluidApply($('#view'), null); wireScrollers($('#sheet-body')); }, 150); }, { passive: true });
 document.fonts?.ready.then(() => fluidApply($('#view'), null));
 function render(enter) {
   const v = $('#view'), y = scrollY, nav = $('#nav');
@@ -865,7 +875,7 @@ const QUOTES = [
   ['We are what we repeatedly do. Excellence, then, is not an act, but a habit.', 'Will Durant'],
   ['The last three or four reps is what makes the muscle grow.', 'Arnold Schwarzenegger'],
   ['Hard work beats talent when talent doesn’t work hard.', 'Tim Notke'],
-  ['I hated every minute of training, but I said, “Don’t quit. Suffer now and live the rest of your life as a champion.”', 'Muhammad Ali'],
+  ['I hated every minute of training, but I said, ‘Don’t quit. Suffer now and live the rest of your life as a champion.’', 'Muhammad Ali'],
   ['Success isn’t always about greatness. It’s about consistency.', 'Dwayne Johnson'],
   ['Motivation is what gets you started. Habit is what keeps you going.', 'Jim Ryun'],
   ['You have to expect things of yourself before you can do them.', 'Michael Jordan'],
@@ -875,6 +885,13 @@ const QUOTES = [
   ['Do not pray for an easy life, pray for the strength to endure a difficult one.', 'Bruce Lee'],
   ['Small daily improvements over time lead to stunning results.', 'Robin Sharma']
 ];
+/* rest days are chosen by hand from Home */
+const isRestToday = () => (S.profile.restDays || []).includes(dayKey(Date.now()));
+function setRestToday(on) {
+  const k = dayKey(Date.now()), cur = (S.profile.restDays || []).filter(d => d !== k);
+  S.profile.restDays = on ? [...cur, k].slice(-400) : cur; queue('p', 200); buzz(); render(false);
+  toast(on ? 'Rest day logged. Recover well.' : 'Rest day removed');
+}
 function greet(hi) {
   const h = new Date().getHours(), tod = h < 5 || h >= 22 ? 'Up late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   return pick([`Hey ${hi},`, `${tod}, ${hi},`, `Welcome back, ${hi},`, `Let’s go, ${hi},`, `Ready, ${hi}?`], 1);
@@ -882,40 +899,34 @@ function greet(hi) {
 
 /* ---------- Home ---------- */
 function vToday() {
-  const now = new Date(), C = consistency(), a = activeSession(), list = sorted();
-  const done = list.filter(s => s.endedAt);
-  const avg = done.length ? done.slice(0, 10).reduce((x, s) => x + (S.A.sess.get(s.id)?.int || 0), 0) / Math.min(10, done.length) : 0;
-  const d30 = Date.now() - 30 * 864e5, prs30 = list.filter(s => s.startedAt >= d30).reduce((x, s) => x + (S.A.sess.get(s.id)?.prs.length || 0), 0);
-  const nx = !a && nextSplitDay(), hi = esc(S.profile.name || S.profile.username);
+  const now = new Date(), a = activeSession(), list = sorted();
+  const nx = !a && nextSplitDay(), hi = esc(((S.profile.name || '').trim().split(/\s+/)[0] || S.profile.username || '').slice(0, 24));
   let lines, cta;
   if (a) {
     const sa = S.A.sess.get(a.id);
     lines = [greet(hi), ...pick([['your session', '<em>is live</em>.'], ['the bar is', '<em>waiting</em>.'], ['finish what', '<em>you started</em>.']], 2)];
     cta = `<div class="what"><span>In progress</span><b>${esc(sessName(a))}</b><span>${plural(a.items.length, 'exercise')} · ${plural(sa.sets, 'set')} logged</span></div><button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
+  } else if (isRestToday()) {
+    lines = [greet(hi), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
+    cta = `<div class="what"><span>Rest day</span><b>Recovery counts</b><span>Logged for today${nx ? ` · ${esc(nx.sp.days[nx.i].type || 'Training')} waits for tomorrow` : ''}</span></div>
+      <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-undo">Undo rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Train anyway"><span class="fab-l" aria-hidden="true">Train anyway</span>${ICON.plus}</button></div>`;
   } else if (nx) {
     const d = nx.sp.days[nx.i], ty = d.type ? esc(d.type) : 'training day';
     lines = [greet(hi), ty, pick(['<em>is up next</em>.', '<em>is on deck</em>.', '<em>is calling</em>.'], 3)];
     cta = `<div class="what"><span>${esc(nx.sp.name)} · day ${nx.i + 1}</span><b>${esc(d.type || 'Training')}</b><span>${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}</span></div>
-      <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   } else {
     lines = [greet(hi), ...(list.length
       ? pick([['every set', '<em>adds up</em>.'], ['show up,', '<em>stack wins</em>.'], ['strength is', '<em>built weekly</em>.'], ['one more', '<em>good session</em>.']], 4)
       : pick([['let’s log your', '<em>first session</em>.'], ['your first', '<em>session awaits</em>.'], ['day one', '<em>starts now</em>.']], 4))];
     cta = `<div class="what"></div>
-      <button class="fab magnet" data-act="start-menu" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button>`;
+      <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   }
   const [qt, qa] = pick(QUOTES, 5), ents = homeEntries(), spans = packSpans(ents.map(e => WSPAN[e.size])), ws = ents.map(e => e.id);
   return pageTop('Home', '', false) + `
   <section class="hero rv">
-    <div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}
+    <div class="hero-top"><div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}</div>
       <figure class="quote"><blockquote>${esc(qt)}</blockquote><figcaption>${esc(qa)}</figcaption></figure></div>
-    <div class="statgrid">
-      <div class="stat hi">${big(list.length)}<span class="l">${list.length === 1 ? 'Session' : 'Sessions'}</span></div>
-      <div class="stat hi">${big(done.length ? Math.round(avg) : '–')}<span class="l">Avg intensity</span></div>
-      <div class="stat">${big(C.score == null ? '–' : Math.round(C.score))}<span class="l">Consistency</span></div>
-      <div class="stat">${big(C.streak)}<span class="l">Week streak</span></div>
-      <div class="stat">${big(prs30)}<span class="l">Records this month</span></div>
-    </div>
     <div class="hero-cta">${cta}</div>
   </section>
   ${ws.length ? `<div class="dash" id="dash">${ents.map((e, i) => wCard(e.id, e.size, spans[i])).join('')}</div>
@@ -982,14 +993,16 @@ function chartDays(days) {
 }
 const chart30 = () => chartDays(30);
 function heatWeeks(weeks) {
-  const cw = weekStart(Date.now()), start = shiftWeek(cw, -(weeks - 1)), di = dayIntensity(), tk = dayKey(Date.now()), now = Date.now();
+  const cw = weekStart(Date.now()), start = shiftWeek(cw, -(weeks - 1)), di = dayIntensity(), tk = dayKey(Date.now()), now = Date.now(), rd = new Set(S.profile.restDays || []);
   let h = '';
   for (let w = 0; w < weeks; w++) { const ws = shiftWeek(start, w); for (let d = 0; d < 7; d++) { const dt = new Date(ws); dt.setDate(dt.getDate() + d); const k = dayKey(dt);
-    let c = ''; if (dt.getTime() > now) c = 'fut'; else if (di.has(k)) { const v = di.get(k); c = v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1'; }
-    if (k === tk) c += ' today'; h += `<i class="${c}" title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : ''}"></i>`; } }
+    let c = ''; if (dt.getTime() > now) c = 'fut'; else if (di.has(k)) { const v = di.get(k); c = v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1'; } else if (rd.has(k)) c = 'rd';
+    if (k === tk) c += ' today'; h += `<i class="${c}" title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : rd.has(k) ? ' · rest day' : ''}"></i>`; } }
   return `<div class="heat${weeks > 30 ? ' dense' : ''}" aria-label="Training days, last ${weeks} weeks">${h}</div>`;
 }
 const heat = () => heatWeeks(18);
+const heatKey = `<div class="heat-f"><span class="lbl">less</span><span class="lbl"><i class="rd-key"></i>rest</span><span class="lbl">more intense</span></div>`;
+const restIn = days => { const t = Date.now() - days * 864e5; return (S.profile.restDays || []).filter(k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime() >= t; }).length; };
 function weekCounts() { const m = new Map(); for (const s of S.sessions.values()) if (s.items.length) { const k = weekStart(s.startedAt); m.set(k, (m.get(k) || 0) + 1); } return m; }
 function bestStreak() {
   const m = weekCounts(), target = S.profile.target || 3; if (!m.size) return 0;
@@ -1047,12 +1060,12 @@ const WIDGETS = {
     title: 'Consistency', desc: 'Training days against your weekly target', opts: [[18, '18w'], [52, '52w']],
     card: (open, z) => { const C = consistency();
       if (z === 's') return wTile('Consistency', C.score == null ? '–' : Math.round(C.score), `${plural(C.streak, 'week')} streak`, open);
-      const wk = z === 'l' ? 26 : 18, base = wHead(`Consistency · ${wk}w`, `${C.target}/wk target`, open) + heatWeeks(wk) + `<div class="heat-f"><span class="lbl">less</span><span class="lbl">more intense</span></div>`;
+      const wk = z === 'l' ? 26 : 18, base = wHead(`Consistency · ${wk}w`, `${C.target}/wk target`, open) + heatWeeks(wk) + heatKey;
       return z === 'l' ? base + mkv([['this week', `${C.thisWeek}/${C.target}`], ['streak', plural(C.streak, 'wk')], ['best streak', plural(bestStreak(), 'wk')]]) : base; },
     full: w => {
       const C = consistency(), m = weekCounts(), cw = weekStart(Date.now()); let hit = 0; for (let i = 0; i < w; i++) if ((m.get(shiftWeek(cw, -i)) || 0) >= C.target) hit++;
-      return `<section class="card">${heatWeeks(w)}<div class="heat-f"><span class="lbl">less</span><span class="lbl">more intense</span></div></section>`
-        + kvs([['Score', C.score == null ? '–' : Math.round(C.score)], ['This week', `${C.thisWeek}/${C.target}`], ['Streak', plural(C.streak, 'wk')], ['Best streak', plural(bestStreak(), 'wk')], ['Weeks on target', `${hit}/${w}`], ['Weekly target', C.target]])
+      return `<section class="card">${heatWeeks(w)}${heatKey}</section>`
+        + kvs([['Score', C.score == null ? '–' : Math.round(C.score)], ['This week', `${C.thisWeek}/${C.target}`], ['Streak', plural(C.streak, 'wk')], ['Best streak', plural(bestStreak(), 'wk')], ['Weeks on target', `${hit}/${w}`], ['Rest days', restIn(w * 7)]])
         + `<p class="muted wf-note">Your weekly target is in Settings. A week at or above target scores 100; the score averages your last 8 full weeks.</p>`;
     }
   },
@@ -1301,7 +1314,7 @@ function trend(x) {
 
 /* ---------- Splits ---------- */
 function dayBar(days, next = -1) {
-  return `<div class="daybar">${days.map((d, i) => `<span class="${isRestDay(d) ? '' : 'on'}${i === next ? ' next' : ''}" title="Day ${i + 1}: ${esc(d.type || 'Untitled')}">${esc(isRestDay(d) ? 'rest' : (d.type || 'day ' + (i + 1)).slice(0, 6))}</span>`).join('')}</div>`;
+  return `<div class="daybar">${days.map((d, i) => `<span class="${isRestDay(d) ? '' : 'on'}${i === next ? ' next' : ''}" title="Day ${i + 1}: ${esc(d.type || 'Untitled')}">${esc(isRestDay(d) ? 'rest' : (d.type || 'day ' + (i + 1)))}</span>`).join('')}</div>`;
 }
 function vSplits() {
   const mine = [...S.splits.values()].sort((a, b) => b.updatedAt - a.updatedAt), nx = nextSplitDay();
@@ -1326,7 +1339,7 @@ function vSplit() {
   const sp = S.splits.get(S.arg), rec = S.recipients.get(sp.id), tr = sp.days.filter(d => !isRestDay(d)).length;
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Split</span>
     <button class="btn ghost sm" data-act="share-split" data-id="${sp.id}">${ICON.share}${roll('Share')}</button><button class="iconbtn" data-act="split-menu" data-id="${sp.id}" aria-label="Split options">${ICON.dots}</button></header>
-  <div class="rv" style="margin-top:12px"><input class="sp-name" data-f="spname" value="${esc(sp.name)}" maxlength="60" aria-label="Split name" placeholder="Split name">
+  <div class="rv" style="margin-top:12px"><textarea class="sp-name autosize" data-f="spname" rows="1" maxlength="60" aria-label="Split name" placeholder="Split name">${esc(sp.name)}</textarea>
   <textarea class="sp-desc" data-f="spdesc" maxlength="1000" placeholder="Describe it: goal, who it suits, how to progress" aria-label="Description">${esc(sp.description)}</textarea></div>
   <div class="toolbar rv" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:12px"><span class="lbl">Days</span><span class="stepper" style="background:var(--surface)"><button data-act="days-step" data-d="-1" aria-label="Remove last day">−</button><span>${sp.days.length}</span><button data-act="days-step" data-d="1" aria-label="Add a day">+</button></span></div>
   <span class="lbl">${tr} training · ${sp.days.length - tr} rest${rec && rec.length ? ` · shared with ${rec.length}` : ''}${sp.shareToken ? ' · link on' : ''}</span></div>
@@ -1345,9 +1358,9 @@ function dayCard(d, i, ro) {
   const rest = isRestDay(d), groups = dayGroups(d), lk = !ro && S.spLink && S.spLink.day === i ? S.spLink : null;
   const head = ro
     ? `<div class="day-h"><span class="day-n">DAY ${i + 1}</span><span class="day-type" style="display:flex;align-items:center">${esc(d.type || (rest ? 'Rest' : 'Training'))}</span></div>`
-    : `<div class="day-h"><span class="day-n">DAY ${i + 1}</span><input class="day-type" data-f="dtype" data-day="${i}" value="${esc(d.type)}" maxlength="40" placeholder="Session type" aria-label="Day ${i + 1} session type">${rest ? '' : `<button class="iconbtn" data-act="start-day" data-sp="${S.arg}" data-day="${i}" aria-label="Start day ${i + 1} as a session" title="Start this day">${ICON.play}</button>`}</div>
+    : `<div class="day-h"><span class="day-mv"><button class="iconbtn sm" data-act="day-move" data-day="${i}" data-d="-1"${i === 0 ? ' disabled' : ''} aria-label="Move day ${i + 1} earlier">${ICON.up}</button><button class="iconbtn sm" data-act="day-move" data-day="${i}" data-d="1"${i === (S.splits.get(S.arg)?.days.length || 0) - 1 ? ' disabled' : ''} aria-label="Move day ${i + 1} later">${ICON.down}</button></span><span class="day-n">DAY ${i + 1}</span><input class="day-type" data-f="dtype" data-day="${i}" value="${esc(d.type)}" maxlength="40" placeholder="Session type" aria-label="Day ${i + 1} session type">${rest ? '' : `<button class="iconbtn" data-act="start-day" data-sp="${S.arg}" data-day="${i}" aria-label="Start day ${i + 1} as a session" title="Start this day">${ICON.play}</button>`}</div>
       <div class="types">${DAY_TYPES.map(t => `<button class="chip${d.type === t ? ' on' : ''}" data-act="dtype-pick" data-day="${i}" data-t="${esc(t)}">${t}</button>`).join('')}</div>`;
-  if (rest) return `<div class="day rest${ro ? ' ro' : ''} rv">${head}<p class="muted" style="font-size:13px">Rest day. Recovery is part of the plan.</p>${ro ? '' : `<div class="day-f"><button class="btn line sm" data-act="day-train" data-day="${i}">${roll('Make it a training day')}</button></div>`}</div>`;
+  if (rest) return `<div class="day rest${ro ? ' ro' : ''} rv" data-did="${d.id}">${head}<p class="muted" style="font-size:13px">Rest day. Recovery is part of the plan.</p>${ro ? '' : `<div class="day-f"><button class="btn line sm" data-act="day-train" data-day="${i}">${roll('Make it a training day')}</button></div>`}</div>`;
   const rows = d.exercises.map((x, j) => {
     const e = !ro && x.exId && exOf(x.exId), name = e ? e.name : x.name, muscle = e ? e.muscle : x.muscle, gr = x.g && groups.get(x.g);
     const tag = gr ? `<span class="gtag">${gr.ab}·${gr.letter}</span> ` : '';
@@ -1361,7 +1374,7 @@ function dayCard(d, i, ro) {
   const foot = ro ? '' : lk
     ? `<div class="sp-linkbar"><button class="iconbtn" data-act="sp-link-cancel" aria-label="Cancel linking">${ICON.x}</button><div class="tlink"><b>${lk.sel.size ? spLinkType(lk.sel.size) : 'Select exercises to link'}</b><span class="muted">${lk.sel.size ? (lk.sel.size === 1 ? 'all its sets run back to back' : `set 1 of each, then set 2…`) : 'tap 2+ for a superset, or 1 for a drop set'}</span></div><button class="btn sm" data-act="sp-link-do"${lk.sel.size ? '' : ' disabled'}>Link</button></div>`
     : `<div class="day-f"><button class="btn ghost sm" data-act="dex-add" data-day="${i}">${roll('+ Exercise')}</button>${d.exercises.length ? `<button class="btn ghost sm" data-act="sp-link" data-day="${i}">${ICON.link}${roll('Link sets')}</button>` : ''}<button class="btn line sm" data-act="day-rest" data-day="${i}">${roll('Make it a rest day')}</button></div>`;
-  return `<div class="day${ro ? ' ro' : ''}${lk ? ' linking' : ''} rv">${head}
+  return `<div class="day${ro ? ' ro' : ''}${lk ? ' linking' : ''} rv" data-did="${d.id}">${head}
     ${d.exercises.length ? `<div class="dex-h lbl"><span>Exercise</span><span>Sets</span><span>Reps</span><span></span></div>${rows}` : `<p class="muted" style="font-size:13px">No exercises yet.</p>`}
     ${glist ? `<div class="groups">${glist}</div>` : ''}${foot}</div>`;
 }
@@ -1700,6 +1713,16 @@ function newSplit() {
 }
 const curSplit = () => S.splits.get(S.arg);
 function touchSplit(sp, delay = 800) { sp.updatedAt = Date.now(); queue('sp:' + sp.id, delay); }
+/* reorder split days; sessions logged from this split keep pointing at the same day */
+function moveDay(i, dir) {
+  const sp = curSplit(), j = i + dir; if (!sp || j < 0 || j >= sp.days.length) return;
+  const before = new Map($$('.day[data-did]').map(el => [el.dataset.did, el.getBoundingClientRect().top]));
+  [sp.days[i], sp.days[j]] = [sp.days[j], sp.days[i]];
+  for (const s of S.sessions.values()) if (s.splitId === sp.id && (s.splitDay === i || s.splitDay === j)) { s.splitDay = s.splitDay === i ? j : i; queue('s:' + s.id, 1500); }
+  S.spLink = null; touchSplit(sp, 400); render(false);
+  for (const el of $$('.day[data-did]')) { const y = before.get(el.dataset.did); if (y == null) continue; const dy = y - el.getBoundingClientRect().top; if (!dy || reduced) continue;
+    el.style.transition = 'none'; el.style.transform = `translateY(${dy}px)`; requestAnimationFrame(() => { el.style.transition = 'transform .55s var(--spring)'; el.style.transform = ''; }); }
+}
 function dupSplit(id) {
   const sp = S.splits.get(id); if (!sp) return;
   const c = { ...clone(sp), id: uuid(), name: (sp.name + ' copy').slice(0, 60), shareToken: null, copiedFrom: null, updatedAt: Date.now() };
@@ -1903,6 +1926,7 @@ const ACT = {
   'dex-add': el => openPicker('split', { split: S.arg, day: +el.dataset.day }),
   'sp-link': el => { S.spLink = { day: +el.dataset.day, sel: new Set() }; render(false); },
   'sp-link-cancel': () => { S.spLink = null; render(false); },
+  'day-move': el => moveDay(+el.dataset.day, +el.dataset.d),
   'sp-link-pick': el => { const L = S.spLink; if (!L) return; const j = +el.dataset.x; L.sel.has(j) ? L.sel.delete(j) : L.sel.add(j); buzz(6); render(false); },
   'sp-link-do': () => { const sp = curSplit(), L = S.spLink, d = sp && L && sp.days[L.day]; if (!d || !L.sel.size) return; const g = sid(), t = spLinkType(L.sel.size);
     const old = new Map(); for (const j of L.sel) { const og = d.exercises[j]?.g; if (og && !old.has(og)) old.set(og, d.exercises.filter(y => y.g === og).length); }
@@ -1928,6 +1952,8 @@ const ACT = {
   'w-open': el => { S.homeRestore = { y: scrollY, x: $('#dash')?.scrollLeft || 0 }; go('widget', el.dataset.id); },
   'w-opt': el => { WOPT[el.dataset.id] = +el.dataset.v; try { localStorage.setItem('sg-wopt', JSON.stringify(WOPT)); } catch {} render(false); },
   'w-close': () => back(),
+  'rest-today': () => setRestToday(true),
+  'rest-undo': () => setRestToday(false),
   'w-size': el => { const list = homeEntries(), e = list.find(x => x.id === el.dataset.id); if (!e) return; e.size = el.dataset.v; saveEntries(list); buzz(); render(false); },
   'edit-home': () => editHome(),
   how: () => openSheet(HOW),
@@ -1964,7 +1990,7 @@ const ACT = {
 };
 /* app feel on phones: a light haptic tick on key taps (Android; iOS has no web vibration) */
 const coarse = matchMedia('(pointer:coarse)');
-const BUZZ = new Set(['w-open', 'w-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install']);
+const BUZZ = new Set(['day-move', 'w-open', 'w-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install']);
 const buzz = (ms = 8) => { if (!coarse.matches || reduced) return; try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
@@ -1991,7 +2017,7 @@ document.addEventListener('input', e => {
     case 'obbw': { const v = parseFloat(el.value.replace(',', '.')); S.ob.bw = isFinite(v) && v > 0 ? (S.ob.unit === 'lb' ? v / KG_LB : v) : null; break; }
     case 'd-name': { const v = el.value.trim().slice(0, 40); if (v) { S.profile.name = v; queue('p', 900); } break; }
     case 'restr': S.profile.rest = +el.value; $('#restv').textContent = 'rest ' + mmss(S.profile.rest * 1000); queue('p', 900); break;
-    case 'spname': { const sp = curSplit(); if (sp) { sp.name = el.value.slice(0, 60) || 'Untitled split'; touchSplit(sp); } break; }
+    case 'spname': { if (/\n/.test(el.value)) el.value = el.value.replace(/\s*\n\s*/g, ' '); grow(el); const sp = curSplit(); if (sp) { sp.name = el.value.slice(0, 60) || 'Untitled split'; touchSplit(sp); } break; }
     case 'spdesc': { const sp = curSplit(); if (sp) { sp.description = el.value.slice(0, 1000); touchSplit(sp, 1200); } break; }
     case 'dtype': { const sp = curSplit(), d = sp && sp.days[+el.dataset.day]; if (d) { d.type = el.value.slice(0, 40); d.rest = /^rest$/i.test(d.type.trim()); touchSplit(sp); } break; }
     case 'dsets': { const sp = curSplit(), x = sp && sp.days[+el.dataset.day]?.exercises[+el.dataset.x]; const v = parseInt(el.value, 10); if (x && v > 0) { x.sets = Math.min(20, v); touchSplit(sp); } break; }

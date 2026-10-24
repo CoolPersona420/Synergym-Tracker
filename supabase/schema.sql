@@ -34,6 +34,8 @@ alter table public.profiles add column if not exists theme text check (char_leng
 alter table public.profiles add column if not exists muscles jsonb check (muscles is null or (jsonb_typeof(muscles) = 'array' and jsonb_array_length(muscles) <= 40));
 -- Home screen widgets, in order (ids from the app's widget catalog)
 alter table public.profiles add column if not exists widgets jsonb check (widgets is null or (jsonb_typeof(widgets) = 'array' and jsonb_array_length(widgets) <= 20));
+-- Days the user marked as rest from the Home screen ("YYYY-M-D", most recent kept)
+alter table public.profiles add column if not exists rest_days jsonb check (rest_days is null or (jsonb_typeof(rest_days) = 'array' and jsonb_array_length(rest_days) <= 400));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
