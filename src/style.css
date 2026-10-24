@@ -1124,3 +1124,4 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   .hero-cta .what-pick:hover .wp-d > b{background-size:100% 2px}
 }
 .hero-cta .what-pick .wp-d .wp-chip{font-size:var(--t-xs);color:var(--ink-2)}
+@media (max-width:47.99rem){.what-pick > .wp-sub{display:none}}
