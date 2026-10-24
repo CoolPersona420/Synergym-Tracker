@@ -2,8 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import './style.css';
 
 /* ================= config ================= */
-const SB_URL = import.meta.env.VITE_SUPABASE_URL;
-const SB_KEY = import.meta.env.VITE_SUPABASE_KEY;
+// The project URL and publishable key are public by design (every browser receives them; Row Level
+// Security protects the data). They're the defaults here so a deploy works without extra setup;
+// VITE_SUPABASE_URL / VITE_SUPABASE_KEY in the environment override them, e.g. for a staging project.
+const SB_URL = (import.meta.env.VITE_SUPABASE_URL || 'https://dqpxqinejgovkhwvsqem.supabase.co').trim();
+const SB_KEY = (import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_jTBU_Y-1T3ouNej7YUsCIQ_E5ceELbu').trim();
 const sb = SB_URL && SB_KEY
   ? createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } })
   : null;
