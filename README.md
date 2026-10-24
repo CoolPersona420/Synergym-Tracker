@@ -8,6 +8,8 @@ exercise list per user, and training splits you can share.
   Settings › Theme: Mono Light/Dark, Solarized Light/Dark, Gruvbox Light/Dark, Nord, Dracula, Ocean, Sage and Volt.
   The sun / moon button flips to each theme's light or dark partner. Spacing, type sizes and two-column splits
   follow the golden ratio (φ = 1.618); the scale and theme tokens are at the top of `src/style.css`.
+- **Brand:** the wolf mascot (white head, red eyes) is the logo, the loading screen lockup and the app
+  icon (`public/icon.svg`, `apple-touch-icon.png`, `icon-192/512.png`, `icon-maskable-512.png`). The wordmark is Teko Bold, slanted 12°.
 - **Focus:** whatever you're not working on recedes. Other exercise cards blur while you type into one, card
   grids and lists soften around the one you hover, and sheets blur the page behind them.
 - **Accounts:** a login page and a five-step registration: account, name and username, units /

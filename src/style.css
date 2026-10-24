@@ -170,10 +170,19 @@ body.no-nav .app{grid-template-columns:minmax(0,1fr)}
 }
 
 /* brand */
-.brand{display:inline-flex;align-items:center;gap:var(--s-1);font-weight:800;font-size:1.15rem;letter-spacing:-.03em;color:var(--ink)}
-.brand .mark{width:2rem;height:2rem;flex:none}
-.mark .m-bg{fill:var(--solid)}.mark .m-s{stroke:var(--solid-ink)}.mark .m-d{fill:var(--muted)}
-.on-hero .mark .m-bg{fill:var(--hero-ink)}.on-hero .mark .m-s{stroke:var(--hero-deep)}.on-hero .mark .m-d{fill:var(--hero-accent)}
+.brand{display:inline-flex;align-items:center;gap:var(--s-1);color:var(--ink)}
+.brand .mark{width:2.1rem;height:2.1rem;flex:none;border-radius:22%;box-shadow:0 0 0 1px var(--line)}
+.wordmark{font-family:"Teko","Anton",Impact,"Arial Narrow",sans-serif;font-weight:700;font-size:1.72rem;line-height:.8;letter-spacing:.02em;padding:.18em .04em 0 0;transform:skewX(-12deg);display:inline-block}
+.brand.on-hero{color:var(--hero-ink)}
+/* stacked lockup (loading screen): wolf over wordmark, as in the brand artwork */
+.lockup{display:flex;flex-direction:column;align-items:center;gap:var(--s0);color:var(--ink)}
+.lockup .wolf{width:6.854rem;height:6.854rem}
+.lockup .wolf path:first-child{fill:var(--ink);stroke:var(--ink)}
+.lockup .wolf path:last-child{fill:var(--bg)}
+.lockup .wordmark{font-size:var(--t3)}
+.boot .lockup{animation:breathe 1.8s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.55;transform:scale(.98)}}
+@media (prefers-reduced-motion:reduce){.boot .lockup{animation:none}}
 .brand.on-hero{color:var(--hero-ink)}
 
 /* text roll + entrance */
@@ -480,7 +489,6 @@ a:hover .roll>span,button:hover .roll>span{transform:translateY(-50%)}
 .pw-meter{height:4px;border-radius:4px;background:var(--surface-2);overflow:hidden}
 .pw-meter i{display:block;height:100%;width:0;background:var(--bad);transition:width .3s,background .3s}
 .boot{min-height:70vh;display:grid;place-items:center}
-.boot .brand{animation:pulse 1.4s infinite}
 .ob{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--s1) + env(safe-area-inset-top,0px)) var(--gr) var(--s3) var(--gl)}
 .ob-in{width:min(32rem,100%);display:flex;flex-direction:column;gap:var(--s1)}
 .ob-top{display:flex;justify-content:space-between;align-items:center}

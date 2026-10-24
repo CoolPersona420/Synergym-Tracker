@@ -73,8 +73,10 @@ function roll(t) { return `<span class="roll"><span data-t="${esc(t)}">${esc(t)}
 let toastT; function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2800); }
 
 /* brand, contour lines, big numerals */
-const MARK = '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect class="m-bg" width="32" height="32" rx="9"/><path class="m-s" d="M21.2 11.4c-.9-1.7-2.8-2.7-5.1-2.7-3 0-5.1 1.6-5.1 4 0 5.3 10.6 2.7 10.6 8.1 0 2.4-2.3 4.1-5.4 4.1-2.4 0-4.5-1.1-5.4-3" fill="none" stroke-width="2.6" stroke-linecap="round"/><circle class="m-d" cx="24.6" cy="7.6" r="2.3"/></svg>';
-const brand = (cls = '') => `<span class="brand ${cls}">${MARK}<span>Synergym</span></span>`;
+const WOLF = '<path d="M200 142 L258 128 L292 56 L312 162 L340 196 L318 204 L330 232 L252 304 L200 358 L148 304 L70 232 L82 204 L60 196 L88 162 L108 56 L142 128 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="16" stroke-linejoin="miter"/><path fill="#E8261A" d="M212 220 L280 188 L268 212 Z M188 220 L120 188 L132 212 Z"/><path fill="#0B0B0B" d="M186 290 L214 290 L200 304 Z"/>';
+const MARK = `<svg class="mark" viewBox="0 0 400 400" aria-hidden="true"><rect width="400" height="400" rx="88" fill="#0B0B0B"/><g transform="translate(200 207) scale(.8) translate(-200 -207)">${WOLF}</g></svg>`;
+const brand = (cls = '') => `<span class="brand ${cls}" aria-label="Synergym">${MARK}<span class="wordmark" aria-hidden="true">SYNERGYM</span></span>`;
+const lockup = () => `<div class="lockup" aria-label="Synergym"><svg class="wolf" viewBox="0 0 400 400" aria-hidden="true">${WOLF}</svg><span class="wordmark">SYNERGYM</span></div>`;
 const orbs = () => '<div class="orbs" aria-hidden="true"><i class="solid"></i><i class="glass"></i></div>';
 function big(v) {
   const s = String(v), n = parseFloat(s);
@@ -419,7 +421,7 @@ function render(enter) {
     if (!sb) { html = vNoConfig(); bare = true; }
     else if (S.recover) { html = vRecover(); bare = true; }
     else if (S.view === 'public') { html = vPublic(); app = !!(S.user && S.loaded && S.profile.onboarded); }
-    else if (!S.authReady || (S.user && !S.loaded && !S.loadError)) html = `<div class="boot">${brand()}</div>`;
+    else if (!S.authReady || (S.user && !S.loaded && !S.loadError)) html = `<div class="boot">${lockup()}</div>`;
     else if (!S.user) { html = vAuth(); bare = true; }
     else if (S.loadError) { html = vLoadError(); bare = true; }
     else if (!S.profile.onboarded) { html = vWizard(); bare = true; }
