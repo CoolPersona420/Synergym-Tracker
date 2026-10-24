@@ -39,7 +39,7 @@ const ICON={
 };
 
 /* ================= state ================= */
-const DEFAULT_PROFILE = { username: null, name: '', exp: null, goal: null, onboarded: false, unit: 'kg', target: 3, rest: 90, restOn: true, sound: true, bw: 75 };
+const DEFAULT_PROFILE = { theme: null, username: null, name: '', exp: null, goal: null, onboarded: false, unit: 'kg', target: 3, rest: 90, restOn: true, sound: true, bw: 75 };
 const S = {
   authReady: false, user: null, loaded: false, loadError: null,
   profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(),
@@ -73,11 +73,10 @@ function roll(t) { return `<span class="roll"><span data-t="${esc(t)}">${esc(t)}
 let toastT; function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2800); }
 
 /* brand, contour lines, big numerals */
-const WOLF = '<path d="M200 142 L258 128 L292 56 L312 162 L340 196 L318 204 L330 232 L252 304 L200 358 L148 304 L70 232 L82 204 L60 196 L88 162 L108 56 L142 128 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="16" stroke-linejoin="miter"/><path fill="#E8261A" d="M212 220 L280 188 L268 212 Z M188 220 L120 188 L132 212 Z"/><path fill="#0B0B0B" d="M186 290 L214 290 L200 304 Z"/>';
-const MARK = `<svg class="mark" viewBox="0 0 400 400" aria-hidden="true"><rect width="400" height="400" rx="88" fill="#0B0B0B"/><g transform="translate(200 207) scale(.8) translate(-200 -207)">${WOLF}</g></svg>`;
+const WOLF = '<path class="w-body" d="M200 142 L258 128 L292 56 L312 162 L340 196 L318 204 L330 232 L252 304 L200 358 L148 304 L70 232 L82 204 L60 196 L88 162 L108 56 L142 128 Z" stroke-width="16" stroke-linejoin="miter"/><path class="w-eyes" d="M212 220 L280 188 L268 212 Z M188 220 L120 188 L132 212 Z"/><path class="w-nose" d="M186 290 L214 290 L200 304 Z"/>';
+const MARK = `<svg class="mark wolf-t" viewBox="44 40 312 330" aria-hidden="true">${WOLF}</svg>`;
 const brand = (cls = '') => `<span class="brand ${cls}" aria-label="Synergym">${MARK}<span class="wordmark" aria-hidden="true">SYNERGYM</span></span>`;
-const lockup = () => `<div class="lockup" aria-label="Synergym"><svg class="wolf" viewBox="0 0 400 400" aria-hidden="true">${WOLF}</svg><span class="wordmark">SYNERGYM</span></div>`;
-const orbs = () => '<div class="orbs" aria-hidden="true"><i class="solid"></i><i class="glass"></i></div>';
+const lockup = () => `<div class="lockup" aria-label="Synergym"><svg class="wolf wolf-t" viewBox="44 40 312 330" aria-hidden="true">${WOLF}</svg><span class="wordmark">SYNERGYM</span></div>`;
 function big(v) {
   const s = String(v), n = parseFloat(s);
   return s.trim() !== '' && isFinite(n) && /^-?\d+(\.\d+)?$/.test(s) ? `<span class="n count" data-to="${n}" data-dec="${s.includes('.') ? 1 : 0}">${esc(s)}</span>` : `<span class="n">${esc(s)}</span>`;
@@ -109,19 +108,23 @@ const THEMES = [
 ];
 const themePref = () => document.documentElement.dataset.theme || 'auto';
 const isDark = () => { const t = THEMES.find(x => x.id === themePref()); return t && t.dark != null ? t.dark : matchMedia('(prefers-color-scheme: dark)').matches; };
-function setTheme(t) {
+function applyTheme(t) {
   if (!THEMES.some(x => x.id === t)) t = 'auto';
   if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   try { t === 'auto' ? localStorage.removeItem('sg-theme') : localStorage.setItem('sg-theme', t); } catch {}
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   for (const m of $$('meta[name="theme-color"]')) m.content = bg || (isDark() ? '#050505' : '#EDEDED');
-  render(false);
 }
+function setTheme(t) { applyTheme(t); render(false); }
 function flipTheme() {
   const t = THEMES.find(x => x.id === themePref());
-  setTheme(t && t.pair ? t.pair : (isDark() ? 'light' : 'dark'));
+  const next = t && t.pair ? t.pair : (isDark() ? 'light' : 'dark');
+  applyTheme(next);
+  if (S.draft) S.draft.theme = next;
+  else if (S.user && S.loaded && S.profile.onboarded) { S.profile.theme = next; queue('p', 300); }
+  render(false);
 }
-const themePicker = () => `<div class="themes">${THEMES.map(t => `<button class="theme-card${themePref() === t.id ? ' on' : ''}" data-act="theme" data-t="${t.id}" aria-pressed="${themePref() === t.id}">
+const themePicker = () => `<div class="themes">${THEMES.map(t => `<button class="theme-card${themePref() === t.id ? ' on' : ''}" data-act="d-theme" data-t="${t.id}" aria-pressed="${themePref() === t.id}">
   <span class="tp" style="background:${t.c[0]}"><b style="background:${t.c[4]}"></b><em style="background:${t.c[1]}"></em><i style="background:${t.c[2]}"></i><u style="background:${t.c[3]}"></u></span>
   <span>${t.name}<small>${t.note}</small></span></button>`).join('')}</div>`;
 const themeBtn = () => `<button class="theme-btn" data-act="theme-flip" aria-label="Switch to ${isDark() ? 'light' : 'dark'} mode" title="Switch to ${isDark() ? 'light' : 'dark'} mode">${isDark() ? ICON.sun : ICON.moon}</button>`;
@@ -150,8 +153,8 @@ function cleanDays(d) {
 }
 
 /* ================= db mapping ================= */
-const profFromDb = r => ({ username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75 });
-const profToDb = p => ({ display_name: (p.name || '').slice(0, 40) || null, experience: p.exp || null, goal: p.goal || null, onboarded: !!p.onboarded, unit: p.unit, weekly_target: p.target, rest_seconds: p.rest, rest_enabled: p.restOn, rest_sound: p.sound, bodyweight: Math.round(p.bw * 100) / 100 });
+const profFromDb = r => ({ theme: r.theme || null, username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75 });
+const profToDb = p => ({ theme: p.theme || null, display_name: (p.name || '').slice(0, 40) || null, experience: p.exp || null, goal: p.goal || null, onboarded: !!p.onboarded, unit: p.unit, weekly_target: p.target, rest_seconds: p.rest, rest_enabled: p.restOn, rest_sound: p.sound, bodyweight: Math.round(p.bw * 100) / 100 });
 const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: r.kind === 'bw' ? 'bw' : 'w', archived: !!r.archived, isDefault: !!r.is_default });
 const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault });
 const sessFromDb = r => cleanSession({ id: r.id, name: r.name, startedAt: Date.parse(r.started_at), endedAt: r.ended_at ? Date.parse(r.ended_at) : null, notes: r.notes, items: r.items, splitId: r.split_id, splitDay: r.split_day });
@@ -160,7 +163,7 @@ const splitFromDb = r => ({ id: r.id, name: r.name, description: r.description |
 const splitToDb = p => ({ id: p.id, user_id: S.user.id, name: p.name.trim() || 'Untitled split', description: p.description || '', days: p.days, share_token: p.shareToken, copied_from: p.copiedFrom, updated_at: new Date().toISOString() });
 
 /* ================= save queue (survives reloads and dropped connections) ================= */
-const OB = { pending: new Set(), timers: new Map(), inflight: new Set(), again: new Set(), failing: false, backoff: 2000, retryT: null };
+const OB = { lastOk: new Map(), pending: new Set(), timers: new Map(), inflight: new Set(), again: new Set(), failing: false, backoff: 2000, retryT: null };
 const obKey = () => S.user ? 'sg-outbox-' + S.user.id : null;
 function snapshot(key) {
   const i = key.indexOf(':'), t = key.slice(0, i), id = key.slice(i + 1);
@@ -210,7 +213,7 @@ async function flush(key) {
   try {
     const r = await runJob(key);
     if (r.error) throw r.error;
-    ok = true; OB.failing = false; OB.backoff = 2000;
+    ok = true; OB.failing = false; OB.backoff = 2000; OB.lastOk.set(key, Date.now());
   } catch (e) {
     if (isPermanent(e)) { saveError(key, e); }
     else { OB.pending.add(key); OB.failing = true; scheduleRetry(); }
@@ -252,7 +255,7 @@ async function fetchAll(make) {
   return out;
 }
 async function loadAll() {
-  const uid = S.user.id;
+  const uid = S.user.id, t0 = Date.now();
   let [pr, ex, ss, sp, sh] = await Promise.all([
     sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
     fetchAll(() => sb.from('exercises').select('*').order('name')),
@@ -267,7 +270,7 @@ async function loadAll() {
     await sb.rpc('restore_default_exercises');
     ex = await fetchAll(() => sb.from('exercises').select('*').order('name'));
   }
-  const keep = k => OB.pending.has(k) || OB.inflight.has(k);
+  const keep = k => OB.pending.has(k) || OB.inflight.has(k) || (OB.lastOk.get(k) || 0) >= t0;
   const prof = profFromDb(pr.data);
   S.profile = keep('p') ? { ...S.profile, username: prof.username } : prof;
   const lib = new Map(ex.map(r => [r.id, exFromDb(r)]));
@@ -405,7 +408,7 @@ function back() {
   go(up, null, { replace: true });
 }
 addEventListener('popstate', e => { depth = e.state?.d || 0; route(true); });
-function route(enter = true) { const [v, a] = parsePath(); S.view = v; S.arg = a ? decodeURIComponent(a) : null; S.link = null; render(enter); }
+function route(enter = true) { const [v, a] = parsePath(); if (v !== 'prefs' && S.draft) { if (prefsDirty()) toast('Unsaved settings were discarded'); discardDraft(); } S.view = v; S.arg = a ? decodeURIComponent(a) : null; S.link = null; render(enter); }
 
 /* ================= rendering ================= */
 let rT;
@@ -486,18 +489,6 @@ const vNoConfig = () => shell(`<div class="msg err">This deployment is missing i
 const vLoadError = () => shell(`<h1>Couldn’t load <em>your log</em>.</h1><p class="lead">${esc(S.loadError)}</p><button class="btn lg" data-act="retry-load">Try again</button><button class="linkbtn" data-act="signout">Sign out</button>`);
 
 /* ---------- auth ---------- */
-function authSide() {
-  return `<aside class="auth-side">${orbs()}
-    <div>${brand('on-hero')}</div>
-    <div><span class="lbl" style="color:var(--sea-ink-2)">Strength training log</span>
-    ${disp(['Every set', 'builds you,', '<em>session by session</em>.'])}</div>
-    <div class="statgrid">
-      <div class="stat"><span class="n">100</span><span class="l">point intensity score on every set</span></div>
-      <div class="stat"><span class="n">5</span><span class="l">set types it spots for you</span></div>
-      <div class="stat"><span class="n">43</span><span class="l">exercises ready on day one</span></div>
-      <div class="stat"><span class="n">2</span><span class="l">ways to share your split</span></div>
-    </div></aside>`;
-}
 function obBar(step) { return `<div class="ob-bar" aria-label="Step ${step} of 5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= step ? 'on' : ''}"></i>`).join('')}</div>`; }
 function vAuth() {
   const m = S.authMode, msg = S.authMsg;
@@ -524,7 +515,7 @@ function vAuth() {
       <label>Password<input class="field" type="password" name="password" autocomplete="current-password" required></label>
       ${msgHTML}<button class="btn lg" type="submit">Log in</button>
     </form><button class="linkbtn" data-act="auth-mode" data-m="forgot" style="align-self:flex-start">Forgot password?</button>`;
-  return `<div class="auth">${authSide()}<main class="auth-main"><div class="auth-box">${box}</div></main></div>`;
+  return `<div class="auth"><main class="auth-main"><div class="auth-box"><div class="auth-logo">${lockup()}</div>${box}</div></main></div>`;
 }
 function vRecover() {
   return shell(`<h1>Set a <em>new password</em>.</h1>
@@ -682,7 +673,7 @@ function vToday() {
       <div style="display:flex;gap:8px;align-items:center">${last ? `<button class="btn line sm" data-act="repeat" data-id="${last.id}">Repeat</button>` : ''}<button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button></div>`;
   }
   return pageTop('Synergym') + `
-  <section class="hero rv">${orbs()}
+  <section class="hero rv">
     <div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}</div>
     <div class="statgrid">
       <div class="stat">${big(C.thisWeek)}<span class="l">Sessions this week <small>of ${C.target}</small></span></div>
@@ -984,35 +975,61 @@ async function loadRecipients(id) {
 }
 
 /* ---------- Settings ---------- */
+const PREF_KEYS = ['name', 'unit', 'target', 'rest', 'restOn', 'sound', 'bw', 'theme'];
+const draftFrom = p => ({ name: p.name || '', unit: p.unit, target: p.target, rest: p.rest, restOn: p.restOn, sound: p.sound, bw: p.bw, theme: p.theme || themePref() });
+const prefsDirty = () => !!S.draft && PREF_KEYS.some(k => JSON.stringify(S.draft[k]) !== JSON.stringify(draftFrom(S.profile)[k]));
+function updateSaveBar() {
+  const dirty = prefsDirty(), m = $('#savemsg'), sv = $('#save-prefs'), dc = $('#discard-prefs');
+  if (m) m.textContent = dirty ? 'Unsaved changes' : 'All changes saved';
+  if (sv) sv.disabled = !dirty;
+  if (dc) dc.hidden = !dirty;
+}
+function discardDraft() { if (!S.draft) return; const changedTheme = S.draft.theme !== (S.profile.theme || themePref()); S.draft = null; if (changedTheme) applyTheme(S.profile.theme || 'auto'); }
+async function savePrefs(btn) {
+  const d = S.draft; if (!d) return;
+  const name = d.name.trim();
+  if (!name) return toast('Enter a name');
+  if (!(d.bw >= 30 && d.bw <= 300)) return toast('Enter a bodyweight between 30 and 300 kg');
+  const next = { ...S.profile, ...d, name };
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const { error } = await sb.from('profiles').update(profToDb(next)).eq('id', S.user.id);
+  if (error) { btn.disabled = false; btn.textContent = 'Save changes'; return toast('Couldn’t save your settings. Check your connection and try again.'); }
+  S.profile = next; OB.pending.delete('p'); OB.lastOk.set('p', Date.now()); persistOutbox();
+  S.draft = null; applyTheme(next.theme); render(false); toast('Settings saved');
+}
 function vPrefs() {
-  const p = S.profile;
+  const d = S.draft || (S.draft = draftFrom(S.profile)), du = d.unit === 'lb' ? 'lb' : 'kg';
+  const bwShown = Math.round((du === 'lb' ? d.bw * KG_LB : d.bw) * 10) / 10;
   return pageTop('Settings') + `<h1 class="h1 rv" style="margin:10px 0 16px">Settings</h1>
   <div class="dash">
   <section class="card rv">
-    <div class="pref"><span class="k">Units<small>Stored precisely; switch any time</small></span><span class="seg"><button class="${p.unit === 'kg' ? 'on' : ''}" data-act="unit" data-u="kg">kg</button><button class="${p.unit === 'lb' ? 'on' : ''}" data-act="unit" data-u="lb">lb</button></span></div>
-    <div class="pref"><span class="k">Weekly target<small>Sessions per week for consistency</small></span><span class="stepper"><button data-act="step" data-k="target" data-d="-1" aria-label="Fewer">−</button><span>${p.target}</span><button data-act="step" data-k="target" data-d="1" aria-label="More">+</button></span></div>
-    <div class="pref"><span class="k">Rest timer<small>Counts down after you tick a set</small></span><button class="toggle${p.restOn ? ' on' : ''}" data-act="toggle" data-k="restOn" aria-pressed="${p.restOn}" aria-label="Rest timer"></button></div>
-    ${p.restOn ? `<div class="pref"><span class="k">Rest length</span><span class="stepper"><button data-act="step" data-k="rest" data-d="-15" aria-label="Shorter">−</button><span>${mmss(p.rest * 1000)}</span><button data-act="step" data-k="rest" data-d="15" aria-label="Longer">+</button></span></div>
-    <div class="pref"><span class="k">Rest sound<small>A short beep when rest ends</small></span><button class="toggle${p.sound ? ' on' : ''}" data-act="toggle" data-k="sound" aria-pressed="${p.sound}" aria-label="Rest sound"></button></div>` : ''}
-    <div class="pref"><span class="k">Bodyweight<small>Used for bodyweight exercises</small></span><span style="display:flex;align-items:center;gap:8px"><input class="field" style="width:96px;text-align:center" data-f="bw" inputmode="decimal" value="${fmtW(p.bw)}" aria-label="Bodyweight"><span class="lbl">${unit()}</span></span></div>
+    <div class="pref" style="padding-top:0"><span class="k">Name<small>Shown in your greeting</small></span><input class="field" style="width:11rem" data-f="d-name" value="${esc(d.name)}" maxlength="40" aria-label="Your name"></div>
+    <div class="pref"><span class="k">Units<small>Stored precisely; switch any time</small></span><span class="seg"><button class="${du === 'kg' ? 'on' : ''}" data-act="d-set" data-k="unit" data-v="kg">kg</button><button class="${du === 'lb' ? 'on' : ''}" data-act="d-set" data-k="unit" data-v="lb">lb</button></span></div>
+    <div class="pref"><span class="k">Bodyweight<small>Used for bodyweight exercises</small></span><span style="display:flex;align-items:center;gap:8px"><input class="field" style="width:96px;text-align:center" data-f="d-bw" inputmode="decimal" value="${bwShown}" aria-label="Bodyweight"><span class="lbl">${du}</span></span></div>
+    <div class="pref"><span class="k">Weekly target<small>Sessions per week for consistency</small></span><span class="stepper"><button data-act="d-step" data-k="target" data-d="-1" aria-label="Fewer">−</button><span>${d.target}</span><button data-act="d-step" data-k="target" data-d="1" aria-label="More">+</button></span></div>
+    <div class="pref"><span class="k">Rest timer<small>Counts down after you tick a set</small></span><button class="toggle${d.restOn ? ' on' : ''}" data-act="d-toggle" data-k="restOn" aria-pressed="${d.restOn}" aria-label="Rest timer"></button></div>
+    ${d.restOn ? `<div class="pref"><span class="k">Rest length</span><span class="stepper"><button data-act="d-step" data-k="rest" data-d="-15" aria-label="Shorter">−</button><span>${mmss(d.rest * 1000)}</span><button data-act="d-step" data-k="rest" data-d="15" aria-label="Longer">+</button></span></div>
+    <div class="pref"><span class="k">Rest sound<small>A short beep when rest ends</small></span><button class="toggle${d.sound ? ' on' : ''}" data-act="d-toggle" data-k="sound" aria-pressed="${d.sound}" aria-label="Rest sound"></button></div>` : ''}
   </section>
   <section class="card rv" style="display:flex;flex-direction:column;gap:14px">
     <span class="lbl">Account</span>
-    <div class="pref" style="padding-top:0"><span class="k">Name<small>Shown in your greeting</small></span><input class="field" style="width:11rem" data-f="dname" value="${esc(p.name)}" maxlength="40" aria-label="Your name"></div>
-    <div class="pref"><span class="k">@${esc(p.username)}<small>${esc(S.user.email || '')}</small></span><button class="btn ghost sm" data-act="change-username">${roll('Change')}</button></div>
+    <div class="pref" style="padding-top:0"><span class="k">@${esc(S.profile.username)}<small>${esc(S.user.email || '')}</small></span><button class="btn ghost sm" data-act="change-username">${roll('Change')}</button></div>
     <p class="muted" style="font-size:13px">Your sessions, exercises and splits are private to your account. Others only see a split when you share it.</p>
     <span class="lbl" style="margin-top:6px">Your data</span>
     <div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn sm" data-act="export" data-f="json">${roll('Export JSON')}</button><button class="btn ghost sm" data-act="export" data-f="csv">${roll('Export CSV')}</button><button class="btn line sm" data-act="import">${roll('Import JSON')}</button></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="signout">${roll('Sign out')}</button><button class="btn line sm" data-act="delete-account" style="color:var(--bad)">${roll('Delete account')}</button></div>
   </section>
-  <section class="card span rv"><div class="card-h"><span class="lbl">Theme</span><span class="lbl">${esc((THEMES.find(t => t.id === themePref()) || THEMES[0]).name)}</span></div>${themePicker()}</section>
+  <section class="card span rv"><div class="card-h"><span class="lbl">Theme</span><span class="lbl">${esc((THEMES.find(t => t.id === d.theme) || THEMES[0]).name)}</span></div>${themePicker()}</section>
   <section class="card span rv"><div class="card-h"><span class="lbl">How the numbers work</span></div><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
     <p><b>Linked sets.</b> Link two or more sets and Synergym names the structure: two exercises make a superset, three or more a giant set. On one exercise, falling weight is a drop set, the same weight a rest-pause set, anything else a pyramid. Rest starts after the last set of a group.</p>
     <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target.</p>
     <p><b>Splits.</b> The Today screen suggests the next training day of the split you used last, skipping rest days.</p>
-  </div></section></div>`;
+  </div></section></div>
+  <div class="savebar" role="region" aria-label="Save settings"><span id="savemsg" class="muted">${prefsDirty() ? 'Unsaved changes' : 'All changes saved'}</span>
+    <button class="btn ghost sm" id="discard-prefs" data-act="discard-prefs"${prefsDirty() ? '' : ' hidden'}>Discard</button>
+    <button class="btn" id="save-prefs" data-act="save-prefs"${prefsDirty() ? '' : ' disabled'}>Save changes</button></div>`;
 }
 
 /* ================= sheets ================= */
@@ -1417,15 +1434,18 @@ const ACT = {
   'copy-public': () => { if (S.pub?.data) copySplit(S.pub.data, S.pub.data.owner_username); },
   'public-signin': () => { try { localStorage.setItem('sg-open-split', S.arg); } catch {} S.authMode = 'signup'; go('today', null, { replace: true }); },
   unit: el => { S.profile.unit = el.dataset.u; queue('p'); render(false); },
-  step: el => { const k = el.dataset.k, d = +el.dataset.d; S.profile[k] = k === 'target' ? Math.min(7, Math.max(1, S.profile.target + d)) : Math.min(600, Math.max(15, S.profile.rest + d)); queue('p'); render(false); },
-  toggle: el => { const k = el.dataset.k; S.profile[k] = !S.profile[k]; if (k === 'restOn' && !S.profile.restOn) S.rest = null; queue('p'); render(false); },
   'change-username': changeUsername,
   'delete-account': deleteAccount,
   export: el => exportData(el.dataset.f),
   import: () => $('#imp').click(),
   close: closeSheet,
   'theme-flip': flipTheme,
-  theme: el => setTheme(el.dataset.t),
+  'd-theme': el => { if (!S.draft) return; S.draft.theme = el.dataset.t; applyTheme(el.dataset.t); render(false); },
+  'd-set': el => { if (!S.draft) return; S.draft[el.dataset.k] = el.dataset.v; render(false); },
+  'd-step': el => { if (!S.draft) return; const k = el.dataset.k, d = +el.dataset.d; S.draft[k] = k === 'target' ? Math.min(7, Math.max(1, S.draft.target + d)) : Math.min(600, Math.max(15, S.draft.rest + d)); render(false); },
+  'd-toggle': el => { if (!S.draft) return; const k = el.dataset.k; S.draft[k] = !S.draft[k]; render(false); },
+  'save-prefs': el => savePrefs(el),
+  'discard-prefs': () => { discardDraft(); render(false); toast('Changes discarded'); },
   resend: async () => { if (!S.pendingEmail) return; const { error } = await sb.auth.resend({ type: 'signup', email: S.pendingEmail, options: { emailRedirectTo: location.origin } }); S.authMsg = error ? { text: authErr(error), err: true } : { text: 'Sent again. It can take a minute to arrive.', err: false }; render(false); },
   'ob-unit': el => { S.ob.unit = S.profile.unit = el.dataset.u; render(false); },
   'ob-pick': el => { const k = el.dataset.k, v = el.dataset.v; S.ob[k] = k === 'days' ? +v : v; S.authMsg = null; render(false); },
@@ -1462,13 +1482,13 @@ document.addEventListener('input', e => {
     case 'notes': if (s) { s.notes = el.value.slice(0, 4000); queue('s:' + s.id, 1200); } break;
     case 'q': S.q = el.value; $('#hlist').innerHTML = historyList(); break;
     case 'exq': S.exq = el.value; $('#exlist').innerHTML = exList(); break;
-    case 'bw': { const v = parseFloat(el.value.replace(',', '.')); if (isFinite(v) && v > 0) { S.profile.bw = Math.min(300, Math.max(30, fromU(v))); queue('p', 900); } break; }
+    case 'd-bw': { if (!S.draft) break; const v = parseFloat(el.value.replace(',', '.')); S.draft.bw = isFinite(v) && v > 0 ? (S.draft.unit === 'lb' ? v / KG_LB : v) : 0; updateSaveBar(); break; }
     case 'pw': { const v = el.value; let sc = 0; if (v.length >= 8) sc++; if (v.length >= 12) sc++; if (/[a-z]/.test(v) && /[A-Z]/.test(v)) sc++; if (/\d/.test(v)) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
       const m = $('#pwm'), t = $('#pwt'); if (m) { m.style.width = (sc * 20) + '%'; m.style.background = sc <= 1 ? 'var(--bad)' : sc <= 3 ? 'var(--accent)' : 'var(--good)'; }
       if (t) t.textContent = !v ? 'At least 8 characters. A passphrase is best.' : v.length < 8 ? `${8 - v.length} more character${8 - v.length === 1 ? '' : 's'}` : ['Weak', 'Weak', 'Okay', 'Good', 'Strong', 'Very strong'][sc];
       break; }
     case 'obbw': { const v = parseFloat(el.value.replace(',', '.')); S.ob.bw = isFinite(v) && v > 0 ? (S.ob.unit === 'lb' ? v / KG_LB : v) : null; break; }
-    case 'dname': S.profile.name = el.value.trim().slice(0, 40); queue('p', 900); break;
+    case 'd-name': if (S.draft) { S.draft.name = el.value.slice(0, 40); updateSaveBar(); } break;
     case 'restr': S.profile.rest = +el.value; $('#restv').textContent = 'rest ' + mmss(S.profile.rest * 1000); queue('p', 900); break;
     case 'spname': { const sp = curSplit(); if (sp) { sp.name = el.value.slice(0, 60) || 'Untitled split'; touchSplit(sp); } break; }
     case 'spdesc': { const sp = curSplit(); if (sp) { sp.description = el.value.slice(0, 1000); touchSplit(sp, 1200); } break; }
@@ -1517,6 +1537,7 @@ async function startApp() {
   try { await loadAll(); }
   catch (e) { console.error(e); S.loadError = navigator.onLine ? (e.message || 'The server didn’t respond.') : 'You’re offline. Connect and try again.'; return render(true); }
   S.loaded = true; flushAll();
+  if (S.profile.theme) applyTheme(S.profile.theme);
   const p = S.profile;
   S.ob = { step: p.username ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null };
   const t = S.profile.onboarded && pendingPublic();

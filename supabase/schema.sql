@@ -30,6 +30,7 @@ alter table public.profiles add column if not exists display_name text check (ch
 alter table public.profiles add column if not exists experience text check (experience in ('beginner','intermediate','advanced'));
 alter table public.profiles add column if not exists goal text check (goal in ('strength','muscle','fitness','fat_loss'));
 alter table public.profiles add column if not exists onboarded boolean not null default false;
+alter table public.profiles add column if not exists theme text check (char_length(theme) <= 30);
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
