@@ -19,6 +19,9 @@ const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATUR
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const KG_LB = 2.2046226;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* low-end devices (few cores, little memory, data saver) get the same motion with cheaper effects */
+const LITE = (() => { try { const n = navigator, c = n.connection; return !!(c && c.saveData) || (n.deviceMemory && n.deviceMemory <= 2) || (n.hardwareConcurrency && n.hardwareConcurrency <= 4 && (!n.deviceMemory || n.deviceMemory <= 4)); } catch { return false; } })();
+if (LITE) document.documentElement.classList.add('lite');
 
 
 const ICON={
@@ -488,10 +491,22 @@ function go(v, a = null, { replace = false } = {}) {
 function back() {
   if (depth > 0) return history.back();
   const up = { exercise: 'exercises', split: 'splits', shared: 'splits' }[S.view] || 'today';
-  go(up, null, { replace: true });
+  navDir = 'back'; go(up, null, { replace: true });
 }
-addEventListener('popstate', e => { depth = e.state?.d || 0; route(true); });
-function route(enter = true) { const [v, a] = parsePath(); if (v !== 'prefs' && S.draft) { if (prefsDirty()) toast('Unsaved settings were discarded'); discardDraft(); } S.view = v; S.arg = a ? decodeURIComponent(a) : null; S.link = null; render(enter); }
+addEventListener('popstate', e => { const d = e.state?.d || 0; navDir = d < depth ? 'back' : 'fwd'; depth = d; route(true); });
+/* page change: a curtain wipe through the View Transitions API where the browser has it
+   (old page lifts away, new page is revealed from below; reversed when going back). */
+let navDir = 'fwd';
+function route(enter = true) {
+  const [v, a] = parsePath(); if (v !== 'prefs' && S.draft) { if (prefsDirty()) toast('Unsaved settings were discarded'); discardDraft(); }
+  const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg;
+  S.view = v; S.arg = arg; S.link = null;
+  const dir = navDir; navDir = 'fwd';
+  if (enter && changed && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
+    document.documentElement.dataset.nav = dir;
+    document.startViewTransition(() => render(true));
+  } else render(enter);
+}
 
 /* ================= rendering ================= */
 let rT;
@@ -533,12 +548,36 @@ function render(enter) {
   document.body.classList.toggle('no-nav', !app);
   document.body.classList.toggle('bare', bare);
   document.body.classList.toggle('in-session', app && S.view === 'session');
-  if (enter) { $$('.rv', v).forEach((el, i) => el.style.setProperty('--i', Math.min(i, 10))); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); scrollTo(0, 0); countUp(v); }
+  if (enter) { scrollTo(0, 0); if (!SPL.el) playEnter(v); }
   else { v.classList.remove('enter'); scrollTo(0, y); }
   if (app) renderNav();
   syncUI(); tick();
   wake(app && S.view === 'session' && cur() && !cur().endedAt);
   afterRender(enter);
+  if (SPL.el && !(sb && (!S.authReady || (S.user && !S.loaded && !S.loadError)))) splashOut();
+}
+function playEnter(v) {
+  $$('.rv', v).forEach((el, i) => el.style.setProperty('--i', Math.min(i, LITE ? 5 : 10)));
+  v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); countUp(v);
+}
+
+/* splash: the mascot on page load and after logging in, then the panel lifts away */
+const SPL = { el: null, t0: 0, leaving: false };
+function splashIn() {
+  if (SPL.el) return;
+  const el = document.createElement('div');
+  el.id = 'splash'; el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = `<div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t" viewBox="44 40 312 330">${WOLF}</svg></span><span class="spl-mask"><span class="wordmark">SYNERGYM</span></span><span class="spl-bar"><i></i></span></div>`;
+  document.body.appendChild(el);
+  SPL.el = el; SPL.t0 = performance.now(); SPL.leaving = false;
+}
+function splashOut() {
+  if (SPL.leaving) return; SPL.leaving = true;
+  const el = SPL.el, wait = Math.max(0, (reduced ? 500 : 1250) - (performance.now() - SPL.t0));
+  setTimeout(() => {
+    el.classList.add('out'); playEnter($('#view'));
+    setTimeout(() => { el.remove(); if (SPL.el === el) { SPL.el = null; SPL.leaving = false; } }, 1000);
+  }, wait);
 }
 function wireCarousel() {
   const d = $('#dash'), dots = $$('#dash-dots button'); if (!d || !dots.length) return;
@@ -573,8 +612,7 @@ function renderNav() {
   <div class="nav-foot"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span data-sync class="lbl sync"></span>${themeBtn()}</div></div>`;
 }
 function pageTop(title, extra = '', logo = false) {
-  const now = new Date();
-  return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="muted">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()].slice(0, 3)}</span></div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
+  return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}</div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
 }
 const vMissing = msg => `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button></header><div class="empty rv"><b>${esc(msg)}</b>It may have been deleted on another device.</div>`;
 const shell = inner => `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}${themeBtn()}</div>${inner}</div></div>`;
@@ -774,6 +812,15 @@ function vToday() {
       <div class="stat">${big(C.streak)}<span class="l">Week streak</span></div>
       <div class="stat">${big(prs30)}<span class="l">Records this month</span></div>
     </div>
+    <div class="hero-meta">
+      <div class="hm"><span class="hm-n">${list.length}</span><span class="hm-l">${list.length === 1 ? 'session' : 'sessions'}</span></div>
+      <div class="hm"><span class="hm-n">${fmtVol(total)}</span><span class="hm-l">lifted</span></div>
+      <div class="hm"><span class="hm-n">${Math.round(avg)}</span><span class="hm-l">avg intensity</span></div>
+    </div>
+    <div class="hero-ctl">
+      ${S.profile.restOn ? `<label class="restctl"><span class="lbl" id="restv">rest ${mmss(S.profile.rest * 1000)}</span><input type="range" class="range" data-f="restr" min="15" max="300" step="15" value="${S.profile.rest}" aria-label="Rest between sets"></label>` : ''}
+      <div class="seg" role="group" aria-label="Units"><button class="${unit() === 'kg' ? 'on' : ''}" data-act="unit" data-u="kg">kg</button><button class="${unit() === 'lb' ? 'on' : ''}" data-act="unit" data-u="lb">lb</button></div>
+    </div>
     <div class="hero-cta">${cta}</div>
   </section>
   <div class="dash" id="dash">
@@ -790,14 +837,8 @@ function vToday() {
       <div class="card-h"><span class="lbl">Recent sessions</span><button class="lbl" data-act="nav" data-v="history">${roll('All history')}</button></div>
       <div class="list">${list.length ? list.slice(0, 6).map(rowSession).join('') : `<div class="empty"><b>No sessions yet.</b>Tap + to start, or open Splits to plan your week. Intensity calibrates once each exercise has a couple of sessions.</div>`}</div>
     </section>
-    <section class="panel stats span rv">
-      <div class="term">${plural(list.length, 'session')} · ${fmtVol(total)} lifted</div>
-      <div class="seg" role="group" aria-label="Units"><button class="${unit() === 'kg' ? 'on' : ''}" data-act="unit" data-u="kg">kg</button><button class="${unit() === 'lb' ? 'on' : ''}" data-act="unit" data-u="lb">lb</button></div>
-      <div class="term">avg intensity ${Math.round(avg)} · ${prs30} record${prs30 === 1 ? '' : 's'} / 30d</div>
-      ${S.profile.restOn ? `<label class="restctl"><span class="lbl" id="restv">rest ${mmss(S.profile.rest * 1000)}</span><input type="range" class="range" data-f="restr" min="15" max="300" step="15" value="${S.profile.rest}" aria-label="Rest between sets"></label>` : `<span class="lbl" style="justify-self:end">rest timer off</span>`}
-    </section>
   </div>
-  <div class="dash-dots" id="dash-dots" role="tablist" aria-label="Dashboard cards">${['Intensity', 'Consistency', 'Recent sessions', 'Totals'].map((n, i) => `<button role="tab" data-act="dash-go" data-i="${i}" aria-label="${n}"${i ? '' : ' class="on" aria-selected="true"'}></button>`).join('')}</div>`;
+  <div class="dash-dots" id="dash-dots" role="tablist" aria-label="Dashboard cards">${['Intensity', 'Consistency', 'Recent sessions'].map((n, i) => `<button role="tab" data-act="dash-go" data-i="${i}" aria-label="${n}"${i ? '' : ' class="on" aria-selected="true"'}></button>`).join('')}</div>`;
 }
 function rowSession(s) {
   const a = S.A.sess.get(s.id) || { ex: 0, sets: 0, vol: 0, prs: [], int: 0 };
@@ -1647,6 +1688,7 @@ async function startApp() {
 function boot() {
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
+  splashIn();
   route(true);
   if (!sb) return;
   sb.auth.onAuthStateChange((event, session) => {
@@ -1654,7 +1696,7 @@ function boot() {
     const u = session?.user || null;
     setTimeout(() => {
       S.authReady = true;
-      if (u && (!S.user || S.user.id !== u.id)) { resetState(); S.user = u; startApp(); }
+      if (u && (!S.user || S.user.id !== u.id)) { splashIn(); resetState(); S.user = u; startApp(); }
       else if (u) { S.user = u; }
       else if (!u && S.user) { resetState(); S.recover = false; go('today', null, { replace: true }); }
       else render(false);

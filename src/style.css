@@ -197,7 +197,8 @@ a:hover .roll>span,button:hover .roll>span{transform:translateY(-50%)}
 #view.enter .display .ln>span{animation:lineup 1s var(--ease) both;transform:skewX(-8deg);animation-delay:calc(var(--k,0) * 110ms + 80ms)}
 @keyframes lineup{from{transform:translateY(108%) skewX(-8deg)}}
 @media (prefers-reduced-motion:reduce){
-  #view.enter .rv,#view.enter .display .ln>span,.sheet .scrim,.sheet .sp{animation:none!important}
+  #view.enter .display .ln>span,.sheet .scrim{animation:none!important}
+  #view.enter .rv,.sheet .sp{animation:fade .35s both!important}
   .roll>span{transition:none}
 }
 
@@ -634,8 +635,73 @@ header.top .ttl.no-logo > .muted{padding-left:0;font-size:.9rem;font-weight:600;
   .dash{display:flex;gap:var(--s-1);overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-left:calc(var(--gl) * -1);margin-right:calc(var(--gr) * -1);padding:2px var(--gr) 2px var(--gl);scroll-padding:0 var(--gr) 0 var(--gl)}
   .dash::-webkit-scrollbar{display:none}
   .dash > *{flex:0 0 88%;min-width:0;scroll-snap-align:center;scroll-snap-stop:always}
-  .dash > .panel.stats{grid-template-columns:minmax(0,1fr);align-content:start}
   .dash-dots{display:flex;justify-content:center;gap:8px;margin-top:var(--s0)}
   .dash-dots button{width:8px;height:8px;border-radius:999px;background:var(--line);transition:width .35s var(--ease),background .35s}
   .dash-dots button.on{width:22px;background:var(--ink)}
 }
+
+/* ---------- Today: totals live on the main board ---------- */
+.hero-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s0);margin-top:var(--s1);padding-top:var(--s0);border-top:1px solid var(--hero-line)}
+.hm{display:flex;flex-direction:column;gap:5px;min-width:0}
+.hm-n{font-family:var(--font-display);font-weight:600;font-size:var(--t2);line-height:.9;color:var(--hero-ink);font-variant-numeric:tabular-nums;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm-l{font-family:var(--font-mono);font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.08em;color:var(--hero-ink-2);white-space:nowrap}
+.hero-ctl{display:flex;align-items:center;gap:var(--s0);margin-top:var(--s0)}
+.hero-ctl .seg{margin-left:auto;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--hero-line)}
+.hero-ctl .seg button{color:var(--hero-ink-2)}
+.hero-ctl .seg button.on{background:var(--hero-ink);color:var(--hero-deep)}
+.hero-ctl .restctl{flex:1;min-width:0}
+.hero-ctl .restctl .lbl{color:var(--hero-ink-2);white-space:nowrap}
+.hero-ctl .range{flex:1;min-width:0;width:auto;background:var(--hero-line)}
+.hero-ctl .range::-webkit-slider-thumb{background:var(--hero-ink);border-color:var(--hero-deep)}
+.hero-ctl .range::-moz-range-thumb{background:var(--hero-ink);border-color:var(--hero-deep)}
+@media (max-width:47.99rem){.hm-n{font-size:1.618rem}}
+
+/* ---------- motion: one system for every screen size ----------
+   Curtain page transitions (View Transitions API), masked headline lines, staggered rise,
+   a mascot splash on load and after login. Only transform, opacity and clip-path animate. */
+:root{--ease-io:cubic-bezier(.76,0,.24,1)}
+.nav{view-transition-name:nav}
+::view-transition-old(nav),::view-transition-new(nav){animation:none}
+::view-transition-old(root){animation:vt-out .62s var(--ease-io) both}
+::view-transition-new(root){animation:vt-in .62s var(--ease-io) both}
+html[data-nav="back"]::view-transition-old(root){animation-name:vt-out-back}
+html[data-nav="back"]::view-transition-new(root){animation-name:vt-in-back}
+@keyframes vt-out{to{transform:translateY(-7%)}}
+@keyframes vt-in{from{clip-path:inset(100% 0 0 0);transform:translateY(5%)}to{clip-path:inset(0 0 0 0);transform:none}}
+@keyframes vt-out-back{to{transform:translateY(7%)}}
+@keyframes vt-in-back{from{clip-path:inset(0 0 100% 0);transform:translateY(-5%)}to{clip-path:inset(0 0 0 0);transform:none}}
+
+/* press feedback, identical for touch and mouse */
+.iconbtn,.nav-i,.row,.opt,.theme-card{transition:transform .25s var(--ease),background .2s,color .3s,border-color .2s}
+.iconbtn:active,.nav-i:active,.opt:active,.theme-card:active{transform:scale(.94)}
+.row:active{transform:scale(.985)}
+.row:active .tri{transform:translateX(4px);border-left-color:var(--accent)}
+.nav-train:active .ring{transform:scale(.92)}
+
+/* splash */
+#splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:var(--bg);color:var(--ink);overflow:hidden}
+#splash .spl-in{display:flex;flex-direction:column;align-items:center;gap:var(--s-1)}
+#splash .spl-mask{display:block;overflow:hidden;padding:0 .12em .06em}
+#splash .wolf{display:block;width:7.5rem;height:7.5rem;animation:spl-up 1s var(--ease-io) both}
+#splash .wordmark{font-size:var(--t3);animation:spl-up-sk 1s var(--ease-io) .14s both}
+#splash .spl-bar{display:block;width:6.854rem;height:2px;margin-top:var(--s0);background:var(--line);border-radius:2px;overflow:hidden;animation:fade .4s .8s both}
+#splash .spl-bar i{display:block;width:40%;height:100%;background:var(--ink);animation:spl-load 1.1s var(--ease-io) infinite}
+#splash.out{animation:spl-lift .9s var(--ease-io) both;pointer-events:none}
+#splash.out .spl-in{animation:spl-in-lift .9s var(--ease-io) both}
+@keyframes spl-up{from{transform:translateY(110%)}}
+@keyframes spl-up-sk{from{transform:translateY(110%) skewX(-12deg)}to{transform:skewX(-12deg)}}
+@keyframes spl-load{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+@keyframes spl-lift{to{transform:translateY(-100%)}}
+@keyframes spl-in-lift{to{transform:translateY(-22vh);opacity:0}}
+@keyframes fade-out{to{opacity:0}}
+
+@media (prefers-reduced-motion:reduce){
+  ::view-transition-old(root),::view-transition-new(root),html[data-nav="back"]::view-transition-old(root),html[data-nav="back"]::view-transition-new(root){animation:none}
+  #splash .wolf,#splash .wordmark,#splash .spl-bar i,#splash.out .spl-in{animation:none}
+  #splash.out{animation:fade-out .4s both}
+}
+
+/* low-end devices: no live blur behind the dock, skip painting off-screen rows */
+.lite .nav,.lite .transport{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--bg)}
+.lite .list>.row{content-visibility:auto;contain-intrinsic-size:auto 4.2rem}
+@media (min-width:48rem){.hero .hero-ctl{margin-top:var(--s1);padding-top:var(--s0);border-top:1px solid var(--hero-line);align-self:stretch;align-items:flex-start}.hero-ctl .restctl{padding-top:.45rem}}
