@@ -36,6 +36,8 @@ alter table public.profiles add column if not exists muscles jsonb check (muscle
 alter table public.profiles add column if not exists widgets jsonb check (widgets is null or (jsonb_typeof(widgets) = 'array' and jsonb_array_length(widgets) <= 20));
 -- Days the user marked as rest from the Home screen ("YYYY-M-D", most recent kept)
 alter table public.profiles add column if not exists rest_days jsonb check (rest_days is null or (jsonb_typeof(rest_days) = 'array' and jsonb_array_length(rest_days) <= 400));
+-- The split day the user picked as their next session ({sp, i, at}); used until they start a session after "at"
+alter table public.profiles add column if not exists next_day jsonb check (next_day is null or jsonb_typeof(next_day) = 'object');
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (

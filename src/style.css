@@ -1087,3 +1087,12 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   html::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30;pointer-events:none}
 }
 .daybar span{display:block;line-height:2.1rem;text-align:center;padding:0 3px}
+
+/* Home: the up-next block is a dropdown */
+.what-pick{display:block;text-align:left;min-width:0;padding:8px 12px;margin:-8px -12px;border-radius:var(--r-md);transition:background .25s,transform .45s var(--spring)}
+.what-pick > span:first-child{display:inline-flex;align-items:center;gap:6px}
+.what-pick .dd{display:inline-grid;place-items:center;width:1.35rem;height:1.35rem;border-radius:50%;background:var(--surface-2);color:var(--ink);font-style:normal;transition:transform .45s var(--spring)}
+.what-pick .dd .ico{width:12px;height:12px;stroke-width:2.4}
+.what-pick:active{transform:scale(.98)}
+@media (hover:hover){.what-pick:hover{background:var(--surface)}.what-pick:hover .dd{transform:translateY(2px)}}
+.st-q{margin-top:var(--s-1)}
