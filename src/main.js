@@ -410,7 +410,7 @@ function editMuscles() {
   openSheet('', null); draw();
 }
 /* hero background: a giant outlined wolf with glowing eyes over a dot grid */
-const heroArt = () => `<div class="hero-art" aria-hidden="true"><svg viewBox="44 40 312 330"><path class="ha-body" d="M200 142 L258 128 L292 56 L312 162 L340 196 L318 204 L330 232 L252 304 L200 358 L148 304 L70 232 L82 204 L60 196 L88 162 L108 56 L142 128 Z"/><path class="ha-eyes" d="M212 220 L280 188 L268 212 Z M188 220 L120 188 L132 212 Z"/></svg></div>`;
+const heroArt = () => `<div class="hero-art" aria-hidden="true"></div>`;
 const tier = v => v >= 88 ? 'Max effort' : v >= 75 ? 'Hard' : v >= 60 ? 'Moderate' : v > 0 ? 'Easy' : 'No working sets yet';
 const tierShort = v => v >= 88 ? 'MAX' : v >= 75 ? 'HARD' : v >= 60 ? 'MOD' : v > 0 ? 'EASY' : '—';
 function sessName(s) {
@@ -562,9 +562,9 @@ function renderNav() {
   <button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>
   <div class="nav-foot"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span data-sync class="lbl sync"></span>${themeBtn()}</div></div>`;
 }
-function pageTop(title, extra = '') {
+function pageTop(title, extra = '', logo = true) {
   const now = new Date();
-  return `<header class="top rv"><div class="ttl" aria-label="${esc(title)}">${brand()}<span class="muted">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()].slice(0, 3)}</span></div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
+  return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="muted">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()].slice(0, 3)}</span></div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
 }
 const vMissing = msg => `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button></header><div class="empty rv"><b>${esc(msg)}</b>It may have been deleted on another device.</div>`;
 const shell = inner => `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}${themeBtn()}</div>${inner}</div></div>`;
@@ -755,7 +755,7 @@ function vToday() {
     cta = `<div class="what"></div>
       <div style="display:flex;gap:8px;align-items:center">${last ? `<button class="btn line sm" data-act="repeat" data-id="${last.id}" title="Repeat ${esc(sessName(last))}">Repeat last</button>` : ''}<button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button></div>`;
   }
-  return pageTop('Synergym') + `
+  return pageTop('Today', '', false) + `
   <section class="hero rv">${heroArt()}
     <div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}</div>
     <div class="statgrid">
