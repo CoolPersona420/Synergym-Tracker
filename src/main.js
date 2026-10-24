@@ -711,6 +711,26 @@ const vLoadError = () => shell(`<h1>Couldn’t load <em>your log</em>.</h1><p cl
 
 /* ---------- auth ---------- */
 function obBar(step) { return `<div class="ob-bar" aria-label="Step ${step} of 5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= step ? 'on' : ''}"></i>`).join('')}</div>`; }
+/* OAuth 2 sign-in: any provider switched on in Supabase (Authentication › Providers) shows up here automatically */
+const OAUTH = [
+  ['google', 'Google', '<svg class="oi" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>'],
+  ['apple', 'Apple', '<svg class="oi" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.7-1-2.7-4.1zM13.9 5c.7-.9 1.2-2 1.1-3.2-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.1.1 2.3-.6 3-1.5z"/></svg>'],
+  ['github', 'GitHub', '<svg class="oi" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2.1c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.6 18.3 5 18.3 5c.7 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5z"/></svg>'],
+  ['discord', 'Discord', '<svg class="oi" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.5 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3c.5-5.2-.8-9.7-3.6-13.8zM8 15.4c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.6 8 10.6s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg>']
+];
+async function loadProviders() {
+  try {
+    const r = await fetch(SB_URL + '/auth/v1/settings', { headers: { apikey: SB_KEY } }); if (!r.ok) return;
+    const ext = (await r.json()).external || {}; S.providers = OAUTH.filter(([id]) => ext[id]).map(x => x[0]);
+    if (S.providers.length && !S.user && S.authReady) render(false);
+  } catch {}
+}
+const oauthHTML = verb => { const on = S.providers || []; if (!on.length) return '';
+  return `<div class="oauth">${OAUTH.filter(([id]) => on.includes(id)).map(([id, name, ic]) => `<button class="btn line lg oauth-b" data-act="oauth" data-p="${id}">${ic}<span>${verb} with ${name}</span></button>`).join('')}</div><div class="or" role="separator"><span>or with email</span></div>`; };
+async function oauthSignIn(provider) {
+  const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + '/' } });
+  if (error) { S.authMsg = { text: authErr(error), err: true }; render(false); }
+}
 function vAuth() {
   const m = S.authMode, msg = S.authMsg;
   const msgHTML = msg ? `<div class="msg${msg.err ? ' err' : ''}" role="alert">${esc(msg.text)}</div>` : '';
@@ -722,7 +742,7 @@ function vAuth() {
     ${msgHTML}<button class="btn line lg" data-act="resend">Resend the email</button><button class="linkbtn" data-act="auth-mode" data-m="signin">I’ve confirmed, log in</button>`;
   else if (m === 'signup') box = `${obBar(1)}<div><span class="lbl">Step 1 of 5 · Account</span><h2 style="margin-top:6px">Create your account</h2><p class="muted" style="margin-top:6px">Free. Your log stays private to you.</p></div>
     <div class="auth-tabs"><button data-act="auth-mode" data-m="signin">Log in</button><button class="on">Register</button></div>
-    <form id="f-auth" novalidate>
+    ${oauthHTML('Sign up')}<form id="f-auth" novalidate>
       <label>Email<input class="field" type="email" name="email" autocomplete="email" required></label>
       <label>Password<input class="field" type="password" name="password" data-f="pw" autocomplete="new-password" minlength="8" required></label>
       <div class="pw-meter" aria-hidden="true"><i id="pwm"></i></div><span class="muted" id="pwt" style="font-size:.78rem;margin-top:-8px">At least 8 characters. A passphrase is best.</span>
@@ -731,7 +751,7 @@ function vAuth() {
     </form><p class="muted" style="font-size:.78rem">Passwords are handled by Supabase Auth and stored hashed. We never see them.</p>`;
   else box = `<div><h2>Welcome back</h2><p class="muted" style="margin-top:6px">Log in to pick up where you left off.</p></div>
     <div class="auth-tabs"><button class="on">Log in</button><button data-act="auth-mode" data-m="signup">Register</button></div>
-    <form id="f-auth" novalidate>
+    ${oauthHTML('Continue')}<form id="f-auth" novalidate>
       <label>Email<input class="field" type="email" name="email" autocomplete="email" required></label>
       <label>Password<input class="field" type="password" name="password" autocomplete="current-password" required></label>
       ${msgHTML}<button class="btn lg" type="submit">Log in</button>
@@ -1969,6 +1989,7 @@ const ACT = {
   export: el => exportData(el.dataset.f),
   import: () => $('#imp').click(),
   close: closeSheet,
+  oauth: el => oauthSignIn(el.dataset.p),
   'w-open': el => { S.homeRestore = { y: scrollY, x: $('#dash')?.scrollLeft || 0 }; go('widget', el.dataset.id); },
   'w-opt': el => { WOPT[el.dataset.id] = +el.dataset.v; try { localStorage.setItem('sg-wopt', JSON.stringify(WOPT)); } catch {} render(false); },
   'w-close': () => back(),
@@ -2112,10 +2133,17 @@ async function startApp() {
   S.loaded = true; flushAll();
   if (S.profile.theme) applyTheme(S.profile.theme);
   const p = S.profile;
-  S.ob = { step: p.username ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null };
+  const meta = S.user?.user_metadata || {};
+  S.ob = { step: p.username ? 3 : 2, name: p.name || String(meta.full_name || meta.name || '').trim().slice(0, 40), username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null };
   const t = S.profile.onboarded && pendingPublic();
   if (t) return go('public', t, { replace: true });
   route(true);
+}
+function oauthReturn() {
+  const q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.slice(1));
+  const err = q.get('error_description') || h.get('error_description');
+  if (err) S.authMsg = { text: err.replace(/\+/g, ' '), err: true };
+  if (err || q.has('code')) history.replaceState({ d: 0 }, '', location.pathname);
 }
 function boot() {
   document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
@@ -2123,6 +2151,7 @@ function boot() {
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
   splashIn();
   route(true);
+  if (sb) { setTimeout(oauthReturn, 0); loadProviders(); }
   if (!sb) return;
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') { S.recover = true; S.authMsg = null; render(false); }
