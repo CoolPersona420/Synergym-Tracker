@@ -12,7 +12,8 @@ const sb = SB_URL && SB_KEY
   : null;
 
 /* ================= constants ================= */
-const MUSCLES = ['Chest','Back','Shoulders','Biceps','Triceps','Quads','Hamstrings','Glutes','Calves','Core','Full body'];
+const DEFAULT_MUSCLES = ['Chest','Back','Shoulders','Biceps','Triceps','Quads','Hamstrings','Glutes','Calves','Core','Full body'];
+const muscles = () => (Array.isArray(S.profile.muscles) && S.profile.muscles.length ? S.profile.muscles : DEFAULT_MUSCLES);
 const DAY_TYPES = ['Push','Pull','Legs','Upper','Lower','Full body','Chest & Back','Arms','Shoulders','Glutes','Cardio','Rest'];
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -39,7 +40,7 @@ const ICON={
 };
 
 /* ================= state ================= */
-const DEFAULT_PROFILE = { theme: null, username: null, name: '', exp: null, goal: null, onboarded: false, unit: 'kg', target: 3, rest: 90, restOn: true, sound: true, bw: 75 };
+const DEFAULT_PROFILE = { muscles: null, theme: null, username: null, name: '', exp: null, goal: null, onboarded: false, unit: 'kg', target: 3, rest: 90, restOn: true, sound: true, bw: 75 };
 const S = {
   authReady: false, user: null, loaded: false, loadError: null,
   profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(),
@@ -146,17 +147,17 @@ function cleanDays(d) {
     id: safeId(x && x.id), type: String(x?.type || '').slice(0, 40), rest: !!x?.rest,
     exercises: Array.isArray(x?.exercises) ? x.exercises.slice(0, 30).map(e => ({
       id: safeId(e?.id), exId: e?.exId ? String(e.exId).slice(0, 40) : null, name: String(e?.name || 'Exercise').slice(0, 60),
-      muscle: MUSCLES.includes(e?.muscle) ? e.muscle : 'Full body', kind: e?.kind === 'bw' ? 'bw' : 'w',
+      muscle: String(e?.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: e?.kind === 'bw' ? 'bw' : 'w',
       sets: Math.min(20, Math.max(1, parseInt(e?.sets) || 3)), reps: String(e?.reps ?? '8-12').slice(0, 12)
     })) : []
   }));
 }
 
 /* ================= db mapping ================= */
-const profFromDb = r => ({ theme: r.theme || null, username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75 });
-const profToDb = p => ({ theme: p.theme || null, display_name: (p.name || '').slice(0, 40) || null, experience: p.exp || null, goal: p.goal || null, onboarded: !!p.onboarded, unit: p.unit, weekly_target: p.target, rest_seconds: p.rest, rest_enabled: p.restOn, rest_sound: p.sound, bodyweight: Math.round(p.bw * 100) / 100 });
-const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: r.kind === 'bw' ? 'bw' : 'w', archived: !!r.archived, isDefault: !!r.is_default });
-const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault });
+const profFromDb = r => ({ muscles: Array.isArray(r.muscles) ? r.muscles.filter(m => typeof m === 'string' && m.trim()).map(m => m.trim().slice(0, 30)).slice(0, 40) : null, theme: r.theme || null, username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75 });
+const profToDb = p => ({ muscles: Array.isArray(p.muscles) && p.muscles.length ? p.muscles : null, theme: p.theme || null, display_name: (p.name || '').slice(0, 40) || null, experience: p.exp || null, goal: p.goal || null, onboarded: !!p.onboarded, unit: p.unit, weekly_target: p.target, rest_seconds: p.rest, rest_enabled: p.restOn, rest_sound: p.sound, bodyweight: Math.round(p.bw * 100) / 100 });
+const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: r.kind === 'bw' ? 'bw' : 'w', archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null });
+const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null });
 const sessFromDb = r => cleanSession({ id: r.id, name: r.name, startedAt: Date.parse(r.started_at), endedAt: r.ended_at ? Date.parse(r.ended_at) : null, notes: r.notes, items: r.items, splitId: r.split_id, splitDay: r.split_day });
 const sessToDb = s => ({ id: s.id, user_id: S.user.id, name: s.name, started_at: new Date(s.startedAt).toISOString(), ended_at: s.endedAt ? new Date(s.endedAt).toISOString() : null, notes: s.notes || '', items: s.items, split_id: s.splitId || null, split_day: s.splitDay ?? null, updated_at: new Date().toISOString() });
 const splitFromDb = r => ({ id: r.id, name: r.name, description: r.description || '', days: cleanDays(r.days), shareToken: r.share_token || null, copiedFrom: r.copied_from || null, updatedAt: Date.parse(r.updated_at) || 0 });
@@ -183,7 +184,7 @@ function restoreOutbox() {
   for (const [key, val] of Object.entries(o)) {
     const i = key.indexOf(':'), t = key.slice(0, i), id = key.slice(i + 1);
     if (t === 's') { if (val) { const s = cleanSession(val); if (s) S.sessions.set(id, s); } else S.sessions.delete(id); }
-    else if (t === 'x') { S.library = S.library.filter(e => e.id !== id); if (val && val.name) S.library.push({ id, name: String(val.name).slice(0, 60), muscle: val.muscle || 'Full body', kind: val.kind === 'bw' ? 'bw' : 'w', archived: !!val.archived, isDefault: !!val.isDefault }); }
+    else if (t === 'x') { S.library = S.library.filter(e => e.id !== id); if (val && val.name) S.library.push({ id, name: String(val.name).slice(0, 60), muscle: val.muscle || 'Full body', kind: val.kind === 'bw' ? 'bw' : 'w', archived: !!val.archived, isDefault: !!val.isDefault, oneRm: num(val.oneRm), oneRmAt: num(val.oneRmAt) }); }
     else if (t === 'sp') { if (val) S.splits.set(id, { ...val, days: cleanDays(val.days) }); else S.splits.delete(id); }
     else if (t === 'p' && val) S.profile = { ...S.profile, ...val, username: S.profile.username, onboarded: S.profile.onboarded };
     else continue;
@@ -309,7 +310,7 @@ function compute() {
     for (const [ex, sc] of sb_) { const prev = best.get(ex) || 0; if (prev > 0 && sc > prev * 1.0001) prs.push(ex); if (sc > prev) best.set(ex, sc); if ((seen.get(ex) || 0) < 2) calib = true; }
     let vol = 0, wsum = 0, isum = 0, sets = 0;
     for (const it of s.items) {
-      const ex = exMap.get(it.exId), ref = best.get(it.exId) || 0;
+      const ex = exMap.get(it.exId), orm = ex && ex.oneRm > 0 && ex.oneRmAt && ex.oneRmAt <= (s.endedAt || Date.now()) ? ex.oneRm : 0, ref = Math.max(best.get(it.exId) || 0, orm);
       for (const st of it.sets) {
         const r = +st.r || 0; if (r <= 0) continue; sets++;
         const v = (+st.w || 0) * r; vol += v; exVol.set(it.exId, (exVol.get(it.exId) || 0) + v);
@@ -328,6 +329,88 @@ function compute() {
   }
   S.A = A; return A;
 }
+/* 1RM: the confirmed value if the user saved one, otherwise the best estimate from finished sessions */
+function prevBestE1rm(exId, excludeSid) {
+  const ex = exOf(exId); let b = 0;
+  for (const s of S.sessions.values()) { if (s.id === excludeSid) continue; for (const it of s.items) if (it.exId === exId) for (const st of it.sets) { const v = e1rm(loadOf(st, ex), +st.r || 0); if (v > b) b = v; } }
+  return b;
+}
+const oneRmOf = (exId, excludeSid) => { const ex = exOf(exId); return ex && ex.oneRm > 0 ? ex.oneRm : prevBestE1rm(exId, excludeSid); };
+const roundW = kg => { const st = unit() === 'lb' ? 1 : 0.5; return fromU(Math.round(toU(kg) / st) * st); };
+function liveTop(s, it) { const ex = exOf(it.exId); let b = 0, bs = null; for (const st of it.sets) { const v = e1rm(loadOf(st, ex), +st.r || 0); if (v > b) { b = v; bs = st; } } return { v: b, st: bs }; }
+function ormLine(s, it) {
+  const ex = exOf(it.exId); if (!ex) return '';
+  const base = oneRmOf(it.exId, s.id), top = liveTop(s, it).v, saved = ex.oneRm > 0;
+  if (!base && !top) return `${esc(ex.muscle)} · first log`;
+  let t = `${esc(ex.muscle)} · ${saved ? '1RM' : 'est. 1RM'} ${base ? fmtW(roundW(base)) + ' ' + unit() : '—'}`;
+  if (top > base * 1.0001 && base > 0) t += ` · <em class="pr">today ${fmtW(roundW(top))} ↑</em>`;
+  else if (top > 0 && !base) t += ` · today ${fmtW(roundW(top))}`;
+  return t;
+}
+const declined1rm = new Map();
+function maybePromptOneRm(s, it, st) {
+  const ex = exOf(it.exId); if (!ex || s.endedAt) return;
+  const v = e1rm(loadOf(st, ex), +st.r || 0), base = oneRmOf(it.exId, s.id);
+  if (!(v > 0) || !(base > 0) || v <= base * 1.0001) return;
+  const val = roundW(v); if (val <= base) return;
+  if ((declined1rm.get(ex.id) || 0) >= val) return;
+  const u = unit(), single = (+st.r || 0) === 1;
+  openSheet(`<div class="sh-h"><h3>New 1RM PR?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="pr-hero"><span class="lbl">${esc(ex.name)}</span><div class="bignum md"><span class="n">${fmtW(val)}</span><span class="pr-u">${u}</span></div>
+  <p class="muted">${single ? 'A true single' : `Estimated from ${fmtW(loadOf(st, ex))} ${u} × ${st.r}`}. Your ${ex.oneRm > 0 ? 'saved 1RM is' : 'best estimate so far is'} ${fmtW(roundW(base))} ${u} (+${fmtW(val - roundW(base)) || 0} ${u}).</p></div>
+  <div class="btns"><button class="btn ghost" id="orm-no">Not now</button><button class="btn" id="orm-yes">Update my 1RM</button></div>`, r => {
+    r.querySelector('#orm-no').onclick = () => { declined1rm.set(ex.id, val); closeSheet(); };
+    r.querySelector('#orm-yes').onclick = () => { ex.oneRm = val; ex.oneRmAt = Date.now(); queue('x:' + ex.id, 0); closeSheet(); render(false); toast(`${ex.name} 1RM is now ${fmtW(val)} ${u}`); };
+  });
+}
+function editOneRm(id) {
+  const ex = exOf(id); if (!ex) return; const est = prevBestE1rm(id), u = unit();
+  openSheet(`<div class="sh-h"><h3>${esc(ex.name)} 1RM</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="form">
+  <label>One-rep max (${u})<input class="field" id="orm-v" inputmode="decimal" value="${ex.oneRm > 0 ? fmtW(ex.oneRm) : ''}" placeholder="${est ? fmtW(roundW(est)) : '0'}"></label>
+  <p class="muted" style="font-size:13px">${est ? `Your best estimate from logged sets is ${fmtW(roundW(est))} ${u}.` : 'Log a few sets and Synergym will estimate it for you.'} Synergym asks to update this whenever a set beats it.</p></div>
+  <div class="btns">${ex.oneRm > 0 ? '<button class="btn line" id="orm-clear" style="margin-right:auto">Use estimate instead</button>' : ''}${est ? `<button class="btn ghost" id="orm-est">Use ${fmtW(roundW(est))}</button>` : ''}<button class="btn" id="orm-save">Save</button></div>`, r => {
+    const save = v => { if (!(v > 0 && v < 2000)) return toast('Enter a weight above 0'); ex.oneRm = v; ex.oneRmAt = Date.now(); queue('x:' + ex.id, 0); closeSheet(); render(false); toast(`1RM saved: ${fmtW(v)} ${u}`); };
+    r.querySelector('#orm-save').onclick = () => save(fromU(parseFloat(r.querySelector('#orm-v').value.replace(',', '.'))));
+    r.querySelector('#orm-est')?.addEventListener('click', () => save(roundW(est)));
+    r.querySelector('#orm-clear')?.addEventListener('click', () => { ex.oneRm = null; ex.oneRmAt = null; queue('x:' + ex.id, 0); closeSheet(); render(false); toast('Using your best estimate'); });
+  });
+}
+/* muscle groups: the user's own list (falls back to the defaults) */
+function editMuscles() {
+  const rows = muscles().map(m => ({ orig: m, name: m }));
+  const count = m => S.library.filter(e => !e.archived && e.muscle === m).length;
+  const draw = () => {
+    $('#sheet-body').innerHTML = `<div class="sh-h"><h3>Muscle groups</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+    <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">Rename a group and its exercises move with it. A group can be removed once no exercises use it.</p>
+    <div class="share-row" style="margin-bottom:var(--s0)"><input class="field" id="mg-new" placeholder="New muscle group, e.g. Forearms" maxlength="30"><button class="btn ghost" id="mg-add">Add</button></div>
+    <div class="mg-list">${rows.map((r, i) => `<div class="mg-row"><input class="field" data-mg="${i}" value="${esc(r.name)}" maxlength="30" aria-label="Muscle group name"><span class="lbl mg-n">${r.orig ? count(r.orig) : 0} ex</span>
+      <button class="iconbtn" data-mg-del="${i}" aria-label="Remove ${esc(r.name)}"${r.orig && count(r.orig) ? ' disabled title="Move or remove its exercises first" style="opacity:.35"' : ''}>${ICON.x}</button></div>`).join('')}</div>
+    <div class="btns sheet-foot"><button class="btn line" id="mg-reset" style="margin-right:auto">Reset</button><button class="btn" id="mg-save">Save</button></div>`;
+    const r = $('#sheet-body');
+    r.querySelectorAll('[data-mg]').forEach(inp => inp.oninput = () => { rows[+inp.dataset.mg].name = inp.value; });
+    r.querySelectorAll('[data-mg-del]').forEach(b => b.onclick = () => { if (b.disabled) return; rows.splice(+b.dataset.mgDel, 1); draw(); });
+    const add = () => { const v = r.querySelector('#mg-new').value.trim().slice(0, 30); if (!v) return; if (rows.some(x => x.name.trim().toLowerCase() === v.toLowerCase())) return toast('That group already exists'); if (rows.length >= 40) return toast('Up to 40 groups'); rows.push({ orig: null, name: v }); draw(); setTimeout(() => $('#mg-new')?.focus(), 0); };
+    r.querySelector('#mg-add').onclick = add;
+    r.querySelector('#mg-new').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+    r.querySelector('#mg-reset').onclick = () => { const used = new Set(S.library.filter(e => !e.archived).map(e => e.muscle)); rows.length = 0; for (const m of DEFAULT_MUSCLES) rows.push({ orig: muscles().includes(m) ? m : null, name: m }); for (const m of used) if (!DEFAULT_MUSCLES.includes(m)) rows.push({ orig: m, name: m }); draw(); };
+    r.querySelector('#mg-save').onclick = () => {
+      const names = rows.map(x => x.name.trim().slice(0, 30));
+      if (names.some(n => !n)) return toast('Muscle groups need a name');
+      if (new Set(names.map(n => n.toLowerCase())).size !== names.length) return toast('Two groups have the same name');
+      let moved = 0;
+      for (const row of rows) if (row.orig && row.orig !== row.name.trim()) {
+        const to = row.name.trim();
+        for (const e of S.library) if (e.muscle === row.orig) { e.muscle = to; queue('x:' + e.id, 200); moved++; }
+        for (const sp of S.splits.values()) { let ch = false; for (const d of sp.days) for (const x of d.exercises) if (x.muscle === row.orig) { x.muscle = to; ch = true; } if (ch) queue('sp:' + sp.id, 400); }
+      }
+      S.profile.muscles = names; queue('p', 0); closeSheet(); render(false);
+      toast(moved ? `Muscle groups saved · ${plural(moved, 'exercise')} moved` : 'Muscle groups saved');
+    };
+  };
+  openSheet('', null); draw();
+}
+/* hero background: a giant outlined wolf with glowing eyes over a dot grid */
+const heroArt = () => `<div class="hero-art" aria-hidden="true"><svg viewBox="44 40 312 330"><path class="ha-body" d="M200 142 L258 128 L292 56 L312 162 L340 196 L318 204 L330 232 L252 304 L200 358 L148 304 L70 232 L82 204 L60 196 L88 162 L108 56 L142 128 Z"/><path class="ha-eyes" d="M212 220 L280 188 L268 212 Z M188 220 L120 188 L132 212 Z"/></svg></div>`;
 const tier = v => v >= 88 ? 'Max effort' : v >= 75 ? 'Hard' : v >= 60 ? 'Moderate' : v > 0 ? 'Easy' : 'No working sets yet';
 const tierShort = v => v >= 88 ? 'MAX' : v >= 75 ? 'HARD' : v >= 60 ? 'MOD' : v > 0 ? 'EASY' : '—';
 function sessName(s) {
@@ -481,7 +564,7 @@ function renderNav() {
 }
 function pageTop(title, extra = '') {
   const now = new Date();
-  return `<header class="top rv"><div class="ttl"><b>${esc(title)}</b><span class="muted">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()].slice(0, 3)}</span></div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
+  return `<header class="top rv"><div class="ttl" aria-label="${esc(title)}">${brand()}<span class="muted">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()].slice(0, 3)}</span></div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span><span class="nav-mob" style="display:flex;gap:6px">${themeBtn()}<button class="iconbtn" data-act="nav" data-v="prefs" aria-label="Settings">${ICON.prefs}</button></span></div></header>`;
 }
 const vMissing = msg => `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button></header><div class="empty rv"><b>${esc(msg)}</b>It may have been deleted on another device.</div>`;
 const shell = inner => `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}${themeBtn()}</div>${inner}</div></div>`;
@@ -669,11 +752,11 @@ function vToday() {
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start this day">${ICON.plus}</button></div>`;
   } else {
     lines = list.length ? [`Hey ${hi},`, 'every set', '<em>adds up</em>.'] : [`Hey ${hi},`, 'let’s log your', '<em>first session</em>.'];
-    cta = `<div class="what"><span>Next session</span><b>Start a session</b><span>${last ? `or repeat ${esc(sessName(last))}` : 'Log sets as you go. Intensity updates live.'}</span></div>
-      <div style="display:flex;gap:8px;align-items:center">${last ? `<button class="btn line sm" data-act="repeat" data-id="${last.id}">Repeat</button>` : ''}<button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button></div>`;
+    cta = `<div class="what"></div>
+      <div style="display:flex;gap:8px;align-items:center">${last ? `<button class="btn line sm" data-act="repeat" data-id="${last.id}" title="Repeat ${esc(sessName(last))}">Repeat last</button>` : ''}<button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button></div>`;
   }
   return pageTop('Synergym') + `
-  <section class="hero rv">
+  <section class="hero rv">${heroArt()}
     <div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}</div>
     <div class="statgrid">
       <div class="stat">${big(C.thisWeek)}<span class="l">Sessions this week <small>of ${C.target}</small></span></div>
@@ -764,9 +847,9 @@ function wave(s) {
 }
 const setInt = st => { const p = S.A.set.get(st.id); return p ? Math.round(p) : '·'; };
 function exCard(it, gmap) {
-  const ex = exOf(it.exId) || { name: 'Deleted exercise', muscle: '', kind: 'w' }, e = S.A.ex.get(it.exId), bw = ex.kind === 'bw';
+  const ex = exOf(it.exId) || { name: 'Deleted exercise', muscle: '', kind: 'w' }, bw = ex.kind === 'bw';
   return `<article class="ex rv" data-item="${it.id}">
-  <div class="ex-h"><button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub">${esc(ex.muscle)}${e ? ` · best e1RM ${fmtW(e.best)} ${unit()}` : ' · first log'}</div></button>
+  <div class="ex-h"><button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub" data-orm="${it.id}">${ormLine(cur() || { id: null }, it)}</div></button>
   <button class="iconbtn" data-act="item-menu" data-item="${it.id}" aria-label="Exercise options">${ICON.dots}</button></div>
   <div class="set-head lbl"><span>Set</span><span>${bw ? '+' + unit() : unit()}</span><span>Reps</span><span>Int</span><span></span></div>
   <div class="sets">${it.sets.map((st, i) => setRow(st, i, gmap)).join('')}</div>
@@ -811,6 +894,7 @@ function liveRefresh() {
     const gt = $(`[data-gtag="${st.id}"]`); if (gt) { const g = gmap.get(st.id); gt.innerHTML = g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''; }
   }
   const gs = $('#gsum'); if (gs) gs.innerHTML = groupsHTML(groups);
+  for (const it of s.items) { const el = $(`[data-orm="${it.id}"]`); if (el) el.innerHTML = ormLine(s, it); }
   tick();
 }
 
@@ -834,14 +918,14 @@ function historyList() {
 function vExercises() {
   const active = S.library.filter(e => !e.archived), custom = active.filter(e => !e.isDefault).length;
   return pageTop('Exercises', `<span class="lbl">${active.length} total · ${custom} custom</span>`) + `
-  <div class="rv" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 6px"><h1 class="h1">Exercises</h1>
+  <div class="rv pagehead" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 6px"><h1 class="h1">Exercises</h1>
   <div style="display:flex;gap:8px"><button class="btn" data-act="new-ex">${roll('Add exercise')}</button><button class="iconbtn" data-act="lib-menu" aria-label="Library options">${ICON.dots}</button></div></div>
   <p class="muted rv" style="font-size:13px;max-width:60ch">Your own copy of the list. Edit, add or remove anything; changes are private to your account.</p>
   <div class="toolbar rv"><input class="search" data-f="exq" placeholder="Search exercises" value="${esc(S.exq)}" autocomplete="off"></div>
   <div class="hscroll rv" id="exm">${muscleChips()}</div>
   <div id="exlist" class="rv">${exList()}</div>`;
 }
-const muscleChips = () => ['', ...MUSCLES, 'Custom'].map(m => `<button class="chip${S.exm === m ? ' on' : ''}" data-act="exm" data-m="${esc(m)}">${m || 'All'}</button>`).join('');
+const muscleChips = () => ['', ...muscles(), 'Custom'].map(m => `<button class="chip${S.exm === m ? ' on' : ''}" data-act="exm" data-m="${esc(m)}">${esc(m || 'All')}</button>`).join('') + `<button class="chip chip-edit" data-act="edit-muscles">${ICON.plus.replace('class="ico"', 'class="ico" style="width:14px;height:14px"')}Edit groups</button>`;
 function exList() {
   const q = S.exq.trim().toLowerCase(), m = S.exm;
   const match = e => (!q || e.name.toLowerCase().includes(q) || e.muscle.toLowerCase().includes(q)) && (!m || (m === 'Custom' ? !e.isDefault : e.muscle === m));
@@ -850,7 +934,7 @@ function exList() {
   let h = '';
   if (!lib.length) h = `<div class="empty"><b>${q || m ? 'No exercises match.' : 'Your list is empty.'}</b>${q ? `Add “${esc(S.exq.trim())}” as a new exercise with the button above.` : 'Add one with the button above, or restore the default list from the menu.'}</div>`;
   const groups = new Map(); for (const e of lib) { if (!groups.has(e.muscle)) groups.set(e.muscle, []); groups.get(e.muscle).push(e); }
-  const order = [...MUSCLES, ...[...groups.keys()].filter(k => !MUSCLES.includes(k))];
+  const order = [...muscles(), ...[...groups.keys()].filter(k => !muscles().includes(k))];
   for (const mg of order) { const es = groups.get(mg); if (!es) continue;
     h += `<div class="mgroup"><span class="lbl">${esc(mg)}</span><span class="lbl">${es.length}</span></div><div class="list">${es.map(exRow).join('')}</div>`; }
   if (arch.length) h += `<div class="mgroup"><button class="lbl" data-act="toggle-arch">${roll((S.showArchived ? 'Hide' : 'Show') + ' removed (' + arch.length + ')')}</button><span class="lbl">kept for history</span></div>${S.showArchived ? `<div class="list">${arch.map(exRow).join('')}</div>` : ''}`;
@@ -869,9 +953,9 @@ function vExercise() {
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Exercise</span><button class="btn ghost sm" data-act="edit-ex" data-id="${ex.id}">${roll('Edit')}</button></header>
   <h1 class="h1 rv" style="margin:14px 0 4px">${esc(ex.name)}${ex.isDefault ? '' : ' <span class="badge acc">custom</span>'}</h1><p class="muted rv">${esc(ex.muscle)} · ${ex.kind === 'bw' ? 'Bodyweight (load = bodyweight + added)' : 'Weighted'}${ex.archived ? ' · removed from list' : ''}</p>
   <div class="dash" style="margin-top:18px">
-    <div class="card rv"><div class="card-h"><span class="lbl">Best estimated 1RM</span><span class="lbl">${unit()}</span></div>
-      <div class="bignum md">${big(x ? fmtW(x.best) : '–')}<span class="dot"></span></div>
-      <p class="muted" style="margin-top:14px;font-size:13px">${bs ? `From ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set to see your estimate.'}</p></div>
+    <div class="card rv"><div class="card-h"><span class="lbl">${ex.oneRm > 0 ? 'Your 1RM' : 'Estimated 1RM'} · ${unit()}</span><button class="btn ghost sm" data-act="edit-orm" data-id="${ex.id}">${roll(ex.oneRm > 0 ? 'Edit' : 'Set 1RM')}</button></div>
+      <div class="bignum md">${big(ex.oneRm > 0 ? fmtW(ex.oneRm) : x ? fmtW(roundW(x.best)) : '–')}<span class="dot"></span></div>
+      <p class="muted" style="margin-top:14px;font-size:13px">${ex.oneRm > 0 ? `Saved ${fmtDate(ex.oneRmAt || Date.now())}${x ? ` · best estimate ${fmtW(roundW(x.best))} ${unit()}` : ''}` : bs ? `From ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set to see your estimate.'}</p></div>
     <div class="card rv"><div class="card-h"><span class="lbl">e1RM by session</span><span class="lbl">${x ? x.pts.length : 0} logged</span></div>${trend(x)}</div>
     <div class="kv span rv"><div><span class="lbl">Sessions</span><div class="term">${x ? x.n : 0}</div></div><div><span class="lbl">Volume</span><div class="term">${fmtVol(x ? x.vol : 0)}</div></div><div><span class="lbl">Records</span><div class="term">${x ? x.pts.filter(p => p.pr).length : 0}</div></div><div><span class="lbl">Last</span><div class="term">${x ? fmtDate(x.last) : '—'}</div></div></div>
     <section class="card span rv"><div class="card-h"><span class="lbl">Recent sets</span></div>
@@ -899,7 +983,7 @@ function vSplits() {
     ${dayBar(sp.days, nx && nx.sp.id === sp.id ? nx.i : -1)}<div class="lbl">${sp.shareToken ? 'link on · ' : ''}${(S.recipients.get(sp.id) || []).length ? plural(S.recipients.get(sp.id).length, 'person') + ' · ' : ''}edit ↗</div></button>`; };
   const shcard = sp => `<button class="split-card rv" data-act="open-shared" data-id="${sp.id}"><div><h3>${esc(sp.name)}</h3><div class="from" style="margin-top:4px">from @${esc(sp.from || 'someone')} · ${fmtDate(sp.sharedAt)}</div></div>${dayBar(sp.days)}<div class="lbl">view ↗</div></button>`;
   return pageTop('Splits') + `
-  <div class="rv" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 6px"><h1 class="h1">Splits</h1><button class="btn" data-act="new-split">${roll('New split')}</button></div>
+  <div class="rv pagehead" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 6px"><h1 class="h1">Splits</h1><button class="btn" data-act="new-split">${roll('New split')}</button></div>
   <p class="muted rv" style="font-size:13px;max-width:60ch">Plan your week: how many days, what each day trains, and the exercises with sets and reps. Start any day as a session, and share the plan with other lifters.</p>
   <div class="mgroup rv"><span class="lbl">Your splits</span><span class="lbl">${mine.length}</span></div>
   <div class="split-grid" style="margin-top:12px">${mine.map(card).join('') || `<div class="empty rv"><b>No splits yet.</b>Create one to plan your training days. Push / Pull / Legs is a good place to start.</div>`}</div>
@@ -1047,7 +1131,7 @@ function exerciseForm(title, ex, onSave, extra = '') {
   let m = ex.muscle || '', k = ex.kind || 'w';
   openSheet(`<div class="sh-h"><h3>${esc(title)}</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="form">
   <label>Name<input class="field" id="ef-n" value="${esc(ex.name || '')}" maxlength="60" autocomplete="off"></label>
-  <div><span class="lbl">Muscle group</span><div class="chips" id="ef-m" style="margin-top:8px">${MUSCLES.map(x => `<button class="chip${x === m ? ' on' : ''}" data-m="${x}">${x}</button>`).join('')}</div></div>
+  <div><span class="lbl">Muscle group</span><div class="chips" id="ef-m" style="margin-top:8px">${muscles().map(x => `<button class="chip${x === m ? ' on' : ''}" data-m="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>
   <div><span class="lbl">Type</span><div class="chips" id="ef-k" style="margin-top:8px"><button class="chip${k === 'w' ? ' on' : ''}" data-k="w">Weighted</button><button class="chip${k === 'bw' ? ' on' : ''}" data-k="bw">Bodyweight</button></div></div></div>
   <div class="btns">${extra}<button class="btn" id="ef-save">Save</button></div>`, r => {
     r.querySelector('#ef-m').onclick = e => { const b = e.target.closest('[data-m]'); if (!b) return; m = b.dataset.m; r.querySelectorAll('#ef-m .chip').forEach(c => c.classList.toggle('on', c === b)); };
@@ -1094,7 +1178,7 @@ function openPicker(mode, extra = {}) {
 }
 function pickerList() {
   const q = S.pk.q.trim(), ql = q.toLowerCase(), m = S.pk.m;
-  $('#pkm').innerHTML = ['', ...MUSCLES].map(x => `<button class="chip${m === x ? ' on' : ''}" data-act="pk-m" data-m="${esc(x)}">${x || 'All'}</button>`).join('');
+  $('#pkm').innerHTML = ['', ...muscles()].map(x => `<button class="chip${m === x ? ' on' : ''}" data-act="pk-m" data-m="${esc(x)}">${esc(x || 'All')}</button>`).join('');
   const lib = S.library.filter(e => !e.archived && (!m || e.muscle === m) && (!ql || e.name.toLowerCase().includes(ql)))
     .sort((a, b) => (S.A.ex.get(b.id)?.n || 0) - (S.A.ex.get(a.id)?.n || 0) || a.name.localeCompare(b.name));
   const exact = q && S.library.some(e => e.name.toLowerCase() === ql);
@@ -1188,6 +1272,7 @@ function toggleDone(setId) {
   render(false);
   if (s.endedAt) return;
   if (nextName) { toast('Next in group: ' + nextName); S.rest = null; tick(); } else if (S.profile.restOn) startRest();
+  maybePromptOneRm(s, f.it, st);
 }
 let AC = null;
 function startRest() { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume && AC.resume(); } catch {} S.rest = { end: Date.now() + S.profile.rest * 1000, beeped: false }; tick(); }
@@ -1327,7 +1412,7 @@ $('#imp').addEventListener('change', async e => {
     for (const x of lib) {
       if (!x || !x.name) continue; const name = String(x.name).trim().slice(0, 60); if (!name) continue;
       let e = S.library.find(y => y.name.toLowerCase() === name.toLowerCase());
-      if (!e) { e = { id: uuid(), name, muscle: MUSCLES.includes(x.muscle) ? x.muscle : 'Full body', kind: x.kind === 'bw' ? 'bw' : 'w', archived: false, isDefault: false }; S.library.push(e); queue('x:' + e.id, delay += 120); addedL++; }
+      if (!e) { e = { id: uuid(), name, muscle: String(x.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: x.kind === 'bw' ? 'bw' : 'w', archived: false, isDefault: false }; S.library.push(e); queue('x:' + e.id, delay += 120); addedL++; }
       remap.set(String(x.id), e.id);
     }
     const starts = new Set([...S.sessions.values()].map(s => s.startedAt));
@@ -1387,10 +1472,13 @@ const ACT = {
   'add-ex': () => { if (!S.link) openPicker('session'); },
   'new-ex': () => newExercise({ name: S.exq.trim() }),
   'edit-ex': el => editExercise(el.dataset.id),
+  'edit-orm': el => editOneRm(el.dataset.id),
+  'edit-muscles': editMuscles,
   'open-ex': el => { if (!S.link) go('exercise', el.dataset.id); },
   'exm': el => { S.exm = el.dataset.m; $('#exm').innerHTML = muscleChips(); $('#exlist').innerHTML = exList(); },
   'toggle-arch': () => { S.showArchived = !S.showArchived; $('#exlist').innerHTML = exList(); },
   'lib-menu': () => menuSheet('Exercise list', [
+    { label: 'Edit muscle groups', hint: 'add, rename, remove', fn: editMuscles },
     { label: 'Restore default list', hint: 'adds back removed defaults', fn: async () => { const { data, error } = await sb.rpc('restore_default_exercises'); if (error) return toast('Couldn’t restore. Try again.'); await reloadLibrary(); toast(data ? `Restored ${plural(data, 'exercise')}` : 'Your default list is complete'); } },
     { label: S.showArchived ? 'Hide removed exercises' : 'Show removed exercises', fn: () => { S.showArchived = !S.showArchived; render(false); } }
   ]),

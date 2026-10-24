@@ -31,6 +31,7 @@ alter table public.profiles add column if not exists experience text check (expe
 alter table public.profiles add column if not exists goal text check (goal in ('strength','muscle','fitness','fat_loss'));
 alter table public.profiles add column if not exists onboarded boolean not null default false;
 alter table public.profiles add column if not exists theme text check (char_length(theme) <= 30);
+alter table public.profiles add column if not exists muscles jsonb check (muscles is null or (jsonb_typeof(muscles) = 'array' and jsonb_array_length(muscles) <= 40));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
@@ -50,6 +51,9 @@ create table if not exists public.exercises (
   created_at timestamptz not null default now()
 );
 create unique index if not exists exercises_user_name_uq on public.exercises (user_id, lower(name));
+-- The user's confirmed one-rep max, updated when they accept a new PR while logging.
+alter table public.exercises add column if not exists one_rm numeric check (one_rm > 0 and one_rm < 2000);
+alter table public.exercises add column if not exists one_rm_at timestamptz;
 
 create table if not exists public.sessions (
   id         uuid primary key,
