@@ -734,3 +734,51 @@ button,a,label,input,select,textarea,[data-act]{touch-action:manipulation}
 }
 @keyframes pill{from{transform:scaleX(.55);opacity:.3}}
 @media (prefers-reduced-motion:reduce){.nav-i.pop svg{animation:none}}
+
+/* ---------- Settings: grouped list, like a native settings screen ---------- */
+.settings{display:grid;gap:var(--s1);align-items:start}
+@media (min-width:60rem){.settings{display:block;columns:2;column-gap:var(--s1)}.settings>.sg{break-inside:avoid;margin-bottom:var(--s1)}}
+.sg{min-width:0}
+.sg-h{font-family:var(--font-mono);font-size:var(--t-xs);font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0 0 var(--s-1) var(--s0)}
+.sg-b{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+.sg-f{font-size:.8rem;color:var(--muted);margin:var(--s-1) var(--s0) 0;line-height:1.45}
+.sg-pad{padding:0 var(--s0) var(--s0)}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:var(--s0);min-height:3.4rem;padding:.55rem var(--s0);width:100%;text-align:left;position:relative}
+.srow + .srow::before{content:"";position:absolute;top:0;left:var(--s0);right:0;height:1px;background:var(--line)}
+.srow .k{font-size:1rem;font-weight:600;min-width:0}
+.srow .k small{display:block;color:var(--muted);font-size:.78rem;font-weight:400;margin-top:1px}
+.srow .v{margin-left:auto;color:var(--muted);font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.srow .field{width:11rem;height:2.5rem;text-align:right;background:transparent;border-color:transparent;padding:0 .25rem}
+.srow .field:focus{border-color:var(--line);background:var(--field)}
+.srow .unitin{display:flex;align-items:center;gap:6px}
+.srow .unitin .field{width:4.5rem}
+.srow.link{transition:background .15s}
+.srow.link:active{background:var(--surface-2);transform:none}
+@media (hover:hover){.srow.link:hover{background:var(--surface-2)}}
+.srow .chev{flex:none;width:8px;height:8px;border-top:2px solid var(--muted);border-right:2px solid var(--muted);transform:rotate(45deg);margin-left:var(--s-1);opacity:.7}
+.srow.center{justify-content:center}.srow.center .k{font-weight:600}.srow.center .chev{display:none}
+.srow.danger .k{color:var(--bad)}
+.me{display:flex;align-items:center;gap:var(--s0);padding:var(--s0)}
+.avatar{width:3.4rem;height:3.4rem;border-radius:50%;background:var(--solid);color:var(--solid-ink);display:grid;place-items:center;flex:none;font-family:var(--font-display);font-weight:600;font-size:1.9rem;line-height:1;padding-top:.15em}
+.me-t{display:flex;flex-direction:column;min-width:0}
+.me-t b{font-size:1.15rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.me-t span{font-size:.85rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sg .themes{grid-template-columns:repeat(auto-fill,minmax(7.5rem,1fr))}
+@media (max-width:47.99rem){
+  .srow .k small{display:none}
+  .srow .field{width:9.5rem}
+  /* save bar appears above the tab bar only when there is something to save */
+  .savebar{position:fixed;left:var(--gl);right:var(--gr);bottom:calc(5.4rem + env(safe-area-inset-bottom,0px));margin:0;transform:translateY(1rem);opacity:0;pointer-events:none;transition:transform .35s var(--ease),opacity .25s}
+  .savebar.dirty{transform:none;opacity:1;pointer-events:auto}
+  body.on-prefs .nav-train{display:none}
+  body.on-prefs #view{padding-bottom:10rem}
+}
+@media (max-width:47.99rem){
+  /* themes: a swipeable strip instead of a long grid */
+  .sg .themes{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;margin:0 calc(var(--s0) * -1);padding:2px var(--s0);gap:var(--s-1)}
+  .sg .themes::-webkit-scrollbar{display:none}
+  .sg .theme-card{flex:0 0 7.6rem;scroll-snap-align:start}
+  .savebar #savemsg{display:none}
+  .savebar #discard-prefs{flex:1}
+  .savebar #save-prefs{flex:1.618}
+}

@@ -548,6 +548,7 @@ function render(enter) {
   document.body.classList.toggle('no-nav', !app);
   document.body.classList.toggle('bare', bare);
   document.body.classList.toggle('in-session', app && S.view === 'session');
+  document.body.classList.toggle('on-prefs', app && S.view === 'prefs');
   if (enter) { scrollTo(0, 0); if (!SPL.el) playEnter(v); }
   else { v.classList.remove('enter'); scrollTo(0, y); }
   if (app) renderNav();
@@ -1121,6 +1122,7 @@ function updateSaveBar() {
   if (m) m.textContent = dirty ? 'Unsaved changes' : 'All changes saved';
   if (sv) sv.disabled = !dirty;
   if (dc) dc.hidden = !dirty;
+  $('.savebar')?.classList.toggle('dirty', dirty);
 }
 function discardDraft() { if (!S.draft) return; const changedTheme = S.draft.theme !== (S.profile.theme || themePref()); S.draft = null; if (changedTheme) applyTheme(S.profile.theme || 'auto'); }
 async function savePrefs(btn) {
@@ -1137,39 +1139,44 @@ async function savePrefs(btn) {
 }
 function vPrefs() {
   const d = S.draft || (S.draft = draftFrom(S.profile)), du = d.unit === 'lb' ? 'lb' : 'kg';
-  const bwShown = Math.round((du === 'lb' ? d.bw * KG_LB : d.bw) * 10) / 10;
+  const bwShown = Math.round((du === 'lb' ? d.bw * KG_LB : d.bw) * 10) / 10, dirty = prefsDirty();
+  const row = (k, ctl, hint = '') => `<div class="srow"><span class="k">${k}${hint ? `<small>${hint}</small>` : ''}</span>${ctl}</div>`;
+  const link = (k, attrs, val = '', cls = '') => `<button class="srow link${cls}" ${attrs}><span class="k">${k}</span>${val ? `<span class="v">${val}</span>` : ''}<span class="chev" aria-hidden="true"></span></button>`;
+  const group = (title, body, foot = '') => `<section class="sg rv"><h2 class="sg-h">${title}</h2><div class="sg-b">${body}</div>${foot ? `<p class="sg-f">${foot}</p>` : ''}</section>`;
+  const who = d.name || S.profile.username || '?';
   return pageTop('Settings') + `<h1 class="h1 rv" style="margin:10px 0 16px">Settings</h1>
-  <div class="dash">
-  <section class="card rv">
-    <div class="pref" style="padding-top:0"><span class="k">Name<small>Shown in your greeting</small></span><input class="field" style="width:11rem" data-f="d-name" value="${esc(d.name)}" maxlength="40" aria-label="Your name"></div>
-    <div class="pref"><span class="k">Units<small>Stored precisely; switch any time</small></span><span class="seg"><button class="${du === 'kg' ? 'on' : ''}" data-act="d-set" data-k="unit" data-v="kg">kg</button><button class="${du === 'lb' ? 'on' : ''}" data-act="d-set" data-k="unit" data-v="lb">lb</button></span></div>
-    <div class="pref"><span class="k">Bodyweight<small>Used for bodyweight exercises</small></span><span style="display:flex;align-items:center;gap:8px"><input class="field" style="width:96px;text-align:center" data-f="d-bw" inputmode="decimal" value="${bwShown}" aria-label="Bodyweight"><span class="lbl">${du}</span></span></div>
-    <div class="pref"><span class="k">Weekly target<small>Sessions per week for consistency</small></span><span class="stepper"><button data-act="d-step" data-k="target" data-d="-1" aria-label="Fewer">−</button><span>${d.target}</span><button data-act="d-step" data-k="target" data-d="1" aria-label="More">+</button></span></div>
-    <div class="pref"><span class="k">Rest timer<small>Counts down after you tick a set</small></span><button class="toggle${d.restOn ? ' on' : ''}" data-act="d-toggle" data-k="restOn" aria-pressed="${d.restOn}" aria-label="Rest timer"></button></div>
-    ${d.restOn ? `<div class="pref"><span class="k">Rest length</span><span class="stepper"><button data-act="d-step" data-k="rest" data-d="-15" aria-label="Shorter">−</button><span>${mmss(d.rest * 1000)}</span><button data-act="d-step" data-k="rest" data-d="15" aria-label="Longer">+</button></span></div>
-    <div class="pref"><span class="k">Rest sound<small>A short beep when rest ends</small></span><button class="toggle${d.sound ? ' on' : ''}" data-act="d-toggle" data-k="sound" aria-pressed="${d.sound}" aria-label="Rest sound"></button></div>` : ''}
-  </section>
-  <section class="card rv" style="display:flex;flex-direction:column;gap:14px">
-    <span class="lbl">Account</span>
-    <div class="pref" style="padding-top:0"><span class="k">@${esc(S.profile.username)}<small>${esc(S.user.email || '')}</small></span><button class="btn ghost sm" data-act="change-username">${roll('Change')}</button></div>
-    ${standalone() ? '' : `<div class="pref"><span class="k">Install the app<small>Opens full screen from your home screen</small></span><button class="btn sm" data-act="install">${roll('Install')}</button></div>`}
-    <p class="muted" style="font-size:13px">Your sessions, exercises and splits are private to your account. Others only see a split when you share it.</p>
-    <span class="lbl" style="margin-top:6px">Your data</span>
-    <div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn sm" data-act="export" data-f="json">${roll('Export JSON')}</button><button class="btn ghost sm" data-act="export" data-f="csv">${roll('Export CSV')}</button><button class="btn line sm" data-act="import">${roll('Import JSON')}</button></div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="signout">${roll('Sign out')}</button><button class="btn line sm" data-act="delete-account" style="color:var(--bad)">${roll('Delete account')}</button></div>
-  </section>
-  <section class="card span rv"><div class="card-h"><span class="lbl">Theme</span><span class="lbl">${esc((THEMES.find(t => t.id === d.theme) || THEMES[0]).name)}</span></div>${themePicker()}</section>
-  <section class="card span rv"><div class="card-h"><span class="lbl">How the numbers work</span></div><div class="how">
+  <div class="settings">
+  <section class="sg rv"><div class="sg-b me"><span class="avatar" aria-hidden="true">${esc(who.trim().charAt(0).toUpperCase())}</span><span class="me-t"><b>${esc(who)}</b><span>@${esc(S.profile.username)}${S.user.email ? ' · ' + esc(S.user.email) : ''}</span></span></div></section>
+  ${group('Profile',
+    row('Name', `<input class="field" data-f="d-name" value="${esc(d.name)}" maxlength="40" aria-label="Your name">`, 'Shown in your greeting') +
+    row('Bodyweight', `<span class="unitin"><input class="field" data-f="d-bw" inputmode="decimal" value="${bwShown}" aria-label="Bodyweight"><span class="lbl">${du}</span></span>`, 'Used for bodyweight exercises'))}
+  ${group('Training',
+    row('Units', `<span class="seg"><button class="${du === 'kg' ? 'on' : ''}" data-act="d-set" data-k="unit" data-v="kg">kg</button><button class="${du === 'lb' ? 'on' : ''}" data-act="d-set" data-k="unit" data-v="lb">lb</button></span>`, 'Stored precisely; switch any time') +
+    row('Weekly target', `<span class="stepper"><button data-act="d-step" data-k="target" data-d="-1" aria-label="Fewer">−</button><span>${d.target}</span><button data-act="d-step" data-k="target" data-d="1" aria-label="More">+</button></span>`, 'Sessions per week for consistency') +
+    row('Rest timer', `<button class="toggle${d.restOn ? ' on' : ''}" data-act="d-toggle" data-k="restOn" aria-pressed="${d.restOn}" aria-label="Rest timer"></button>`, 'Counts down after you tick a set') +
+    (d.restOn ? row('Rest length', `<span class="stepper"><button data-act="d-step" data-k="rest" data-d="-15" aria-label="Shorter">−</button><span>${mmss(d.rest * 1000)}</span><button data-act="d-step" data-k="rest" data-d="15" aria-label="Longer">+</button></span>`) +
+      row('Rest sound', `<button class="toggle${d.sound ? ' on' : ''}" data-act="d-toggle" data-k="sound" aria-pressed="${d.sound}" aria-label="Rest sound"></button>`, 'A short beep when rest ends') : ''),
+    'Your weekly target drives the consistency score and streak.')}
+  ${group('Appearance', `<div class="srow"><span class="k">Theme</span><span class="v">${esc((THEMES.find(t => t.id === d.theme) || THEMES[0]).name)}</span></div><div class="sg-pad">${themePicker()}</div>`)}
+  ${group('Account',
+    link('Username', 'data-act="change-username"', '@' + esc(S.profile.username)) +
+    (standalone() ? '' : link('Install the app', 'data-act="install"')),
+    'Your sessions, exercises and splits are private to your account. Others only see a split when you share it.')}
+  ${group('Your data', link('Export JSON', 'data-act="export" data-f="json"') + link('Export CSV', 'data-act="export" data-f="csv"') + link('Import JSON', 'data-act="import"'))}
+  ${group('About', link('How the numbers work', 'data-act="how"'))}
+  <section class="sg rv"><div class="sg-b">${link('Sign out', 'data-act="signout"', '', ' center')}${link('Delete account', 'data-act="delete-account"', '', ' center danger')}</div></section>
+  </div>
+  <div class="savebar${dirty ? ' dirty' : ''}" role="region" aria-label="Save settings"><span id="savemsg" class="muted">${dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+    <button class="btn ghost sm" id="discard-prefs" data-act="discard-prefs"${dirty ? '' : ' hidden'}>Discard</button>
+    <button class="btn" id="save-prefs" data-act="save-prefs"${dirty ? '' : ' disabled'}>Save changes</button></div>`;
+}
+const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
     <p><b>Linked sets.</b> Link two or more sets and Synergym names the structure: two exercises make a superset, three or more a giant set. On one exercise, falling weight is a drop set, the same weight a rest-pause set, anything else a pyramid. Rest starts after the last set of a group.</p>
     <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target.</p>
     <p><b>Splits.</b> The Today screen suggests the next training day of the split you used last, skipping rest days.</p>
-  </div></section></div>
-  <div class="savebar" role="region" aria-label="Save settings"><span id="savemsg" class="muted">${prefsDirty() ? 'Unsaved changes' : 'All changes saved'}</span>
-    <button class="btn ghost sm" id="discard-prefs" data-act="discard-prefs"${prefsDirty() ? '' : ' hidden'}>Discard</button>
-    <button class="btn" id="save-prefs" data-act="save-prefs"${prefsDirty() ? '' : ' disabled'}>Save changes</button></div>`;
-}
+  </div><button class="btn lg wide" data-act="close" style="margin-top:16px">Done</button>`;
 
 /* ================= sheets ================= */
 function openSheet(html, mount) { const sh = $('#sheet'); $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
@@ -1599,6 +1606,7 @@ const ACT = {
   export: el => exportData(el.dataset.f),
   import: () => $('#imp').click(),
   close: closeSheet,
+  how: () => openSheet(HOW),
   install: async () => {
     if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); installEvt = null; if (r && r.outcome === 'accepted') toast('Synergym is on your home screen'); return; }
     const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
