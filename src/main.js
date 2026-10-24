@@ -911,14 +911,14 @@ function vToday() {
     cta = `<div class="what"><span>In progress</span><b>${esc(sessName(a))}</b><span>${plural(a.items.length, 'exercise')} · ${plural(sa.sets, 'set')} logged</span></div><button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
   } else if (isRestToday()) {
     lines = [greet(hi), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
-    cta = nx ? `<button class="what what-pick" data-act="next-pick" aria-haspopup="dialog" aria-label="Change what’s up next"><span>Rest day · up next${nx.picked ? ' (your pick)' : ''}<i class="dd">${ICON.down}</i></span><b>${esc(nx.sp.days[nx.i].type || 'Training')}</b><span>${esc(nx.sp.name)} · day ${nx.i + 1} · waits for tomorrow</span></button>`
+    cta = nx ? `<button class="what what-pick" data-act="next-pick" aria-haspopup="dialog" aria-expanded="false" aria-label="Change what’s up next"><span class="wp-chip"><span class="wp-t">Rest day · up next${nx.picked ? ' · your pick' : ''}</span><i class="dd">${ICON.down}</i></span><b>${esc(nx.sp.days[nx.i].type || 'Training')}</b><span>${esc(nx.sp.name)} · day ${nx.i + 1} · waits for tomorrow</span></button>`
       : `<div class="what"><span>Rest day</span><b>Recovery counts</b><span>Logged for today</span></div>`;
     cta += `
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-undo">Undo rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Train anyway"><span class="fab-l" aria-hidden="true">Train anyway</span>${ICON.plus}</button></div>`;
   } else if (nx) {
     const d = nx.sp.days[nx.i], ty = d.type ? esc(d.type) : 'training day';
     lines = [greet(hi), ty, pick(['<em>is up next</em>.', '<em>is on deck</em>.', '<em>is calling</em>.'], 3)];
-    cta = `<button class="what what-pick" data-act="next-pick" aria-haspopup="dialog" aria-label="Change what’s up next"><span>${esc(nx.sp.name)} · day ${nx.i + 1}${nx.picked ? ' · your pick' : ''}<i class="dd">${ICON.down}</i></span><b>${esc(d.type || 'Training')}</b><span>${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}</span></button>
+    cta = `<button class="what what-pick" data-act="next-pick" aria-haspopup="dialog" aria-expanded="false" aria-label="Change what’s up next"><span class="wp-chip"><span class="wp-t">${esc(nx.sp.name)} · day ${nx.i + 1}${nx.picked ? ' · your pick' : ''}</span><i class="dd">${ICON.down}</i></span><b>${esc(d.type || 'Training')}</b><span>${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}</span></button>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   } else {
     lines = [greet(hi), ...(list.length
@@ -1462,7 +1462,7 @@ const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class=
 
 /* ================= sheets ================= */
 function openSheet(html, mount) { const sh = $('#sheet'); $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); fluidApply($('#sheet-body'), null); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
-function closeSheet() { $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; const sp = $('#sheet .sp'); sp.style.transform = sp.style.transition = sp.style.animation = ''; }
+function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.remove('open'); w.setAttribute('aria-expanded', 'false'); } $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; const sp = $('#sheet .sp'); sp.style.transform = sp.style.transition = sp.style.animation = ''; }
 /* drag a sheet down from its top to dismiss it, like a native bottom sheet */
 (() => {
   const sp = $('#sheet .sp'); let y0 = null, dy = 0, t0 = 0;
@@ -1967,7 +1967,7 @@ const ACT = {
   'w-opt': el => { WOPT[el.dataset.id] = +el.dataset.v; try { localStorage.setItem('sg-wopt', JSON.stringify(WOPT)); } catch {} render(false); },
   'w-close': () => back(),
   'rest-today': () => setRestToday(true),
-  'next-pick': () => nextMenu(),
+  'next-pick': el => { el.classList.add('open'); el.setAttribute('aria-expanded', 'true'); nextMenu(); },
   'rest-undo': () => setRestToday(false),
   'w-size': el => { const list = homeEntries(), e = list.find(x => x.id === el.dataset.id); if (!e) return; e.size = el.dataset.v; saveEntries(list); buzz(); render(false); },
   'edit-home': () => editHome(),

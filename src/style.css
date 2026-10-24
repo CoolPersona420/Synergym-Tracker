@@ -1088,13 +1088,26 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 }
 .daybar span{display:block;line-height:2.1rem;text-align:center;padding:0 3px}
 
-/* Home: the up-next block is a dropdown */
-.what-pick{display:block;text-align:left;min-width:0;padding:8px 12px;margin:-8px -12px;border-radius:var(--r-md);transition:background .25s,transform .45s var(--spring)}
-.what-pick > span:first-child{display:inline-flex;align-items:center;gap:6px}
-.what-pick .dd{display:inline-grid;place-items:center;width:1.35rem;height:1.35rem;border-radius:50%;background:var(--surface-2);color:var(--ink);font-style:normal;transition:transform .45s var(--spring)}
-.what-pick .dd .ico{width:12px;height:12px;stroke-width:2.4}
-.what-pick:active{transform:scale(.98)}
-@media (hover:hover){.what-pick:hover{background:var(--surface)}.what-pick:hover .dd{transform:translateY(2px)}}
+/* Home: the up-next block is a dropdown. A soft pill names the split and day; the day name
+   gets an underline that draws in on hover; the chevron flips while the picker is open. */
+.what-pick{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:0;margin:0;background:none;text-align:left;min-width:0;max-width:100%;-webkit-tap-highlight-color:transparent}
+.hero-cta .what-pick > span.wp-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:5px 6px 5px 12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);transition:background .4s var(--ease),box-shadow .4s var(--ease),transform .5s var(--spring)}
+.wp-chip > .wp-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;font-size:inherit!important;color:inherit!important}
+.what-pick .dd{display:inline-grid;place-items:center;flex:none;width:1.3rem;height:1.3rem;border-radius:50%;background:var(--surface-2);color:var(--ink);font-style:normal;transition:transform .55s var(--spring),background .3s}
+.what-pick .dd .ico{width:11px;height:11px;stroke-width:2.6}
+.what-pick b{background-image:linear-gradient(currentColor,currentColor);background-repeat:no-repeat;background-position:0 100%;background-size:0% 2px;padding-bottom:3px;transition:background-size .7s var(--ease)}
+.what-pick:active .wp-chip{transform:scale(.96)}
+.what-pick.open .wp-chip{background:var(--surface);box-shadow:inset 0 0 0 1px var(--ink-2)}
+.what-pick.open .dd{transform:rotate(180deg);background:var(--solid);color:var(--solid-ink)}
+.what-pick.open b{background-size:100% 2px}
+.what-pick:focus-visible{outline:none}.what-pick:focus-visible .wp-chip{box-shadow:inset 0 0 0 2px var(--accent)}
+@media (hover:hover){
+  .what-pick:hover .wp-chip{background:var(--surface);box-shadow:inset 0 0 0 1px var(--ink-2)}
+  .what-pick:hover .dd{transform:translateY(2px)}
+  .what-pick.open:hover .dd{transform:rotate(180deg)}
+  .what-pick:hover b{background-size:100% 2px}
+}
 .st-q{margin-top:var(--s-1)}
 #net.upd{cursor:pointer;pointer-events:auto;background:var(--solid);color:var(--solid-ink)}
 #net.upd::before{background:var(--good)}
+.hero-cta .what-pick b{display:inline-block;max-width:100%}
