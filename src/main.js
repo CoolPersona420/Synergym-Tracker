@@ -170,8 +170,10 @@ const splitToDb = p => ({ id: p.id, user_id: S.user.id, name: p.name.trim() || '
 /* ================= save queue (survives reloads and dropped connections) ================= */
 const OB = { lastOk: new Map(), pending: new Set(), timers: new Map(), inflight: new Set(), again: new Set(), failing: false, backoff: 2000, retryT: null };
 const obKey = () => S.user ? 'sg-outbox-' + S.user.id : null;
+/* outbox keys are "s:<id>", "x:<id>", "sp:<id>", or plain "p" for the profile */
+const splitKey = key => { const i = key.indexOf(':'); return i < 0 ? [key, ''] : [key.slice(0, i), key.slice(i + 1)]; };
 function snapshot(key) {
-  const i = key.indexOf(':'), t = key.slice(0, i), id = key.slice(i + 1);
+  const [t, id] = splitKey(key);
   if (t === 's') return S.sessions.get(id) || null;
   if (t === 'x') return S.library.find(e => e.id === id) || null;
   if (t === 'sp') return S.splits.get(id) || null;
@@ -186,7 +188,7 @@ function restoreOutbox() {
   const k = obKey(); let o = null; try { o = JSON.parse(localStorage.getItem(k) || 'null'); } catch {}
   if (!o || typeof o !== 'object') return;
   for (const [key, val] of Object.entries(o)) {
-    const i = key.indexOf(':'), t = key.slice(0, i), id = key.slice(i + 1);
+    const [t, id] = splitKey(key);
     if (t === 's') { if (val) { const s = cleanSession(val); if (s) S.sessions.set(id, s); } else S.sessions.delete(id); }
     else if (t === 'x') { S.library = S.library.filter(e => e.id !== id); if (val && val.name) S.library.push({ id, name: String(val.name).slice(0, 60), muscle: val.muscle || 'Full body', kind: val.kind === 'bw' ? 'bw' : 'w', archived: !!val.archived, isDefault: !!val.isDefault, oneRm: num(val.oneRm), oneRmAt: num(val.oneRmAt) }); }
     else if (t === 'sp') { if (val) S.splits.set(id, { ...val, days: cleanDays(val.days) }); else S.splits.delete(id); }
@@ -201,7 +203,7 @@ function queue(key, delay = 600) {
   clearTimeout(OB.timers.get(key)); OB.timers.set(key, setTimeout(() => flush(key), delay)); syncUI();
 }
 async function runJob(key) {
-  const i = key.indexOf(':'), t = key.slice(0, i), id = key.slice(i + 1);
+  const [t, id] = splitKey(key);
   if (t === 's') { const s = S.sessions.get(id); return s ? sb.from('sessions').upsert(sessToDb(s)) : sb.from('sessions').delete().eq('id', id); }
   if (t === 'x') { const e = S.library.find(x => x.id === id); return e ? sb.from('exercises').upsert(exToDb(e)) : sb.from('exercises').delete().eq('id', id); }
   if (t === 'sp') { const p = S.splits.get(id); return p ? sb.from('splits').upsert(splitToDb(p)) : sb.from('splits').delete().eq('id', id); }
@@ -244,10 +246,10 @@ document.addEventListener('visibilitychange', () => {
 });
 function syncUI() {
   const busy = OB.pending.size || OB.inflight.size;
-  let cls = 'sync', txt = 'Synced';
-  if (OB.failing) { cls += ' err'; txt = navigator.onLine ? 'Retrying' : 'Offline · saved here'; }
-  else if (busy) { cls += ' busy'; txt = 'Saving'; }
-  for (const el of $$('[data-sync]')) { el.className = 'lbl ' + cls; el.textContent = txt; }
+  let txt = 'Synced';
+  if (OB.failing) txt = navigator.onLine ? 'Couldn’t save · retrying' : 'Offline · saved on this device';
+  else if (busy) txt = 'Saving';
+  const net = $('#net'); if (net) { net.hidden = !OB.failing; if (OB.failing) net.textContent = txt; }
 }
 
 /* ================= loading ================= */
@@ -515,6 +517,7 @@ const isTyping = () => { const a = document.activeElement; return !!(a && /^(INP
 function soft() { clearTimeout(rT); rT = setTimeout(() => { if (isTyping()) { S.pendingRender = true; return; } render(false); }, 60); }
 document.addEventListener('focusout', () => setTimeout(() => { if (S.pendingRender && !isTyping()) { S.pendingRender = false; render(false); } }, 320));
 
+const KEEPX = ['#dash', '.hscroll', '.themes'];
 function render(enter) {
   const v = $('#view'), y = scrollY, nav = $('#nav');
   let html = '', app = false, bare = false;
@@ -543,7 +546,9 @@ function render(enter) {
     }
   } catch (err) { console.error(err); html = `<div class="empty"><b>Something went wrong drawing this view.</b>Reload the page. Your data is safe.</div>`; }
   S.animate = false;
+  const keepX = enter ? null : KEEPX.map(q => $$(q, v).map(el => el.scrollLeft));
   v.innerHTML = html;
+  if (keepX) KEEPX.forEach((q, i) => $$(q, v).forEach((el, j) => { if (keepX[i][j]) el.scrollLeft = keepX[i][j]; }));
   v.classList.toggle('linking', !!S.link);
   nav.hidden = !app;
   document.body.classList.toggle('no-nav', !app);
@@ -558,9 +563,20 @@ function render(enter) {
   afterRender(enter);
   if (SPL.el && !(sb && (!S.authReady || (S.user && !S.loaded && !S.loadError)))) splashOut();
 }
+let rvObs = null;
 function playEnter(v) {
-  $$('.rv', v).forEach((el, i) => el.style.setProperty('--i', Math.min(i, LITE ? 5 : 10)));
+  if (rvObs) { rvObs.disconnect(); rvObs = null; }
+  const vh = innerHeight, late = [], io = 'IntersectionObserver' in window && !reduced;
+  let i = 0;
+  for (const el of $$('.rv', v)) {
+    if (io && el.getBoundingClientRect().top > vh * .9) { el.classList.add('rv-wait'); late.push(el); }
+    else el.style.setProperty('--i', Math.min(i++, LITE ? 5 : 10));
+  }
+  if (io) for (const el of $$('.list > .row, .exrow', v)) if (!el.closest('.rv-wait') && el.getBoundingClientRect().top > vh) { el.classList.add('rv-wait'); late.push(el); }
   v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); countUp(v);
+  if (!late.length) return;
+  rvObs = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { e.target.classList.replace('rv-wait', 'rv-in'); rvObs.unobserve(e.target); } }, { rootMargin: '0px 0px -6% 0px' });
+  late.forEach(el => rvObs.observe(el));
 }
 
 /* splash: the mascot on page load and after logging in, then the panel lifts away */
@@ -572,6 +588,7 @@ function splashIn() {
   el.innerHTML = `<div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t" viewBox="44 40 312 330">${WOLF}</svg></span><span class="spl-mask"><span class="wordmark">SYNERGYM</span></span><span class="spl-bar"><i></i></span></div>`;
   document.body.appendChild(el);
   SPL.el = el; SPL.t0 = performance.now(); SPL.leaving = false;
+  setTimeout(() => { if (SPL.el === el && !SPL.leaving) splashOut(); }, 10000);
 }
 function splashOut() {
   if (SPL.leaving) return; SPL.leaving = true;
@@ -592,6 +609,12 @@ function wireCarousel() {
 }
 function afterRender(entered) {
   if (S.view === 'today') wireCarousel();
+  if (S.view === 'today' && S.loaded && !S.hinted && coarse.matches && !reduced) {
+    S.hinted = true;
+    let n = 0; try { n = +localStorage.getItem('sg-fab-hint') || 0; localStorage.setItem('sg-fab-hint', n + 1); } catch {}
+    if (n < 3)
+    setTimeout(() => { document.body.classList.add('fab-hint'); setTimeout(() => document.body.classList.remove('fab-hint'), 2400); }, SPL.el ? 2300 : 800);
+  }
   if (S.view === 'split' && S.splits.has(S.arg) && !S.recipients.has(S.arg)) loadRecipients(S.arg);
   if (S.view === 'public' && (!S.pub || S.pub.token !== S.arg)) loadPublic(S.arg);
   if (S.view === 'splits' && S.loaded && entered && Date.now() - (S.sharedAt || 0) > 3000) loadShared();
@@ -612,14 +635,13 @@ function renderNav() {
   ${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}
   <button class="nav-train${a ? ' live' : ''}" data-act="${a ? 'resume' : 'start-menu'}" data-id="${a ? a.id : ''}" aria-label="${a ? 'Resume session' : 'Start session'}"><span class="ring">${a ? ICON.play : ICON.plus}</span><span class="nl">${a ? roll('Resume session') : roll('Start session')}</span></button>
   ${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}
-  <button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>
-  <div class="nav-foot"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span data-sync class="lbl sync"></span>${themeBtn()}</div></div>`;
+  <button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>`;
 }
 function pageTop(title, extra = '', logo = false) {
-  return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div><div style="display:flex;gap:8px;align-items:center">${extra}<span data-sync class="lbl sync"></span></div></header>`;
+  return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div>${extra ? `<div class="hx">${extra}</div>` : ''}</header>`;
 }
 const vMissing = msg => `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button></header><div class="empty rv"><b>${esc(msg)}</b>It may have been deleted on another device.</div>`;
-const shell = inner => `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}${themeBtn()}</div>${inner}</div></div>`;
+const shell = inner => `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}</div>${inner}</div></div>`;
 const vNoConfig = () => shell(`<div class="msg err">This deployment is missing its Supabase settings. Set VITE_SUPABASE_URL and VITE_SUPABASE_KEY in Vercel, then redeploy.</div>`);
 const vLoadError = () => shell(`<h1>Couldn’t load <em>your log</em>.</h1><p class="lead">${esc(S.loadError)}</p><button class="btn lg" data-act="retry-load">Try again</button><button class="linkbtn" data-act="signout">Sign out</button>`);
 
@@ -687,7 +709,7 @@ function vWizard() {
     <button class="opt${o.tpl === 'none' ? ' on' : ''}" data-act="ob-pick" data-k="tpl" data-v="none"><b>I’ll build my own</b><span>Start with an empty Splits tab</span></button></div>
     ${msg}${nav('data-act="ob-finish"' + (o.tpl ? '' : ' disabled'), 'Finish setup')}`;
   }
-  return `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}<div style="display:flex;gap:8px;align-items:center">${themeBtn()}<button class="linkbtn" data-act="signout">Sign out</button></div></div>${body}</div></div>`;
+  return `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}<div style="display:flex;gap:8px;align-items:center"><button class="linkbtn" data-act="signout">Sign out</button></div></div>${body}</div></div>`;
 }
 
 /* starter splits (exercise names match the default list) */
@@ -796,16 +818,16 @@ function vToday() {
   if (a) {
     const sa = S.A.sess.get(a.id);
     lines = [`Hey ${hi},`, 'your session', '<em>is live</em>.'];
-    cta = `<div class="what"><span>In progress</span><b>${esc(sessName(a))}</b><span>${plural(a.items.length, 'exercise')} · ${plural(sa.sets, 'set')} logged</span></div><button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session">${ICON.play}</button>`;
+    cta = `<div class="what"><span>In progress</span><b>${esc(sessName(a))}</b><span>${plural(a.items.length, 'exercise')} · ${plural(sa.sets, 'set')} logged</span></div><button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
   } else if (nx) {
     const d = nx.sp.days[nx.i];
     lines = [`Hey ${hi},`, d.type ? esc(d.type) : 'training day', '<em>is up next</em>.'];
     cta = `<div class="what"><span>${esc(nx.sp.name)} · day ${nx.i + 1}</span><b>${esc(d.type || 'Training')}</b><span>${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}</span></div>
-      <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start this day">${ICON.plus}</button></div>`;
+      <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   } else {
     lines = list.length ? [`Hey ${hi},`, 'every set', '<em>adds up</em>.'] : [`Hey ${hi},`, 'let’s log your', '<em>first session</em>.'];
     cta = `<div class="what"></div>
-      <button class="fab magnet" data-act="start" aria-label="Start session">${ICON.plus}</button>`;
+      <button class="fab magnet" data-act="start" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button>`;
   }
   return pageTop('Home', '', false) + `
   <section class="hero rv">${heroArt()}
@@ -879,11 +901,11 @@ function vSession() {
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button>
     <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80">
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
-  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} day ${(s.splitDay ?? 0) + 1}` : ''} · ${live ? 'live' : 'completed'} <span data-sync class="lbl sync" style="margin-left:8px"></span></div>
+  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} day ${(s.splitDay ?? 0) + 1}` : ''} · ${live ? 'live' : 'completed'}</div>
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
     <div class="bignum" id="sint" style="margin-top:10px">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
-    <button class="fab magnet" data-act="add-ex" aria-label="Add exercise">${ICON.plus}</button></section>
+    <button class="fab magnet" data-act="add-ex" aria-label="Add exercise"><span class="fab-l" aria-hidden="true">Add exercise</span>${ICON.plus}</button></section>
   <div class="wave rv" id="wave">${wave(s)}</div>
   <div class="strip rv" id="strip">${stripHTML(a)}</div>
   <div class="items">${s.items.map(it => exCard(it, gmap)).join('') || `<div class="empty rv"><b>No exercises yet.</b>Tap + to add one from your library.</div>`}</div>
@@ -1048,7 +1070,7 @@ function vSplits() {
 }
 function vSplit() {
   const sp = S.splits.get(S.arg), rec = S.recipients.get(sp.id), tr = sp.days.filter(d => !isRestDay(d)).length;
-  return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Split <span data-sync class="lbl sync" style="margin-left:8px"></span></span>
+  return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Split</span>
     <button class="btn ghost sm" data-act="share-split" data-id="${sp.id}">${ICON.share}${roll('Share')}</button><button class="iconbtn" data-act="split-menu" data-id="${sp.id}" aria-label="Split options">${ICON.dots}</button></header>
   <div class="rv" style="margin-top:12px"><input class="sp-name" data-f="spname" value="${esc(sp.name)}" maxlength="60" aria-label="Split name" placeholder="Split name">
   <textarea class="sp-desc" data-f="spdesc" maxlength="1000" placeholder="Describe it: goal, who it suits, how to progress" aria-label="Description">${esc(sp.description)}</textarea></div>
@@ -1647,7 +1669,9 @@ const BUZZ = new Set(['nav', 'start', 'start-menu', 'start-day', 'resume', 'dash
 const buzz = (ms = 8) => { if (!coarse.matches || reduced) return; try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
-  const fn = ACT[el.dataset.act]; if (fn) { e.preventDefault(); if (BUZZ.has(el.dataset.act)) buzz(); fn(el, e); }
+  const fn = ACT[el.dataset.act]; if (!fn) return; e.preventDefault(); if (BUZZ.has(el.dataset.act)) buzz();
+  const oops = err => { console.error(err); toast('Something went wrong. Try that again.'); };
+  try { const r = fn(el, e); if (r && r.catch) r.catch(oops); } catch (err) { oops(err); }
 });
 document.addEventListener('input', e => {
   const el = e.target, f = el.dataset && el.dataset.f; if (!f) return; const s = cur();
@@ -1730,6 +1754,7 @@ async function startApp() {
   route(true);
 }
 function boot() {
+  document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
   splashIn();
@@ -1742,7 +1767,7 @@ function boot() {
       S.authReady = true;
       if (u && (!S.user || S.user.id !== u.id)) { splashIn(); resetState(); S.user = u; startApp(); }
       else if (u) { S.user = u; }
-      else if (!u && S.user) { resetState(); S.recover = false; go('today', null, { replace: true }); }
+      else if (!u && S.user) { resetState(); S.recover = false; S.authMode = 'signin'; S.authMsg = null; go('today', null, { replace: true }); }
       else render(false);
     }, 0);
   });
