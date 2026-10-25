@@ -647,16 +647,17 @@ function playEnter(v) {
 const SPL = { el: null, t0: 0, leaving: false };
 const wolfPath = c => (WOLF.match(new RegExp(`class="${c}" d="([^"]+)"`)) || [])[1] || '';
 const WOLF_BODY = wolfPath('w-body'), WOLF_EYES = wolfPath('w-eyes'), WOLF_NOSE = wolfPath('w-nose');
-/* the right eye on its own, with its incentre and inradius: scaled about that point, its edges move in evenly */
-const EYE = 'M212 220 L280 188 L268 212 Z', EYE_IX = 262.8, EYE_IY = 204.79, EYE_R = 7.871;
+/* the right eye on its own, with its incentre and inradius: scaled about that point, its edges move in evenly.
+   EYE_BODY is how far that point sits from the edge of the body (stroke included) */
+const EYE = [[212, 220], [280, 188], [268, 212]], EYE_D = 'M212 220 L280 188 L268 212 Z', EYE_IX = 262.8, EYE_IY = 204.79, EYE_R = 7.871, EYE_BODY = 63;
 function splashIn() {
   if (SPL.el) return;
   const el = document.createElement('div');
   el.id = 'splash'; el.setAttribute('aria-hidden', 'true');
-  /* the background SVG holds a second copy of the wolf for the lunge and a mask whose eye-shaped hole reveals the app */
+  /* the stage is a full-screen copy of the wolf for the lunge; a clip-path cuts the eye-shaped hole that reveals the app */
   const glow = id => `<path class="w-glow" d="${WOLF_EYES}" filter="url(#${id})"/>`;
   const blur = id => `<filter id="${id}" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="7"/></filter>`;
-  el.innerHTML = `<svg class="spl-bg"><defs><mask id="spl-hole" maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%"><rect x="0" y="0" width="100%" height="100%" fill="#fff"/><path class="spl-eye" d="${EYE}" fill="#000" transform="scale(0)"/></mask>${blur('spl-glow-c')}</defs><g mask="url(#spl-hole)"><rect class="spl-fill" x="0" y="0" width="100%" height="100%"/><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/><g class="spl-hot"><path class="a" d="${EYE}"/><path class="b" d="${EYE}"/></g></g></g></svg><span class="spl-flash"></span><span class="spl-ring"></span><span class="spl-ring b"></span>
+  el.innerHTML = `<div class="spl-stage"><svg class="spl-bg"><defs>${blur('spl-glow-c')}</defs><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/></g><g class="spl-hot"><path class="a" d="${EYE_D}"/><path class="b" d="${EYE_D}"/></g></svg></div><span class="spl-flash"></span><span class="spl-ring"></span><span class="spl-ring b"></span>
   <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">SYNERGYM</span></span><span class="spl-bar"><i></i></span></div>`;
   document.body.appendChild(el);
   SPL.el = el; SPL.t0 = performance.now(); SPL.leaving = false;
@@ -669,55 +670,72 @@ function splashFit(el) {
   const s = Math.min(r.width / 312, r.height / 330);
   return { s, ox: r.left + (r.width - 312 * s) / 2 - 44 * s, oy: r.top + (r.height - 330 * s) / 2 - 40 * s };
 }
-/* reveal: the eyes snap open with a flare and a growl, then the wolf lunges at the screen */
+/* reveal: the eyes snap open with a flare and a growl, then the wolf lunges at the screen.
+   Only reduced motion, data saver and very low memory get the plain lift instead */
 function splashOut() {
   if (SPL.leaving) return; SPL.leaving = true;
   const el = SPL.el, wait = Math.max(0, (reduced ? 500 : 1100) - (performance.now() - SPL.t0));
   const finish = () => { el.remove(); if (SPL.el === el) { SPL.el = null; SPL.leaving = false; } };
   setTimeout(() => {
-    const f = !reduced && !LITE && el.querySelector('.spl-cam') && splashFit(el);
+    const n = navigator, plain = reduced || !!(n.connection && n.connection.saveData) || n.deviceMemory <= 1;
+    const f = !plain && el.querySelector('.spl-cam') && splashFit(el);
     if (!f) { el.classList.add('out'); playEnter($('#view')); setTimeout(finish, 1000); return; }
     el.style.setProperty('--rx', `${f.ox + 200 * f.s}px`); el.style.setProperty('--ry', `${f.oy + 204 * f.s}px`);
     el.classList.add('wake');
-    setTimeout(() => splashConsume(el, finish), 560);
+    setTimeout(() => splashConsume(el, finish), 650);
   }, wait);
 }
-/* the lunge: a short crouch, then the camera dives into the right eye. The body blacks out the screen,
-   the eye tears open from its centre with a hot rim, and the app is behind it */
+/* the lunge, in four beats:
+   crouch  - it pulls back
+   lunge   - it springs at the screen, faster and faster, until its body blacks out the view with the eye in the middle
+   impact  - a short shake while the eye burns
+   tear    - the eye rips open from its centre with a hot rim and the app is behind it */
 function splashConsume(el, done) {
-  const f = splashFit(el), cam = el.querySelector('.spl-cam'), hole = el.querySelector('.spl-eye'), hot = el.querySelector('.spl-hot');
-  if (!f) { playEnter($('#view')); return done(); }
+  const f = splashFit(el), stage = el.querySelector('.spl-stage'), cam = el.querySelector('.spl-cam'), hot = el.querySelector('.spl-hot');
+  if (!f || !stage || !cam) { playEnter($('#view')); return done(); }
   const [hotA, hotB] = hot.children, shade = cam.querySelector('.spl-shade'), nose = cam.querySelector('.w-nose'), glowEl = cam.querySelector('.w-glow');
-  const s0 = f.s, ix0 = f.ox + EYE_IX * s0, iy0 = f.oy + EYE_IY * s0, cx = innerWidth / 2, cy = innerHeight / 2;
-  /* the opened eye's inscribed circle has to cover the whole screen from its centre */
-  const s1 = Math.hypot(cx, cy) / EYE_R * 1.04, sc = s0 * .9, D = 1250, C = .14;
+  const W = innerWidth, H = innerHeight, cx = W / 2, cy = H / 2, R = Math.hypot(cx, cy);
+  const s0 = f.s, ix0 = f.ox + EYE_IX * s0, iy0 = f.oy + EYE_IY * s0;
+  /* sc: crouched; sb: the body just covers the screen; s1: the opened eye covers the screen */
+  const sc = s0 * .86, sb = Math.max(sc * 2, R / EYE_BODY * 1.08), s1 = R / EYE_R * 1.06;
+  const C = 280, L = 560, B = 220, T = 700, D = C + L + B + T;
   const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
-  const ease = t => t < .5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+  const io = t => t < .5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+  const px = (x, y) => `${x.toFixed(1)}px ${y.toFixed(1)}px`;
   let entered = false;
   const t0 = performance.now();
   const frame = now => {
-    const p = Math.min(1, (now - t0) / D);
-    let s = sc, e = 0;
-    if (p < C) s = s0 * (1 - .1 * Math.sin(p / C * Math.PI / 2));
-    else { e = ease((p - C) / (1 - C)); s = sc * Math.pow(s1 / sc, e); }
-    /* the eye drifts to the middle of the screen as the camera closes in */
-    const m = smooth(e / .5), x = ix0 + (cx - ix0) * m, y = iy0 + (cy - iy0) * m;
-    const T = `translate(${x - EYE_IX * s} ${y - EYE_IY * s}) scale(${s})`;
-    cam.setAttribute('transform', T);
-    const open = smooth((e - .45) / .35), w = 14 * (1 - smooth((e - .85) / .15));
+    const t = Math.min(D, now - t0);
+    let s, m = 1, dark = 1, open = 0, w = 14, jx = 0, jy = 0;
+    if (t < C) { s = s0 * (1 - .14 * Math.sin(t / C * Math.PI / 2)); m = 0; dark = 0; }
+    else if (t < C + L) {
+      const u = (t - C) / L;
+      s = sc * Math.pow(sb / sc, u ** 2.4); m = smooth(u / .8); dark = smooth((u - .35) / .5);
+    } else if (t < C + L + B) {
+      const v = (t - C - L) / B, a = 9 * (1 - v) ** 2;
+      s = sb * (1 + .05 * v); jx = Math.sin(v * 38) * a; jy = Math.cos(v * 29) * a * .6;
+    } else {
+      const v = (t - C - L - B) / T, e = io(v);
+      s = sb * 1.05 * Math.pow(s1 / (sb * 1.05), e); open = smooth(v / .45); w = 14 * (1 - smooth((v - .75) / .25));
+    }
+    /* the eye drifts to the middle of the screen as the wolf closes in */
+    const x = ix0 + (cx - ix0) * m + jx, y = iy0 + (cy - iy0) * m + jy, tx = x - EYE_IX * s, ty = y - EYE_IY * s;
+    cam.setAttribute('transform', `translate(${tx} ${ty}) scale(${s})`);
     const k = Math.max(0, open * (1 - w / (EYE_R * s)));
-    const K = `${T} translate(${EYE_IX} ${EYE_IY}) scale(${k}) translate(${-EYE_IX} ${-EYE_IY})`;
-    hole.setAttribute('transform', K);
     if (k > 0) {
-      hot.setAttribute('transform', K); hot.style.opacity = open * (1 - smooth((e - .88) / .12));
-      hotA.setAttribute('stroke-width', 28 / (s * k)); hotB.setAttribute('stroke-width', 5 / (s * k));
+      /* the screen minus the eye: the triangle runs against the outer edge, so the nonzero rule leaves it empty */
+      const p = EYE.map(([a, b]) => [tx + (EYE_IX + (a - EYE_IX) * k) * s, ty + (EYE_IY + (b - EYE_IY) * k) * s]);
+      stage.style.clipPath = `polygon(0px 0px, 0px ${H}px, ${px(...p[0])}, ${px(...p[1])}, ${px(...p[2])}, ${px(...p[0])}, 0px ${H}px, ${W}px ${H}px, ${W}px 0px)`;
+      hot.setAttribute('transform', `translate(${tx + EYE_IX * s * (1 - k)} ${ty + EYE_IY * s * (1 - k)}) scale(${s * k})`);
+      hot.style.opacity = Math.min(1, open * 1.6) * (1 - smooth((t - D + 160) / 160));
+      hotA.setAttribute('stroke-width', 30 / (s * k)); hotB.setAttribute('stroke-width', 5 / (s * k));
+      if (!entered) { entered = true; playEnter($('#view')); }
     } else hot.style.opacity = 0;
-    shade.style.opacity = smooth((e - .15) / .35);
-    nose.style.opacity = 1 - smooth(e / .3);
-    const go = .85 * (1 - smooth(e / .25));
-    glowEl.style.opacity = go; if (!go) glowEl.style.display = 'none';
-    if (!entered && e > .4) { entered = true; playEnter($('#view')); }
-    if (p < 1) requestAnimationFrame(frame); else { if (!entered) playEnter($('#view')); done(); }
+    shade.style.opacity = dark;
+    nose.style.opacity = 1 - smooth((t - C) / (L * .4));
+    const go = .85 * (1 - smooth((t - C) / (L * .3)));
+    glowEl.style.opacity = go; glowEl.style.display = go ? '' : 'none';
+    if (t < D) requestAnimationFrame(frame); else { if (!entered) playEnter($('#view')); done(); }
   };
   frame(t0); el.classList.add('consume');
   requestAnimationFrame(frame);
