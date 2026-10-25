@@ -31,6 +31,7 @@ const sb = SB_URL && SB_KEY
   : null;
 
 /* errors reach the database only for a signed-in user (S is defined below; this runs later, on an error) */
+const REPO = 'https://github.com/CoolPersona420/Synergym-Tracker';
 const BUILD = (document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || 'dev').replace(/^.*\//, '');
 const reportError = trackErrors(e => { if (sb && S.user && !S.local) sb.rpc('report_error', { p_message: e.message, p_stack: e.stack, p_path: e.path, p_build: BUILD, p_ua: navigator.userAgent.slice(0, 300) }).then(() => {}, () => {}); });
 if (import.meta.env.PROD) startAnalytics();
@@ -1460,6 +1461,10 @@ function vPrefs() {
     'Your sessions, exercises and splits are private to your account. Others only see a split when you share it.')}
   ${group('Your data', link('Export JSON', 'data-act="export" data-f="json"') + link('Export CSV', 'data-act="export" data-f="csv"') + link('Import JSON', 'data-act="import"'))}
   ${group('Help', link('User guide', 'data-act="nav" data-v="guide"') + link('Replay the tour', 'data-act="tour"') + link('How the numbers work', 'data-act="how"'))}
+  ${group('About',
+    `<div class="srow"><span class="k">Version</span><span class="v">${esc(BUILD.replace(/^index-|\.js$/g, '') || 'dev')}</span></div>` +
+    `<a class="srow link" href="${REPO}" target="_blank" rel="noopener noreferrer"><span class="k">Source code on GitHub</span><span class="v">${esc(REPO.replace('https://github.com/', ''))}</span><span class="chev" aria-hidden="true"></span></a>`,
+    'Synergym is open source. Read the code, report a problem or suggest something on GitHub.')}
   <section class="sg rv"><div class="sg-b">${S.local ? link('Delete data on this phone', 'data-act="delete-local"', '', ' center danger') : link('Sign out', 'data-act="signout"', '', ' center') + link('Delete account', 'data-act="delete-account"', '', ' center danger')}</div></section>
   </div>`;
 }
@@ -1511,9 +1516,13 @@ async function reminderTest() {
 const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
+    <p><b>One-rep max and records.</b> Each exercise shows your saved one-rep max, or the best estimate from your sets. When a completed set beats it, Synergym asks whether to save the new one. A record is a new best estimate on an exercise.</p>
+    <p><b>Next-set suggestions.</b> Based on your top set last time. If it went at least as well as the time before, add 2.5 kg (5 lb) and keep the reps. If it slipped, or your later sets fell short at that weight, keep the weight and aim for a rep more. Bodyweight moves add a rep.</p>
     <p><b>Linked sets.</b> Link two or more sets and Synergym names the structure: two exercises make a superset, three or more a giant set. On one exercise, falling weight is a drop set, the same weight a rest-pause set, anything else a pyramid. Rest starts after the last set of a group.</p>
-    <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target.</p>
-    <p><b>Splits.</b> The Today screen suggests the next training day of the split you used last, skipping rest days.</p>
+    <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target. Rest days you mark on Home show on the heat map.</p>
+    <p><b>This week.</b> Sessions since Monday, volume (weight × reps) against last week, and the lifts whose heaviest set beats your best from the four weeks before.</p>
+    <p><b>Bodyweight.</b> One entry per day, from Settings or the Bodyweight widget. The change is your latest entry minus the first one in the range you’re viewing.</p>
+    <p><b>Splits.</b> Home suggests the next training day of the split you used last, skipping rest days. Pick a different day from the Up next menu and the split carries on from there.</p>
   </div><button class="btn lg wide" data-act="close" style="margin-top:16px">Done</button>`;
 
 /* ================= sheets ================= */
@@ -2460,6 +2469,18 @@ async function leaveLocal() {
   go('today', null, { replace: true });
 }
 
+/* the installed phone app behaves like a native one: the screen never zooms (pinch, double tap, or the
+   automatic zoom when a text box gets focus) and the layout always fits the screen's width. A normal browser
+   tab keeps zoom, which people may need to read. */
+function lockAppZoom() {
+  if (!standalone() || !coarse.matches) return;
+  document.documentElement.classList.add('app-mode');
+  const m = document.querySelector('meta[name="viewport"]');
+  if (m) m.content = 'width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover';
+  /* iOS ignores user-scalable for pinches; its gesture events can still be cancelled */
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+}
+
 /* ================= boot ================= */
 function resetState() {
   Object.assign(S, { user: null, loaded: false, loadError: null, profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(), rest: null, link: null, q: '', exq: '', exm: '' });
@@ -2483,6 +2504,7 @@ function boot() {
   document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
+  lockAppZoom();
   const mode = readMode();
   /* phones get a quick splash each time the app opens */
   if (coarse.matches && !reduced) quickIn();

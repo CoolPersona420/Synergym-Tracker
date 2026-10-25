@@ -1,26 +1,46 @@
 # Synergym
 
-A lifting log: sessions, exercises, sets, reps and weight, with automatic set and session
-intensity, superset / giant set / drop set detection, a consistency score, an editable
-exercise list per user, and training splits you can share.
+A lifting log for phone and desktop: log sessions as you train, see how hard each set and session
+was, follow a training split, and watch your progress add up. Live at
+<https://synergym-tracker-log.vercel.app>.
 
-- **Look:** monochrome by default (follows your device's light or dark setting), with 11 named themes in
-  Settings › Theme: Mono Light/Dark, Solarized Light/Dark, Gruvbox Light/Dark, Nord, Dracula, Ocean, Sage and Volt.
-  The sun / moon button flips to each theme's light or dark partner. Spacing, type sizes and two-column splits
-  follow the golden ratio (φ = 1.618); the scale and theme tokens are at the top of `src/style.css`.
-- **1RM:** each exercise keeps a confirmed one-rep max. While logging, the card shows it live; when a
-  completed set beats it, Synergym asks whether to save the new 1RM. It can also be set by hand on the exercise page.
-- **Muscle groups:** each user edits their own list (Exercises › Edit groups): add, rename (exercises follow), remove.
-- **Brand:** the wolf mascot (white head, red eyes) is the logo, the loading screen lockup and the app
-  icon (`public/icon.svg`, `apple-touch-icon.png`, `icon-192/512.png`, `icon-maskable-512.png`). The wordmark is Teko Bold, slanted 12°.
-- **Accounts:** a login page and a five-step registration: account, name and username, units /
-  bodyweight / experience, goal and days per week, then a recommended starter split.
+## What it does
 
-- **Frontend:** plain JavaScript + Vite, deployed on Vercel.
-- **Backend:** Supabase (Postgres, email + password auth).
-- **Security:** Row Level Security on every table. Each account can only read and write its own
-  rows. Splits are shared only through checked database functions. Strict security headers
-  (CSP, HSTS, no framing) come from `vercel.json`.
+- **Log sessions:** weight and reps per set (last time's numbers show as hints), a tick to finish a set,
+  a rest timer, drop sets, and linked sets that are named automatically (superset, giant set, drop set,
+  rest-pause, pyramid).
+- **Next-set suggestions:** each exercise shows last time's top set and what to try today.
+- **Plate calculator:** the plates for each side of the bar for any weight, with your bar remembered.
+- **Intensity and records:** every set and session gets an intensity score against your best; each
+  exercise keeps a one-rep max, and beating it offers to save the new one.
+- **Splits:** weekly plans with days, exercises, sets and reps and linked groups; start from a template,
+  reorder days, and share by @username or by link. Home suggests the next day, or pick one from Up next.
+- **Home:** a greeting and quote, the next session, and widgets you choose and size: this week's summary,
+  bodyweight trend, intensity, consistency, volume, muscle focus, records, top lifts and your week's plan.
+  Each opens full screen with more detail.
+- **Bodyweight log**, **History** with search, and an **exercise library** of your own with editable
+  muscle groups.
+- **Themes:** Auto (follows the device) plus eleven named palettes.
+- **Phone app:** install it to the Home Screen. It opens without a connection, has a floating dock and a
+  quick opening splash, and never zooms.
+  - **Reminders** at a chosen time on chosen days (see below).
+  - **Offline mode:** use it without an account, or take an account offline; going online merges and
+    uploads (see below).
+- **Accounts:** email and password; a six-step setup (account, name, body and units, goal and days, a
+  starter split, a theme) followed by a short tour. One device is signed in per account at a time.
+- **Your data:** export everything as JSON or every set as CSV; import replaces all data after a warning.
+- **Help:** a user guide for phone and desktop (Settings › User guide) and "How the numbers work".
+
+## How it's built
+
+- **Frontend:** plain JavaScript and Vite, deployed on Vercel (with one serverless function for reminders).
+- **Backend:** Supabase (Postgres, email and password auth, pg_cron for reminders).
+- **Security:** Row Level Security on every table. Each account can only read and write its own rows.
+  Splits are shared only through checked database functions. Strict security headers (CSP, HSTS, no
+  framing) come from `vercel.json`.
+- **Look:** spacing, type sizes and two-column splits follow the golden ratio (φ = 1.618); the scale and
+  theme tokens are at the top of `src/style.css`. The wolf mascot is the logo, the splash and the app icon
+  (`public/icon.svg` and the PNG icons). The wordmark is Teko Bold, slanted 12°.
 
 ## Deploy (about 10 minutes)
 

@@ -1322,7 +1322,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 /* phones: Back and Continue sit on the bottom edge, always in reach */
 @media (max-width:47.99rem){
   .ob-nav{position:fixed;left:0;right:0;bottom:0;z-index:5;margin:0;padding:var(--s1) var(--gr) calc(var(--s0) + env(safe-area-inset-bottom,0px)) var(--gl);background:linear-gradient(to top,var(--bg) 62%,color-mix(in srgb,var(--bg) 0%,transparent))}
-  .ob-nav .btn{flex:1}
+  .ob-nav .btn{flex:1;min-width:0;padding:0 var(--s0)}
   .ob-nav .btn.line{flex:0 0 34%}
   .ob-nav > span:empty{display:none}
 }
@@ -1464,3 +1464,10 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 @keyframes qs-eyes{0%{transform:scaleY(.08)}45%{transform:scaleY(1.2);fill:#ff6a4d}100%{transform:none}}
 @keyframes qs-fade{to{opacity:0}}
 @keyframes qs-zoom{to{opacity:0;transform:scale(1.4)}}
+
+/* ---------- installed phone app: no zoom, always the screen's width ---------- */
+html.app-mode{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html.app-mode body{overflow-x:clip}
+/* text boxes stay at 16px or larger everywhere (tests/e2e/fit.spec.js checks), so iOS never zooms into one */
+
+a.srow{color:inherit;text-decoration:none}
