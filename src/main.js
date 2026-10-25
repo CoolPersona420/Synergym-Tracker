@@ -8,7 +8,7 @@ import { reduced, LITE } from './lib/env.js';
 import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays } from './lib/sanitize.js';
 import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
-import { parseImport } from './lib/importer.js';
+import { parseImport, SPLIT_MAX } from './lib/importer.js';
 import { ICON, brand, lockup, big, disp, countUp } from './ui/brand.js';
 import { THEMES, themePref, isDark, applyTheme, themePicker } from './ui/themes.js';
 import { SPL, QS, setSplashHooks, splashIn, splashOut, quickIn, quickOut } from './ui/splash.js';
@@ -17,6 +17,7 @@ import { QUOTES } from './data/quotes.js';
 import { guideSections, tourSlides } from './ui/guide.js';
 import { rubberBand } from './ui/rubber.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
+import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
 import { trackErrors, startAnalytics } from './lib/telemetry.js';
 import { pushSupported, isIOS, subscribe as pushSubscribe, unsubscribe as pushUnsubscribe, DAY_LETTERS, DAY_NAMES, daysText, timeText } from './lib/push.js';
@@ -51,10 +52,12 @@ const KG_LB = 2.2046226;
 
 
 /* ================= state ================= */
+/* History's filters, empty */
+const HF0 = () => ({ open: false, split: null, ex: null, muscle: null, pr: null, from: null, to: null, range: null });
 const S = {
   authReady: false, user: null, loaded: false, loadError: null,
   profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(),
-  view: 'today', arg: null, link: null, rest: null, q: '', exq: '', exm: '', showArchived: false, A: null, animate: false,
+  view: 'today', arg: null, link: null, rest: null, q: '', hf: HF0(), exq: '', exm: '', showArchived: false, A: null, animate: false,
   ob: { step: 2, name: '', username: '', unit: 'kg', bw: 75, exp: null, goal: null, days: 3, tpl: null },
   pk: {}, authMode: 'signin', authMsg: null, recover: false, pub: null, lastFetch: 0
 };
@@ -234,11 +237,16 @@ function compute() {
   const exMap = new Map(S.library.map(e => [e.id, e]));
   const list = [...S.sessions.values()].sort((a, b) => a.startedAt - b.startedAt);
   const best = new Map(), seen = new Map(), A = { sess: new Map(), set: new Map(), ex: new Map() };
+  /* weight and rep PRs; a live session's faded weights count, as they do when a set is ticked */
+  const rec = scanRecords(list, { weightOf: (st, s, it) => { const w = +(s.endedAt ? st.w : st.w ?? st.pw) || 0; return exMap.get(it.exId)?.kind === 'bw' || w > 0 ? w : null; } }), prBy = new Map();
+  for (const e of rec.events) { if (!prBy.has(e.sid)) prBy.set(e.sid, new Set()); prBy.get(e.sid).add(e.exId); }
+  A.rec = rec; A.splitUse = new Map();
+  for (const s of list) if (s.splitId) A.splitUse.set(s.splitId, (A.splitUse.get(s.splitId) || 0) + 1);
   for (const s of list) {
     const sb_ = new Map(), sbSet = new Map(), exVol = new Map();
     for (const it of s.items) { const ex = exMap.get(it.exId); for (const st of it.sets) { const sc = e1rm(loadOf(st, ex), +st.r || 0); if (sc > (sb_.get(it.exId) || 0)) { sb_.set(it.exId, sc); sbSet.set(it.exId, st); } } }
-    const prs = []; let calib = false;
-    for (const [ex, sc] of sb_) { const prev = best.get(ex) || 0; if (prev > 0 && sc > prev * 1.0001) prs.push(ex); if (sc > prev) best.set(ex, sc); if ((seen.get(ex) || 0) < 2) calib = true; }
+    const prs = [...(prBy.get(s.id) || [])]; let calib = false;
+    for (const [ex, sc] of sb_) { const prev = best.get(ex) || 0; if (sc > prev) best.set(ex, sc); if ((seen.get(ex) || 0) < 2) calib = true; }
     let vol = 0, wsum = 0, isum = 0, sets = 0;
     for (const it of s.items) {
       const ex = exMap.get(it.exId), orm = ex && ex.oneRm > 0 && ex.oneRmAt && ex.oneRmAt <= (s.endedAt || Date.now()) ? ex.oneRm : 0, ref = Math.max(best.get(it.exId) || 0, orm);
@@ -273,7 +281,8 @@ function ormLine(s, it) {
   const ex = exOf(it.exId); if (!ex) return '';
   const base = oneRmOf(it.exId, s.id), top = liveTop(s, it).v, saved = ex.oneRm > 0;
   if (!base && !top) return `${esc(ex.muscle)} · first log`;
-  let t = `${esc(ex.muscle)} · ${saved ? '1RM' : 'est. 1RM'} ${base ? fmtW(roundW(base)) + ' ' + unit() : '—'}`;
+  const b = S.A.rec?.before.get(s.id + ':' + it.exId);
+  let t = `${esc(ex.muscle)}${b && b.w >= 0 ? ` · PR ${prSet({ w: b.w, r: b.wr }, ex)}` : ''} · ${saved ? '1RM' : 'est. 1RM'} ${base ? fmtW(roundW(base)) + ' ' + unit() : '—'}`;
   if (top > base * 1.0001 && base > 0) t += ` · <em class="pr">today ${fmtW(roundW(top))} ↑</em>`;
   else if (top > 0 && !base) t += ` · today ${fmtW(roundW(top))}`;
   return t;
@@ -892,7 +901,7 @@ function vToday() {
   const [qt, qa] = pick(QUOTES, 5), ents = homeEntries(), spans = packSpans(ents.map(e => WSPAN[e.size])), ws = ents.map(e => e.id);
   return pageTop('Home', '', false) + `
   <section class="hero rv">
-    <div class="hero-top"><div><span class="lbl eyebrow">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span></span>${disp(lines)}</div>
+    <div class="hero-top"><div><button class="lbl eyebrow ts-open" data-act="today-sum" aria-label="Today’s summary" aria-haspopup="dialog">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span>${ICON.down}</button>${disp(lines)}</div>
       <figure class="quote"><blockquote>${esc(qt)}</blockquote><figcaption>${esc(qa)}</figcaption></figure></div>
     <div class="hero-cta">${cta}</div>
   </section>
@@ -900,6 +909,66 @@ function vToday() {
   <div class="dash-dots" id="dash-dots" role="tablist" aria-label="Home widgets">${ws.map((id, i) => `<button role="tab" data-act="dash-go" data-i="${i}" aria-label="${esc(WIDGETS[id].title)}"${i ? '' : ' class="on" aria-selected="true"'}></button>`).join('')}</div>`
     : `<div class="empty rv"><b>Your home screen is empty.</b>Add widgets to see your training at a glance.</div>`}
   <div class="home-edit rv"><button class="btn ghost sm" data-act="edit-home">${ICON.pen}${roll('Edit home')}</button></div>`;
+}
+
+/* ---------- Today's summary: pull down on Home (phones), or tap the date ---------- */
+function todaySheet() {
+  const now = Date.now(), done = doneToday().slice().reverse(), a = activeSession(), nx = nextSplitDay();
+  const tot = done.reduce((t, x) => { const q = S.A.sess.get(x.id); return q ? { sets: t.sets + q.sets, vol: t.vol + q.vol, min: t.min + Math.max(0, Math.round((x.endedAt - x.startedAt) / 6e4)) } : t; }, { sets: 0, vol: 0, min: 0 });
+  const ids = new Set(done.map(x => x.id)), prs = bestPerSession(S.A.rec.events.filter(e => ids.has(e.sid)));
+  const wk = sorted().filter(x => x.endedAt && x.startedAt >= weekStart(now)).length, tgt = S.profile.target || 3;
+  let today;
+  if (a) { const q = S.A.sess.get(a.id); today = `<div class="ts-live"><span class="dot live"></span><span><b>${esc(sessName(a))}</b><span class="muted">In progress · ${plural(q ? q.sets : 0, 'set')} logged</span></span><button class="btn sm" data-act="ts-go" data-to="resume" data-id="${a.id}">Resume</button></div>`; }
+  else today = '';
+  if (done.length) today += `<div class="ts-kv"><div><b>${plural(done.length, 'session')}</b><span class="lbl">done</span></div><div><b>${tot.sets}</b><span class="lbl">sets</span></div><div><b>${fmtVol(tot.vol)}</b><span class="lbl">volume</span></div><div><b>${tot.min}</b><span class="lbl">minutes</span></div></div>
+    <div class="list">${done.map(sessRowToday).join('')}</div>
+    ${prs.length ? `<span class="lbl ts-sub">PRs today</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(exOf(p.exId)?.name || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}`;
+  else if (!a) today += isRestToday() ? `<p class="ts-note">${ICON.moon}Rest day. Recovery counts.</p>` : `<p class="ts-note">Nothing logged yet today.</p>`;
+  const wkBar = `<div class="ts-week"><span class="lbl">This week</span><b>${wk} of ${tgt}</b><span class="ts-bar"><i style="width:${Math.min(100, wk / tgt * 100).toFixed(0)}%"></i></span></div>`;
+  openSheet(`<div class="sh-h"><h3>Today</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <span class="lbl">${DAYS[new Date(now).getDay()]} · ${fmtDate(now)}</span>
+  <section class="ts-sec">${today}</section>${wkBar}
+  <section class="ts-sec ts-next">${nextBlock(nx, done, a)}</section>`);
+}
+/* the split's next day: when it comes, what to lift, and what to aim for */
+function nextBlock(nx, done, a) {
+  if (!nx) return S.splits.size ? `<span class="lbl ts-sub">Next time</span><p class="muted">Your split has no training days yet.</p>`
+    : `<span class="lbl ts-sub">Next time</span><p class="muted">No split yet. Plan one and your next day shows here, with what to lift.</p><div class="btns"><button class="btn line" data-act="ts-go" data-to="splits">Plan a split</button></div>`;
+  const d = nx.sp.days[nx.i], full = doneToday().length >= DAY_MAX;
+  const when = nx.second && done.length ? 'Later today' : done.length || isRestToday() ? 'Next time' : 'Up next';
+  const fmt = (x, bw) => bw && !x.w ? `${x.r} reps` : `${fmtW(x.w)}×${x.r}`;
+  const rows = d.exercises.map(x => {
+    const e = (x.exId && exOf(x.exId)) || S.library.find(y => y.name.toLowerCase() === String(x.name).toLowerCase());
+    const g = e && suggestNext(historyFor(e.id, null), { bw: e.kind === 'bw', step: fromU(loadStep()), round: snapW });
+    return `<div class="ts-ex"><span><b>${esc(e ? e.name : x.name)}</b><small>${x.sets} × ${esc(x.reps)}</small></span><span class="ts-t">${g ? `<span class="lbl">try</span> ${fmt(g.next, e.kind === 'bw')}` : '<span class="lbl">first time</span>'}</span></div>`;
+  }).join('');
+  const canStart = !a && !full && (!done.length || nx.second);
+  return `<span class="lbl ts-sub">${when}</span><div class="ts-day"><b>${esc(d.type || 'Training')}</b><span class="muted">${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}${nx.picked ? ' · your pick' : ''}</span></div>
+  ${rows ? `<div class="ts-exs">${rows}</div>` : `<p class="muted">No exercises planned for this day yet.</p>`}
+  <div class="btns"><button class="btn line" data-act="ts-go" data-to="split" data-id="${nx.sp.id}">Open split</button>${canStart ? `<button class="btn" data-act="ts-go" data-to="start" data-sp="${nx.sp.id}" data-day="${nx.i}">Start ${dayLabel(nx.sp.days, nx.i)}</button>` : ''}</div>`;
+}
+/* phones: pulling Home down from the top past a point opens the summary when let go */
+function pullForToday() {
+  if (!coarse.matches) return;
+  const hint = document.createElement('div'); hint.id = 'pull-hint'; hint.setAttribute('aria-hidden', 'true'); document.body.appendChild(hint);
+  const NEED = 110; let y0 = null, x0 = 0, axis = 0, armed = false;
+  const reset = () => { y0 = null; axis = 0; armed = false; hint.className = ''; hint.style.opacity = ''; };
+  addEventListener('touchstart', e => {
+    reset();
+    if (S.view !== 'today' || !S.loaded || e.touches.length !== 1 || !$('#sheet').hidden || scrollY > 0 || e.target.closest('.sheet,input,textarea')) return;
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX;
+  }, { passive: true });
+  addEventListener('touchmove', e => {
+    if (y0 == null || e.touches.length !== 1) return;
+    const t = e.touches[0], dy = t.clientY - y0, dx = t.clientX - x0;
+    if (!axis) { if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return; axis = dy > Math.abs(dx) ? 1 : -1; }
+    if (axis < 0) { reset(); return; }
+    const on = dy >= NEED;
+    if (on !== armed || !hint.textContent) { armed = on; hint.textContent = on ? 'Release for today' : 'Pull for today'; hint.classList.toggle('armed', on); if (on) buzz(10); }
+    hint.classList.add('show'); hint.style.opacity = Math.min(1, Math.max(0, (dy - 20) / (NEED - 20))).toFixed(2);
+  }, { passive: true });
+  addEventListener('touchend', () => { const go = y0 != null && armed; reset(); if (go) todaySheet(); }, { passive: true });
+  addEventListener('touchcancel', reset, { passive: true });
 }
 
 /* ---------- Home widgets ---------- */
@@ -996,8 +1065,19 @@ function hbars(rows, fmt = v => v) {
   if (!rows.length) return ''; const max = Math.max(...rows.map(r => r[1])) || 1;
   return `<div class="hbars">${rows.map(([k, v]) => `<div class="hb"><span class="hb-k">${esc(k)}</span><span class="hb-t"><i style="width:${(v / max * 100).toFixed(1)}%"></i></span><span class="hb-v">${fmt(v)}</span></div>`).join('')}</div>`;
 }
-function prEvents(days) { const t = days ? Date.now() - days * 864e5 : 0, out = []; for (const [exId, e] of S.A.ex) for (const p of e.pts) if (p.pr && p.t >= t) out.push({ exId, ...p }); return out.sort((a, b) => b.t - a.t); }
-const prRow = p => `<button class="row" data-act="open" data-id="${p.sid}"><span class="tri"></span><span class="row-m"><span class="t">${esc(exOf(p.exId)?.name || 'Exercise')}</span><span class="sub">${fmtDate(p.t)} · new best estimate</span></span><span class="row-r"><span class="d">${fmtW(roundW(p.v))}</span><span class="ichip hot">${unit()}</span></span></button>`;
+/* records in a range, one per exercise per session (its strongest), newest first */
+function prEvents(days) { const t = days ? Date.now() - days * 864e5 : 0; return bestPerSession(S.A.rec.events).filter(p => p.t >= t).sort((a, b) => b.t - a.t); }
+/* a set as a record shows it: 100×5, or 12 reps for bodyweight with no added load */
+const prSet = (p, ex = exOf(p.exId)) => ex?.kind === 'bw' && !p.w ? `${p.r} reps` : `${ex?.kind === 'bw' ? '+' : ''}${fmtW(p.w)}×${p.r}`;
+const PR_CHIP = { w: 'weight', r: 'reps', wr: 'both' };
+const prRow = p => `<button class="row" data-act="open" data-id="${p.sid}"><span class="tri"></span><span class="row-m"><span class="t">${esc(exOf(p.exId)?.name || 'Exercise')}</span><span class="sub">${fmtDate(p.t)} · ${PR_LABEL[p.kind]}</span></span><span class="row-r"><span class="d">${prSet(p)}</span><span class="ichip hot">${PR_CHIP[p.kind]}</span></span></button>`;
+/* what a set beat, under the set while logging */
+function prText(ev) {
+  const ex = exOf(ev.exId), bw = ex?.kind === 'bw', u = bw ? '' : ' ' + unit(), was = ev.prevW >= 0 ? (bw && !ev.prevW ? `${ev.prevWr} reps` : `${bw ? '+' : ''}${fmtW(ev.prevW)}${u} × ${ev.prevWr}`) : '';
+  const why = ev.kind === 'r' ? (bw && !ev.w ? `most reps yet · was ${ev.prevR}` : `most reps at ${bw ? '+' : ''}${fmtW(ev.w)}${u} or more · was ${ev.prevR}`)
+    : ev.kind === 'wr' ? `heavier, and more reps · was ${was}` : `heaviest yet · was ${was}`;
+  return `<b>${PR_LABEL[ev.kind]}</b><span>${why}</span>`;
+}
 const topLifts = () => [...S.A.ex].map(([id, e]) => ({ ex: exOf(id), e })).filter(x => x.ex && !x.ex.archived).sort((a, b) => b.e.n - a.e.n || b.e.best - a.e.best);
 const liftRow = ({ ex, e }) => `<button class="row" data-act="open-ex" data-id="${ex.id}"><span class="tri"></span><span class="row-m"><span class="t">${esc(ex.name)}</span><span class="sub">${plural(e.n, 'session')} · ${ex.oneRm > 0 ? 'saved 1RM' : 'est. 1RM'}</span></span><span class="row-r"><span class="d">${fmtW(roundW(ex.oneRm > 0 ? ex.oneRm : e.best))}</span><span class="ichip">${unit()}</span></span></button>`;
 const planDays = (nx, full) => { const dn = new Set(doneToday().filter(s => s.splitId === nx.sp.id).map(s => s.splitDay));
@@ -1079,7 +1159,7 @@ const WIDGETS = {
     full: d => { const r = muscleSets(d), tot = r.reduce((x, y) => x + y[1], 0); return kvs([['Working sets', tot], ['Groups trained', r.length], ['Most trained', r.length ? esc(r[0][0]) : '–']]) + wSect('Sets per muscle group', hbars(r) || nothing('No sets logged in this range.')); }
   },
   prs: {
-    title: 'Records', desc: 'New best estimated 1RMs', opts: [[30, '30d'], [90, '90d'], [0, 'All']],
+    title: 'Records', desc: 'Weight and rep PRs', opts: [[30, '30d'], [90, '90d'], [0, 'All']],
     card: (open, z) => { const e = prEvents(30);
       if (z === 's') return wTile('Records', e.length, 'last 30 days', open);
       return wHead('Records · 30d', plural(e.length, 'PR'), open) + (e.length ? `<div class="list">${e.slice(0, z === 'l' ? 6 : 3).map(prRow).join('')}</div>` : nothing('Beat a previous best and it lands here.')); },
@@ -1154,7 +1234,7 @@ function editHome() {
 
 function rowSession(s) {
   const a = S.A.sess.get(s.id) || { ex: 0, sets: 0, vol: 0, prs: [], int: 0 };
-  const sp = s.splitId && S.splits.get(s.splitId);
+  const sp = splitOf(s.splitId);
   return `<button class="row" data-act="open" data-id="${s.id}"><span class="tri"></span>
   <span class="row-m"><span class="t">${esc(sessName(s))}</span><span class="sub">${fmtDate(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${a.sets} sets · ${fmtVol(a.vol)}${a.prs.length ? ` · <em class="pr">${a.prs.length} PR</em>` : ''}</span></span>
   <span class="row-r"><span class="d">${Math.round(a.int)}</span><span class="ichip${s.endedAt ? (a.int >= 75 ? ' hot' : '') : ' hot'}">${s.endedAt ? tierShort(a.int) : 'LIVE'}</span></span></button>`;
@@ -1164,7 +1244,7 @@ function rowSession(s) {
 function vSession() {
   const s = cur(), a = S.A.sess.get(s.id), live = !s.endedAt, groups = groupsOf(s), gmap = new Map();
   for (const g of groups) for (const x of g.m) gmap.set(x.st.id, g);
-  const sp = s.splitId && S.splits.get(s.splitId);
+  const sp = splitOf(s.splitId);
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button>
     <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80">
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
@@ -1216,8 +1296,10 @@ function setRow(st, i, gmap) {
   <input data-f="w" data-set="${st.id}" inputmode="decimal" enterkeyhint="next" value="${fmtW(st.w)}" placeholder="${st.pw != null ? fmtW(st.pw) : '0'}" aria-label="Weight, set ${i + 1}" autocomplete="off">
   <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, set ${i + 1}" autocomplete="off">
   <span class="int${p >= 99.5 ? ' top' : ''}" data-int="${st.id}">${setInt(st)}</span>
-  <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark set not done' : 'Mark set done'}" aria-pressed="${!!st.done}">${ICON.check}</button></div>`;
+  <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark set not done' : 'Mark set done'}" aria-pressed="${!!st.done}">${ICON.check}</button>
+  ${prLine(st)}</div>`;
 }
+const prLine = st => { const ev = S.A.rec?.bySet.get(st.id); return `<span class="set-pr" data-prb="${st.id}" role="status"${ev ? '' : ' hidden'}>${ev ? prText(ev) : ''}</span>`; };
 function groupsHTML(groups) {
   return groups.map(g => { const names = [...new Set(g.m.map(x => exOf(x.it.exId)?.name || '?'))];
     return `<div class="grp"><span class="gtag">${g.ab}·${g.letter}</span><span><b style="font-weight:500">${g.type}</b> <span class="muted">· ${g.m.length} sets · ${esc(names.join(' + '))}</span></span><button class="gx lbl" data-act="unlink" data-g="${g.g}">${roll('Unlink')}</button></div>`; }).join('');
@@ -1246,6 +1328,8 @@ function liveRefresh() {
   for (const it of s.items) for (const st of it.sets) {
     const el = $(`[data-int="${st.id}"]`); if (el) { el.textContent = setInt(st); el.classList.toggle('top', (S.A.set.get(st.id) || 0) >= 99.5); }
     const gt = $(`[data-gtag="${st.id}"]`); if (gt) { const g = gmap.get(st.id); gt.innerHTML = g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''; }
+    const pb = $(`[data-prb="${st.id}"]`); if (pb) { const ev = S.A.rec.bySet.get(st.id), h = ev ? prText(ev) : '';
+      if (pb.innerHTML !== h) { const was = pb.hidden; pb.innerHTML = h; pb.hidden = !ev; if (ev && was) { pb.classList.remove('pop'); void pb.offsetWidth; pb.classList.add('pop'); buzz(14); } } }
   }
   const gs = $('#gsum'); if (gs) gs.innerHTML = groupsHTML(groups);
   for (const it of s.items) { const el = $(`[data-orm="${it.id}"]`); if (el) el.innerHTML = ormLine(s, it); }
@@ -1253,19 +1337,102 @@ function liveRefresh() {
 }
 
 /* ---------- History ---------- */
+/* filters: split (deleted ones too), exercise, muscle group, PR kind and a date range; they combine with the search */
+const hfOn = f => !!(f.split || f.ex || f.muscle || f.pr || f.from || f.to);
+const PR_FILTER = { any: 'Any PR', w: 'Weight PRs', r: 'Rep PRs', wr: 'Weight + rep PRs' };
+const FILTER_ICON = '<svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>';
+const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const DATE_RANGES = [['today', 'Today', () => [startOfDay(Date.now()), null]], ['7', 'Last 7 days', () => [startOfDay(Date.now() - 6 * 864e5), null]], ['30', 'Last 30 days', () => [startOfDay(Date.now() - 29 * 864e5), null]],
+  ['month', 'This month', () => { const d = new Date(); return [new Date(d.getFullYear(), d.getMonth(), 1).getTime(), null]; }], ['90', 'Last 3 months', () => [startOfDay(Date.now() - 89 * 864e5), null]],
+  ['year', 'This year', () => [new Date(new Date().getFullYear(), 0, 1).getTime(), null]]];
+function hfDateText(f) {
+  if (!f.from && !f.to) return null;
+  const r = DATE_RANGES.find(x => x[0] === f.range); if (r) return r[1];
+  return `${f.from ? fmtDate(f.from) : '…'} – ${f.to ? fmtDate(f.to - 864e5) : 'now'}`;
+}
 function vHistory() {
+  const f = S.hf;
   return pageTop('History', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `<h1 class="h1 rv" style="margin:10px 0 16px">History</h1>
-  <input class="search rv" data-f="q" placeholder="Search by session, exercise or note" value="${esc(S.q)}" autocomplete="off">
+  <div class="hsearch rv"><input class="search" data-f="q" data-act="hf-open" placeholder="Search by session, exercise or note" value="${esc(S.q)}" autocomplete="off" aria-label="Search history">
+  <button class="iconbtn hf-tog${f.open || hfOn(f) ? ' on' : ''}" data-act="hf-toggle" aria-label="Filters" aria-expanded="${f.open || hfOn(f)}" aria-controls="hfil">${FILTER_ICON}</button></div>
+  <div id="hfil">${hfHTML()}</div>
   <div id="hlist" class="rv">${historyList()}</div>`;
 }
+function hfHTML() {
+  const f = S.hf; if (!f.open && !hfOn(f)) return '';
+  const sp = f.split && splitOf(f.split);
+  const chip = (k, label, val) => `<button class="chip hf-c${val ? ' on' : ''}" data-act="hf-pick" data-k="${k}" aria-haspopup="dialog"><span>${val ? esc(val) : label}</span>${ICON.down}</button>`;
+  return `<div class="hf"><div class="hf-row">${chip('date', 'Date', hfDateText(f))}${chip('split', 'Split', sp && sp.name)}${chip('ex', 'Exercise', f.ex && (exOf(f.ex)?.name || 'Exercise'))}${chip('muscle', 'Muscle', f.muscle)}${chip('pr', 'PR', f.pr && PR_FILTER[f.pr])}</div>
+  ${hfOn(f) ? `<button class="hf-clear lbl" data-act="hf-clear">${roll('Clear filters')}</button>` : ''}</div>`;
+}
+function hfMatch(s, f) {
+  if (f.split && s.splitId !== f.split) return false;
+  if (f.ex && !s.items.some(it => it.exId === f.ex)) return false;
+  if (f.muscle && !s.items.some(it => exOf(it.exId)?.muscle === f.muscle)) return false;
+  if (f.pr && !(f.pr === 'any' ? S.A.sess.get(s.id)?.prs.length : S.A.rec.events.some(e => e.sid === s.id && e.kind === f.pr))) return false;
+  if (f.from && s.startedAt < f.from) return false;
+  if (f.to && s.startedAt >= f.to) return false;
+  return true;
+}
 function historyList() {
-  const q = S.q.trim().toLowerCase(); let list = sorted();
+  const q = S.q.trim().toLowerCase(), f = S.hf, on = hfOn(f); let list = sorted();
   if (q) list = list.filter(s => sessName(s).toLowerCase().includes(q) || s.items.some(it => (exOf(it.exId)?.name || '').toLowerCase().includes(q)) || (s.notes || '').toLowerCase().includes(q));
-  if (!list.length) return `<div class="empty"><b>${q ? 'No sessions match.' : 'Nothing logged yet.'}</b>${q ? 'Try an exercise name, like “squat”.' : 'Your sessions will collect here, grouped by month.'}</div>`;
+  if (on) list = list.filter(s => hfMatch(s, f));
+  if (!list.length) return `<div class="empty"><b>${q || on ? 'No sessions match.' : 'Nothing logged yet.'}</b>${on ? 'Try fewer filters, or a wider date range.' : q ? 'Try an exercise name, like “squat”.' : 'Your sessions will collect here, grouped by month.'}</div>`;
   const by = new Map(); for (const s of list) { const d = new Date(s.startedAt), k = d.getFullYear() * 12 + d.getMonth(); if (!by.has(k)) by.set(k, []); by.get(k).push(s); }
-  let h = ''; for (const [k, ss] of by) { const vol = ss.reduce((x, s) => x + (S.A.sess.get(s.id)?.vol || 0), 0);
+  let h = q || on ? `<div class="hf-n lbl">${plural(list.length, 'session')} found</div>` : '';
+  for (const [k, ss] of by) { const vol = ss.reduce((x, s) => x + (S.A.sess.get(s.id)?.vol || 0), 0);
     h += `<div class="month"><span class="lbl">${MONTHS[k % 12]} ${Math.floor(k / 12)}</span><span class="lbl">${plural(ss.length, 'session')} · ${fmtVol(vol)}</span></div><div class="list">${ss.map(rowSession).join('')}</div>`; }
   return h;
+}
+const hfRefresh = () => { const a = $('#hfil'), b = $('#hlist'), t = $('.hf-tog'); if (a) a.innerHTML = hfHTML(); if (b) b.innerHTML = historyList(); if (t) { const on = S.hf.open || hfOn(S.hf); t.classList.toggle('on', on); t.setAttribute('aria-expanded', on); } };
+/* one filter's choices in a sheet: "Any" first, then each option with how many sessions it has */
+function hfSheet(k) {
+  const f = S.hf, all = sorted(), count = fn => all.filter(fn).length;
+  const pick = (title, rows, cur, set, search = false) => {
+    const draw = q => { const ql = (q || '').trim().toLowerCase(), rs = rows.filter(r => !ql || r.label.toLowerCase().includes(ql));
+      return `<button class="row hf-o${cur == null ? ' on' : ''}" data-hfv=""><span class="row-m"><span class="t">Any</span></span>${cur == null ? ICON.check : ''}</button>` +
+        (rs.map(r => `<button class="row hf-o${r.v === cur ? ' on' : ''}" data-hfv="${esc(r.v)}"><span class="row-m"><span class="t">${esc(r.label)}</span>${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span>${r.v === cur ? ICON.check : ''}</button>`).join('') || `<div class="empty">Nothing matches.</div>`); };
+    openSheet(`<div class="sh-h"><h3>${title}</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+    ${search ? `<input class="search" id="hf-q" placeholder="Search" autocomplete="off" style="margin-bottom:10px">` : ''}<div class="list hf-list" id="hf-l">${draw('')}</div>`, r => {
+      const l = r.querySelector('#hf-l');
+      l.addEventListener('click', e => { const b = e.target.closest('[data-hfv]'); if (!b) return; set(b.dataset.hfv || null); closeSheet(); hfRefresh(); });
+      r.querySelector('#hf-q')?.addEventListener('input', e => { l.innerHTML = draw(e.target.value); });
+    });
+  };
+  if (k === 'split') {
+    const ids = [...new Set([...S.splits.keys(), ...all.map(s => s.splitId).filter(Boolean)])].map(splitOf).filter(Boolean);
+    return pick('Filter by split', ids.map(sp => ({ v: sp.id, label: sp.name, sub: `${plural(count(s => s.splitId === sp.id), 'session')}${sp.deleted ? ' · deleted split' : ''}` })), f.split, v => { f.split = v; });
+  }
+  if (k === 'ex') {
+    const n = new Map(); for (const s of all) for (const id of new Set(s.items.map(it => it.exId))) n.set(id, (n.get(id) || 0) + 1);
+    const rows = [...n].map(([id, c]) => ({ e: exOf(id), c })).filter(x => x.e).sort((a, b) => b.c - a.c || a.e.name.localeCompare(b.e.name));
+    return pick('Filter by exercise', rows.map(x => ({ v: x.e.id, label: x.e.name, sub: `${esc(x.e.muscle)} · ${plural(x.c, 'session')}` })), f.ex, v => { f.ex = v; }, true);
+  }
+  if (k === 'muscle') {
+    const n = new Map(); for (const s of all) for (const m of new Set(s.items.map(it => exOf(it.exId)?.muscle).filter(Boolean))) n.set(m, (n.get(m) || 0) + 1);
+    return pick('Filter by muscle group', [...n].sort((a, b) => b[1] - a[1]).map(([m, c]) => ({ v: m, label: m, sub: plural(c, 'session') })), f.muscle, v => { f.muscle = v; });
+  }
+  if (k === 'pr') {
+    return pick('Filter by PR', Object.entries(PR_FILTER).map(([v, label]) => ({ v, label, sub: plural(count(s => hfMatch(s, { pr: v })), 'session') })), f.pr, v => { f.pr = v; });
+  }
+  /* dates: a preset, or any range */
+  const iso = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  openSheet(`<div class="sh-h"><h3>Filter by date</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="list hf-list">${[['', 'Any time'], ...DATE_RANGES].map(([v, label]) => { const cur = (f.range || '') === v && (v || !f.from && !f.to); return `<button class="row hf-o${cur ? ' on' : ''}" data-hfd="${v}"><span class="row-m"><span class="t">${label}</span></span>${cur ? ICON.check : ''}</button>`; }).join('')}</div>
+  <span class="lbl" style="display:block;margin:16px 0 8px">Or choose dates</span>
+  <div class="hf-dates"><label><span class="lbl">From</span><input class="field" type="date" id="hf-from" value="${f.from && !f.range ? iso(f.from) : ''}"></label><label><span class="lbl">To</span><input class="field" type="date" id="hf-to" value="${f.to && !f.range ? iso(f.to - 864e5) : ''}"></label></div>
+  <div class="btns"><button class="btn" id="hf-apply">Apply dates</button></div>`, r => {
+    r.querySelectorAll('[data-hfd]').forEach(b => b.onclick = () => { const v = b.dataset.hfd, x = DATE_RANGES.find(d => d[0] === v); [f.from, f.to] = x ? x[2]() : [null, null]; f.range = x ? v : null; closeSheet(); hfRefresh(); });
+    r.querySelector('#hf-apply').onclick = () => {
+      const day = v => { const [y, m, d] = v.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
+      const a = r.querySelector('#hf-from').value, b = r.querySelector('#hf-to').value;
+      if (!a && !b) return toast('Pick a start or end date');
+      let from = a ? day(a) : null, to = b ? day(b) + 864e5 : null;
+      if (from && to && from >= to) [from, to] = [to - 864e5, from + 864e5];
+      Object.assign(f, { from, to, range: null }); closeSheet(); hfRefresh();
+    };
+  });
 }
 
 /* ---------- Exercises ---------- */
@@ -1311,10 +1478,20 @@ function vExercise() {
       <div class="bignum md">${big(ex.oneRm > 0 ? fmtW(ex.oneRm) : x ? fmtW(roundW(x.best)) : '–')}<span class="dot"></span></div>
       <p class="muted" style="margin-top:14px;font-size:13px">${ex.oneRm > 0 ? `Saved ${fmtDate(ex.oneRmAt || Date.now())}${x ? ` · best estimate ${fmtW(roundW(x.best))} ${unit()}` : ''}` : bs ? `From ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set to see your estimate.'}</p></div>
     <div class="card rv"><div class="card-h"><span class="lbl">e1RM by session</span><span class="lbl">${x ? x.pts.length : 0} logged</span></div>${trend(x)}</div>
-    <div class="kv span rv"><div><span class="lbl">Sessions</span><div class="term">${x ? x.n : 0}</div></div><div><span class="lbl">Volume</span><div class="term">${fmtVol(x ? x.vol : 0)}</div></div><div><span class="lbl">Records</span><div class="term">${x ? x.pts.filter(p => p.pr).length : 0}</div></div><div><span class="lbl">Last</span><div class="term">${x ? fmtDate(x.last) : '—'}</div></div></div>
+    ${recordsCard(ex)}
+    <div class="kv span rv"><div><span class="lbl">Sessions</span><div class="term">${x ? x.n : 0}</div></div><div><span class="lbl">Volume</span><div class="term">${fmtVol(x ? x.vol : 0)}</div></div><div><span class="lbl">PRs</span><div class="term">${S.A.rec.events.filter(e => e.exId === ex.id).length}</div></div><div><span class="lbl">Last</span><div class="term">${x ? fmtDate(x.last) : '—'}</div></div></div>
     <section class="card span rv"><div class="card-h"><span class="lbl">Recent sets</span></div>
     ${hist.length ? hist.map(h => `<button class="hist-s" data-act="open" data-id="${h.s.id}" style="width:100%"><span class="term">${fmtDate(h.s.startedAt)}</span><span class="sl">${h.sets.map(st => `${fmtW(+st.w || 0)}×${st.r}`).join(' · ')}</span></button>`).join('') : `<div class="empty">No sets logged for this exercise yet.</div>`}</section>
   </div>`;
+}
+/* the exercise's records: heaviest set, most reps, and best reps at each of the heaviest weights */
+function recordsCard(ex) {
+  const rc = S.A.rec.ex.get(ex.id), bw = ex.kind === 'bw', w = v => bw ? (v ? `+${fmtW(v)}` : 'body') : fmtW(v);
+  if (!rc) return `<section class="card span rv"><div class="card-h"><span class="lbl">Records</span></div><div class="empty">Log a set to start your records.</div></section>`;
+  const last = S.A.rec.events.filter(e => e.exId === ex.id).pop();
+  return `<section class="card span rv recs"><div class="card-h"><span class="lbl">Records · ${bw ? 'added ' : ''}${unit()}</span>${last ? `<span class="lbl">last PR ${fmtDate(last.t)}</span>` : ''}</div>
+  <div class="rec-top"><div><span class="lbl">Heaviest</span><b>${w(rc.w)} × ${rc.wr}</b><span class="muted">${fmtDate(rc.wt)}</span></div><div><span class="lbl">Most reps</span><b>${rc.maxR}</b><span class="muted">at ${w(rc.maxRw)} · ${fmtDate(rc.maxRt)}</span></div></div>
+  <div class="rec-t"><span class="lbl">Best reps by weight</span>${repTable(rc, 6).map(x => `<span><b>${w(x.w)}</b><i>× ${x.r}</i></span>`).join('')}</div></section>`;
 }
 function trend(x) {
   if (!x || !x.pts.length) return `<div class="empty">Your trend appears after the first session.</div>`;
@@ -1341,7 +1518,7 @@ function vSplits() {
   return pageTop('Splits') + `
   <div class="rv pagehead" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 6px"><h1 class="h1">Splits</h1><button class="btn" data-act="new-split">${ICON.plus}${roll('New split')}</button></div>
   <p class="muted rv" style="font-size:13px;max-width:60ch">Plan your week: how many days, what each day trains, and the exercises with sets and reps. Start any day as a session, and share the plan with other lifters.</p>
-  <div class="mgroup rv"><span class="lbl">Your splits</span><span class="lbl">${mine.length}</span></div>
+  <div class="mgroup rv"><span class="lbl">Your splits</span><span class="lbl">${mine.length} of ${SPLIT_MAX}</span></div>
   <div class="split-grid" style="margin-top:12px">${mine.map(card).join('') || `<div class="empty rv"><b>No splits yet.</b>Create one to plan your training days. Push / Pull / Legs is a good place to start.</div>`}</div>
   <div class="mgroup rv" style="margin-top:18px"><span class="lbl">Shared with you</span><span class="lbl">${S.shared.length}</span></div>
   <div class="split-grid" style="margin-top:12px">${S.shared.map(shcard).join('') || `<div class="empty rv">When someone shares a split with @${esc(S.profile.username)}, it shows up here.</div>`}</div>
@@ -1551,7 +1728,8 @@ async function reminderTest() {
 const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
-    <p><b>One-rep max and records.</b> Each exercise shows your saved one-rep max, or the best estimate from your sets. When a completed set beats it, Synergym asks whether to save the new one. A record is a new best estimate on an exercise.</p>
+    <p><b>One-rep max.</b> Each exercise shows your saved one-rep max, or the best estimate from your sets. When a completed set beats it, Synergym asks whether to save the new one.</p>
+    <p><b>Records (PRs).</b> A weight PR is heavier than anything you’ve lifted on that exercise. A rep PR is more reps than you’ve ever done at that weight or heavier. Heavier and more reps than your record set is both. Each set is judged as you type it, against everything before it, earlier sets that day included; an exercise’s first session sets the baseline. For bodyweight moves the weight is the added load.</p>
     <p><b>Next-set suggestions.</b> Based on your top set last time. If it went at least as well as the time before, add 2.5 kg (5 lb) and keep the reps. If it slipped, or your later sets fell short at that weight, keep the weight and aim for a rep more. Bodyweight moves add a rep.</p>
     <p><b>Linked sets.</b> Link two or more sets and Synergym names the structure: two exercises make a superset, three or more a giant set. On one exercise, falling weight is a drop set, the same weight a rest-pause set, anything else a pyramid. Rest starts after the last set of a group.</p>
     <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target. Rest days you mark on Home show on the heat map.</p>
@@ -1903,7 +2081,29 @@ function sessMenu() {
 }
 
 /* ================= actions: splits ================= */
+/* at most SPLIT_MAX splits. Returns true when there's room; otherwise shows the limit with a way to delete one */
+function splitRoom() {
+  if (S.splits.size < SPLIT_MAX) return true;
+  const list = [...S.splits.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  openSheet(`<div class="sh-h"><h3>${SPLIT_MAX} splits is the limit</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <p class="muted" style="margin-bottom:12px">Delete one to make room for a new split. Sessions you logged with it stay in your history, under its name.</p>
+  <div class="list sp-full">${list.map(sp => `<div class="row"><span class="row-m"><span class="t">${esc(sp.name)}</span><span class="sub">${plural(sp.days.length, 'day')} · ${plural(S.A.splitUse.get(sp.id) || 0, 'session')} logged</span></span><button class="btn line sm" data-act="split-del" data-id="${sp.id}">Delete</button></div>`).join('')}</div>`);
+  return false;
+}
+/* sessions keep pointing at a deleted split; its name and days are kept so history still reads right */
+function deleteSplit(id, after) {
+  const sp = S.splits.get(id); if (!sp) return;
+  if ([...S.sessions.values()].some(x => x.splitId === id)) {
+    S.profile.splitArchive = { ...(S.profile.splitArchive || {}), [id]: { name: sp.name, at: Date.now(), days: sp.days.map(d => ({ type: d.type, rest: !!d.rest, same: !!d.same })) } };
+    queue('p', 200);
+  }
+  if (S.profile.nextDay && S.profile.nextDay.sp === id) { S.profile.nextDay = null; queue('p', 200); }
+  S.splits.delete(id); queue('sp:' + id, 0); compute(); after ? after() : render(false); toast('Split deleted');
+}
+/* a split, or the record of a deleted one */
+const splitOf = id => (id && (S.splits.get(id) || (S.profile.splitArchive?.[id] && { id, ...S.profile.splitArchive[id], deleted: true }))) || null;
 function newSplit() {
+  if (!splitRoom()) return;
   const sp = { id: uuid(), name: 'My split', description: '', days: ['Push', 'Pull', 'Legs'].map(t => ({ id: sid(), type: t, rest: false, exercises: [] })), shareToken: null, copiedFrom: null, updatedAt: Date.now() };
   S.splits.set(sp.id, sp); queue('sp:' + sp.id, 0); go('split', sp.id);
   setTimeout(() => { const n = $('.sp-name'); if (n) { n.focus(); n.select(); } }, 400);
@@ -1925,7 +2125,7 @@ function moveDay(i, dir) {
     el.style.transition = 'none'; el.style.transform = `translateY(${dy}px)`; requestAnimationFrame(() => { el.style.transition = 'transform .55s var(--spring)'; el.style.transform = ''; }); }
 }
 function dupSplit(id) {
-  const sp = S.splits.get(id); if (!sp) return;
+  const sp = S.splits.get(id); if (!sp || !splitRoom()) return;
   const c = { ...clone(sp), id: uuid(), name: (sp.name + ' copy').slice(0, 60), shareToken: null, copiedFrom: null, updatedAt: Date.now() };
   S.splits.set(c.id, c); queue('sp:' + c.id, 0); go('split', c.id); toast('Duplicated. Edit away.');
 }
@@ -1935,7 +2135,7 @@ function templateSheet(tid) {
     <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">${esc(t.desc)} Using it makes your own copy that you can rename, re-order and edit freely.</p>
     <div class="tpl-days">${t.plan.map(([ty, exs], i) => `<div class="pd${exs ? '' : ' rest'}"><span class="lbl">Day ${i + 1}</span><b>${esc(ty)}</b>${exs ? `<span class="sub">${exs.map(e => `${esc(e[0])} ${e[1]}×${esc(e[2])}`).join(' · ')}</span>` : ''}</div>`).join('')}</div>
     <div class="btns" style="margin-top:var(--s0)"><button class="btn lg" id="tpl-use">Use this template</button></div>`, r => {
-    r.querySelector('#tpl-use').onclick = () => { closeSheet(); const sp = splitFromTemplate(t); go('split', sp.id); toast('Template added. Make it yours.'); };
+    r.querySelector('#tpl-use').onclick = () => { closeSheet(); if (!splitRoom()) return; const sp = splitFromTemplate(t); go('split', sp.id); toast('Template added. Make it yours.'); };
   });
 }
 function splitMenu(id) {
@@ -1943,7 +2143,7 @@ function splitMenu(id) {
   menuSheet(sp.name, [
     { label: 'Share', fn: () => shareSheet(id) },
     { label: 'Duplicate', fn: () => dupSplit(id) },
-    { label: 'Delete split', warn: true, fn: () => confirmSheet('Delete split?', 'This deletes the plan and stops sharing it. Sessions you logged from it are kept.', 'Delete', () => { S.splits.delete(id); queue('sp:' + id, 0); go('splits', null, { replace: true }); toast('Split deleted'); }) }
+    { label: 'Delete split', warn: true, fn: () => confirmSheet('Delete split?', 'This deletes the plan and stops sharing it. Sessions you logged from it are kept, under its name.', 'Delete', () => deleteSplit(id, () => go('splits', null, { replace: true }))) }
   ]);
 }
 /* when a superset loses a member and one exercise is left, unlink it rather than turn it into a drop set */
@@ -1994,6 +2194,7 @@ async function shareSheet(id) {
   if (!S.recipients.has(id)) { await loadRecipients(id); if (!$('#sheet').hidden) draw(); }
 }
 function copySplit(src, from) {
+  if (!splitRoom()) return;
   const days = cleanDays(src.days).map(d => ({ ...d, id: sid(), exercises: d.exercises.map(x => { const e = ensureExercise({ ...x, exId: null }); if (e.archived) { e.archived = false; queue('x:' + e.id, 0); } return { ...x, id: sid(), exId: e.id, name: e.name, muscle: e.muscle, kind: e.kind }; }) }));
   const sp = { id: uuid(), name: String(src.name || 'Shared split').slice(0, 60), description: String(src.description || '').slice(0, 1000), days, shareToken: null, copiedFrom: from ? ('@' + from).slice(0, 40) : null, updatedAt: Date.now() };
   S.splits.set(sp.id, sp); queue('sp:' + sp.id, 0); go('split', sp.id, { replace: S.view === 'public' }); toast('Saved to your splits. Exercises you didn’t have were added to your list.');
@@ -2017,6 +2218,7 @@ $('#imp').addEventListener('change', async e => {
   if (f.size > 20e6) return toast('That file is too large');
   let d = null; try { d = parseImport(JSON.parse(await f.text()), S.profile.bw); } catch {}
   if (!d) return toast('That file isn’t a valid Synergym export');
+  if (d.error) return openSheet(`<div class="sh-h"><h3>Can’t import this file</h3><button class="btn ghost sm" data-act="close">Close</button></div><p class="muted">${esc(d.error)}</p><div class="btns"><button class="btn" data-act="close">OK</button></div>`);
   const now = [plural(S.sessions.size, 'session'), plural(S.library.length, 'exercise'), plural(S.splits.size, 'split')];
   const incoming = [plural(d.sessions.length, 'session'), plural(d.library.length, 'exercise'), plural(d.splits.length, 'split')];
   openSheet(`<div class="sh-h"><h3>Replace all your data?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
@@ -2102,6 +2304,14 @@ const ACT = {
   start: el => startSession(!!el && el.dataset.force === '1'),
   'start-menu': () => startMenu(),
   second: () => startMenu(true),
+  'today-sum': () => todaySheet(),
+  'ts-go': el => { const to = el.dataset.to; closeSheet();
+    if (to === 'resume') go('session', el.dataset.id); else if (to === 'split') go('split', el.dataset.id); else if (to === 'splits') go('splits');
+    else if (to === 'start') startFromSplit(el.dataset.sp, +el.dataset.day); },
+  'hf-open': () => { if (!S.hf.open) { S.hf.open = true; hfRefresh(); } },
+  'hf-toggle': () => { S.hf.open = !S.hf.open; hfRefresh(); },
+  'hf-pick': el => hfSheet(el.dataset.k),
+  'hf-clear': () => { S.hf = { ...HF0(), open: true }; hfRefresh(); },
   'today-sessions': todaySessions,
   'open-today': el => { closeSheet(); go('session', el.dataset.id); },
   'start-day': el => startFromSplit(el.dataset.sp, +el.dataset.day),
@@ -2146,7 +2356,7 @@ const ACT = {
   unlink: el => { const s = cur(); if (!s) return; for (const it of s.items) for (const st of it.sets) if (st.g === el.dataset.g) st.g = null; queue('s:' + s.id, 300); render(false); },
   'rest-add': el => { if (S.rest) { S.rest.end += (+el.dataset.d) * 1000; tick(); } },
   'rest-tap': () => { if (S.rest) { S.rest = null; tick(); toast('Rest skipped'); } },
-  'new-split': () => menuSheet('New split', [{ label: 'Blank split', hint: '3 empty days', fn: newSplit }, ...TEMPLATES.map(t => ({ label: t.name, hint: plural(t.days, 'day') + ' a week', fn: () => { const sp = splitFromTemplate(t); go('split', sp.id); toast('Template added. Make it yours.'); } }))]),
+  'new-split': () => splitRoom() && menuSheet('New split', [{ label: 'Blank split', hint: '3 empty days', fn: newSplit }, ...TEMPLATES.map(t => ({ label: t.name, hint: plural(t.days, 'day') + ' a week', fn: () => { const sp = splitFromTemplate(t); go('split', sp.id); toast('Template added. Make it yours.'); } }))]),
   'open-split': el => go('split', el.dataset.id),
   'open-shared': el => go('shared', el.dataset.id),
   'split-menu': el => splitMenu(el.dataset.id),
@@ -2170,6 +2380,7 @@ const ACT = {
     S.spLink = null; touchSplit(sp, 300); render(false); toast(t + ' linked'); },
   'sp-unlink': el => { const sp = curSplit(), d = sp && sp.days[+el.dataset.day]; if (!d) return; for (const x of d.exercises) if (x.g === el.dataset.g) x.g = null; touchSplit(sp, 300); render(false); toast('Unlinked'); },
   'dup-split': el => dupSplit(el.dataset.id),
+  'split-del': el => { const sp = S.splits.get(el.dataset.id); if (sp) confirmSheet(`Delete ${sp.name}?`, 'The plan is deleted and stops being shared. Sessions you logged with it stay in your history, under its name.', 'Delete', () => deleteSplit(sp.id, () => { closeSheet(); render(false); })); },
   'tpl-view': el => templateSheet(el.dataset.id),
   'dex-menu': el => dexMenu(+el.dataset.day, +el.dataset.x),
   'copy-shared': el => { const sp = S.shared.find(x => x.id === el.dataset.id); if (sp) copySplit(sp, sp.from); },
@@ -2488,6 +2699,9 @@ async function syncUp(u) {
     if (!pr.data) { pr = await sb.from('profiles').insert({ id: u.id }).select().single(); if (pr.error) throw pr.error; await sb.rpc('restore_default_exercises'); }
     const serverLib = (await fetchAll(() => sb.from('exercises').select('*').order('name'))).map(exFromDb);
     const plan = planSync(local, serverLib, { fresh });
+    const sv = await sb.from('splits').select('id'); if (sv.error) throw sv.error;
+    const have = new Set((sv.data || []).map(x => x.id)), adding = plan.splits.filter(x => !have.has(x.id)).length;
+    if (have.size + adding > SPLIT_MAX) throw Object.assign(new Error('split-limit'), { user: `Your account has ${plural(have.size, 'split')} and this phone has ${adding} more. Synergym keeps up to ${SPLIT_MAX}: delete some on this phone, then go online again. Everything is still on this phone.` });
     const server = profFromDb(pr.data);
     S.library = plan.library; S.sessions = new Map(plan.sessions.map(x => [x.id, x])); S.splits = new Map(plan.splits.map(x => [x.id, x]));
     S.profile = { ...plan.profile, username: server.username, activeSession: server.activeSession, onboarded: plan.profile.onboarded || server.onboarded };
@@ -2521,7 +2735,7 @@ async function syncUp(u) {
     writeMode({ ...m, mode: 'local' });
     S.syncing = false; closeSheet();
     await startLocal();
-    toast('Couldn’t finish going online. Everything is still on this phone. Try again with a steady connection.');
+    toast(e && e.user || 'Couldn’t finish going online. Everything is still on this phone. Try again with a steady connection.');
   } finally { S.syncing = false; }
 }
 /* restore missing starter exercises on the phone */
@@ -2570,7 +2784,7 @@ function lockAppZoom() {
 
 /* ================= boot ================= */
 function resetState() {
-  Object.assign(S, { user: null, loaded: false, loadError: null, profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(), rest: null, link: null, q: '', exq: '', exm: '' });
+  Object.assign(S, { user: null, loaded: false, loadError: null, profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(), rest: null, link: null, q: '', hf: HF0(), exq: '', exm: '' });
   OB.pending.clear(); OB.inflight.clear(); for (const t of OB.timers.values()) clearTimeout(t); OB.timers.clear(); OB.failing = false;
 }
 async function startApp() {
@@ -2594,6 +2808,7 @@ function boot() {
   lockAppZoom();
   /* pulling past the top or bottom stretches the page and springs back, as on iOS */
   if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced });
+  pullForToday();
   const mode = readMode();
   /* phones get a quick splash each time the app opens */
   if (coarse.matches && !reduced) quickIn();

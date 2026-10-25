@@ -4,15 +4,22 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 1.0.0, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 1.0.2, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`1.0.0-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`1.0.2-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
 - **Log sessions:** weight and reps per set (last time's numbers show as hints), a tick to finish a set,
   a rest timer, drop sets, and linked sets that are named automatically (superset, giant set, drop set,
   rest-pause, pyramid).
+- **Records (PRs):** each exercise knows its records. A weight PR is heavier than ever, a rep PR is more
+  reps than ever at that weight or heavier, and beating both is marked as both. Sets are judged live as you
+  type them, and each exercise page shows its heaviest set, most reps and best reps by weight.
+- **History filters:** filter by date (presets or any range), split (deleted ones too), exercise, muscle
+  group and PR kind, combined with search.
+- **Today's summary:** pull Home down on a phone (or tap the date) for today's sessions, sets, volume and
+  PRs, the week so far, and the split's next day with what to lift and what to aim for.
 - **Next-set suggestions:** each exercise shows last time's top set and what to try today.
 - **Plate calculator:** the plates for each side of the bar for any weight, with your bar remembered.
 - **Intensity and records:** every set and session gets an intensity score against your best; each
@@ -20,6 +27,7 @@ The version lives in `package.json` (`1.0.0-alpha`) and shows in Settings › Ab
 - **Splits:** weekly plans with days, exercises, sets and reps and linked groups; start from a template,
   reorder days, and share by @username or by link. Home suggests the next day, or pick one from Up next.
   A day can be marked "same day as" the one before for training twice a day (Day 1 · 2nd session).
+  Up to six splits; deleting one keeps its sessions and their split name in History.
 - **Done for today:** after a finished session Home shows today as completed with the next day waiting;
   starting again that day asks first, unless the split plans a second session. Two sessions a day at most.
 - **Home:** a greeting and quote, the next session, and widgets you choose and size: this week's summary,
@@ -172,10 +180,10 @@ database transaction (`import_replace`), so a failed import changes nothing.
 
 | Table | Holds | Who can see it |
 |---|---|---|
-| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account) | owner |
+| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account), deleted splits that sessions still point at (`split_archive`) | owner |
 | `exercises` | each user's own exercise list (seeded from `default_exercises`) | owner |
 | `sessions` | one row per workout; sets are stored as JSON inside it | owner |
-| `splits` | training plans: days, session types, exercises with sets × reps | owner |
+| `splits` | training plans: days, session types, exercises with sets × reps; at most 6 per account (`splits_limit` trigger) | owner |
 | `split_shares` | which user a split was shared with | sender and recipient |
 | `client_errors` | errors reported by the app | nobody through the API (SQL editor only) |
 | `push_subscriptions` | each device that gets reminders | owner |

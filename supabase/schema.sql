@@ -42,6 +42,8 @@ alter table public.profiles add column if not exists next_day jsonb check (next_
 alter table public.profiles add column if not exists active_session uuid;
 -- Bodyweight history: [{"d":"YYYY-MM-DD","kg":80.5}], one entry per day, most recent 400 kept
 alter table public.profiles add column if not exists bw_log jsonb check (bw_log is null or (jsonb_typeof(bw_log) = 'array' and jsonb_array_length(bw_log) <= 400));
+-- Deleted splits that sessions still point at: {"<split id>": {"name", "days": [{"type","rest","same"}], "at"}}, so history keeps their names
+alter table public.profiles add column if not exists split_archive jsonb check (split_archive is null or (jsonb_typeof(split_archive) = 'object' and pg_column_size(split_archive) < 100000));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
@@ -93,6 +95,18 @@ create table if not exists public.splits (
   updated_at  timestamptz not null default now()
 );
 create index if not exists splits_user on public.splits (user_id);
+-- An account keeps at most 6 splits. Updating an existing split is always allowed.
+create or replace function public.splits_limit()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.splits where id = new.id)
+     and (select count(*) from public.splits where user_id = new.user_id) >= 6 then
+    raise exception 'A user can keep up to 6 splits' using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+drop trigger if exists splits_limit on public.splits;
+create trigger splits_limit before insert on public.splits for each row execute function public.splits_limit();
 
 create table if not exists public.split_shares (
   split_id   uuid not null references public.splits(id) on delete cascade,
@@ -311,7 +325,7 @@ begin
       rest_sound = coalesce(r.rest_sound, t.rest_sound), bodyweight = coalesce(r.bodyweight, t.bodyweight),
       display_name = coalesce(r.display_name, t.display_name), experience = coalesce(r.experience, t.experience),
       goal = coalesce(r.goal, t.goal), theme = r.theme, muscles = r.muscles, widgets = r.widgets,
-      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log
+      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive
     from jsonb_populate_record(null::public.profiles, p->'profile') r
     where t.id = uid;
   end if;

@@ -1,6 +1,8 @@
 import { uuid } from './util.js';
 import { num, cleanSession, cleanDays } from './sanitize.js';
-import { DEFAULT_PROFILE, profFromDb, profToDb } from './profile.js';
+import { DEFAULT_PROFILE, profFromDb, profToDb, cleanArchive } from './profile.js';
+
+export const SPLIT_MAX = 6;
 
 /* import replaces everything: the file is read and checked here, a warning shows what will be lost, and the
    swap happens in one database transaction (import_replace), so a failure leaves the current data untouched.
@@ -21,12 +23,17 @@ export function parseImport(d, fallbackBw = 75) {
     exId.set(String(x.id), e.id);
   }
   const spId = new Map(), splits = [];
+  /* an account keeps at most SPLIT_MAX splits */
+  if (sps.filter(x => x && typeof x === 'object').length > SPLIT_MAX) return { error: `This file has ${sps.length} splits. Synergym keeps up to ${SPLIT_MAX}; delete some in the app that made it, export again, then import.` };
   for (const x of sps.slice(0, 200)) {
     if (!x || typeof x !== 'object') continue;
     const id = uuid(); spId.set(String(x.id), id);
     const days = cleanDays(x.days); for (const dd of days) for (const e of dd.exercises) e.exId = e.exId ? exId.get(String(e.exId)) || null : null;
     splits.push({ id, name: String(x.name || '').trim().slice(0, 60) || 'Untitled split', description: String(x.description || '').slice(0, 1000), days, shareToken: null, copiedFrom: x.copiedFrom ? String(x.copiedFrom).slice(0, 40) : null });
   }
+  /* deleted splits that sessions still point at come along too, under new ids */
+  const archive = {};
+  for (const [old, v] of Object.entries(cleanArchive(d.profile && d.profile.splitArchive))) if (!spId.has(old)) { const id = uuid(); spId.set(old, id); archive[id] = v; }
   const sessions = [];
   for (const raw of ss.slice(0, 20000)) {
     const s = cleanSession(raw); if (!s) continue;
@@ -36,7 +43,8 @@ export function parseImport(d, fallbackBw = 75) {
     sessions.push(s);
   }
   const p = d.profile && typeof d.profile === 'object' ? { ...DEFAULT_PROFILE, ...profFromDb(profToDb({ ...DEFAULT_PROFILE, ...d.profile, bw: num(d.profile.bw) || fallbackBw })) } : null;
-  if (p && p.nextDay) p.nextDay = spId.has(String(p.nextDay.sp)) ? { ...p.nextDay, sp: spId.get(String(p.nextDay.sp)) } : null;
+  if (p && p.nextDay) { const sp = spId.get(String(p.nextDay.sp)); p.nextDay = sp && !archive[sp] ? { ...p.nextDay, sp } : null; }
+  if (p) p.splitArchive = archive;
   if (p && Array.isArray(p.widgets)) p.widgets = p.widgets.filter(w => typeof w === 'string');
   return { library, sessions, splits, profile: p, exportedAt: Date.parse(d.exportedAt) || null };
 }

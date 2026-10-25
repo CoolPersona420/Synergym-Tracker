@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { FakeSupabase, login, benchHistory } from './fake-supabase.js';
 
@@ -143,4 +144,23 @@ test('the login screen offers offline only in the installed app', async ({ brows
   await expect(p.locator('[data-act="go-local-new"]')).toHaveCount(0);
   await expect(p.locator('.auth-off-n')).toContainText('Home Screen');
   await ctx.close();
+});
+
+test('going online can’t take an account past six splits: it stops before uploading anything', async ({ page }) => {
+  const net = await noServer(page);
+  await onboardOffline(page, 'Lee');
+  await net.off();
+  const fake = new FakeSupabase({ registered: false });
+  for (let i = 1; i <= 6; i++) fake.splits.push({ id: crypto.randomUUID(), user_id: fake.uid, name: 'Plan ' + i, description: '', days: [], share_token: null, copied_from: null, updated_at: new Date().toISOString() });
+  await fake.attach(page, 'A');
+  await page.goto('/settings');
+  await page.click('[data-act="go-online"]');
+  await page.fill('#f-auth [name=email]', 'lee@example.com');
+  await page.fill('#f-auth [name=password]', 'Lift1234x');
+  await page.fill('#f-auth [name=password2]', 'Lift1234x');
+  await page.click('#f-auth button[type=submit]');
+  await expect(page.locator('#toast')).toContainText('keeps up to 6', { timeout: 20000 });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sg-mode')).mode)).toBe('local');
+  expect(fake.splits).toHaveLength(6);
+  expect(fake.sessions).toHaveLength(0);
 });
