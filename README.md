@@ -83,9 +83,43 @@ auth and database calls in memory.
 | Path | What's in it |
 |---|---|
 | `src/main.js` | app state, screens, actions, saving and sync |
-| `src/lib/` | logic with no UI: progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, error reports and stats |
-| `src/ui/` | brand and icons, themes, the login splash |
+| `src/lib/` | logic with no UI: progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, push reminders, error reports and stats |
+| `api/` | the reminders function (Vercel) |
+| `public/sw.js` | the service worker: offline app shell and reminder notifications |
+| `src/ui/` | brand and icons, themes, the login and open splashes, the user guide |
 | `src/data/` | starter split templates, quotes |
+
+## Offline mode (phone app)
+
+In the app installed on a phone's Home Screen, people can use Synergym without an account
+(**Use offline without an account** on the login screen) or switch an existing account to offline
+(**Settings › Use offline**). Everything is then kept in IndexedDB on the phone (`src/lib/localdb.js`) and
+nothing is sent to the server. **Settings › Go online** logs in or creates an account and merges the
+phone's data into it (`src/lib/sync.js`: exercises are matched by name, and only what changed offline is
+uploaded). The phone's copy is cleared only after every upload has succeeded; a dropped connection, a
+rejected record or a closed app leaves it in place and the next attempt picks up again. Offline is limited
+to the installed phone app because browsers may clear a website's storage, but not a Home Screen app's.
+
+The service worker (`public/sw.js`) caches the app so it opens without a connection, for everyone.
+
+## Workout reminders
+
+Phones can get a push notification at a chosen time on chosen days (**Settings › Reminders**). Days the
+user already trained stay quiet. How it works:
+
+- `push_subscriptions` holds each device's push endpoint; `profiles` holds the time, days and time zone.
+- Every 5 minutes `pg_cron` calls `api/reminders.js` (a Vercel function) with a shared secret. It asks the
+  database which devices are due (`reminders_due`), sends the notifications, and removes devices that are
+  gone (`reminders_drop`).
+- Setup (once): `supabase/reminders-cron.sql`. Vercel needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+  `REMINDER_SECRET`; the secret also lives in Supabase Vault as `reminder_secret`.
+
+On iPhone, notifications only work in the app added to the Home Screen (iOS 16.4 or later).
+
+## User guide
+
+New users get a short tour after setup; the full guide is at **Settings › User guide** (`/guide`), with
+phone and desktop versions of each step. The text lives in `src/ui/guide.js`.
 
 ## Errors and usage stats
 
@@ -116,6 +150,7 @@ database transaction (`import_replace`), so a failed import changes nothing.
 | `splits` | training plans: days, session types, exercises with sets × reps | owner |
 | `split_shares` | which user a split was shared with | sender and recipient |
 | `client_errors` | errors reported by the app | nobody through the API (SQL editor only) |
+| `push_subscriptions` | each device that gets reminders | owner |
 
 The functions `share_split`, `unshare_split`, `split_recipients`, `shared_with_me`,
 `get_public_split`, `restore_default_exercises`, `delete_account`, `import_replace` and `report_error` handle the

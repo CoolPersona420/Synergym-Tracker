@@ -16,6 +16,7 @@ export const WOLF_BODY = wolfPath('w-body'), WOLF_EYES = wolfPath('w-eyes'), WOL
 export const EYE = [[212, 220], [280, 188], [268, 212]], EYE_D = 'M212 220 L280 188 L268 212 Z', EYE_IX = 262.8, EYE_IY = 204.79, EYE_R = 7.871, EYE_BODY = 63;
 export function splashIn() {
   if (SPL.el) return;
+  quickDrop();
   const el = document.createElement('div');
   el.id = 'splash'; el.setAttribute('aria-hidden', 'true');
   /* the stage is a full-screen copy of the wolf for the lunge; a clip-path cuts the eye-shaped hole that reveals the app */
@@ -128,3 +129,25 @@ export function splashConsume(el, done) {
   frame(t0); el.classList.add('consume');
   requestAnimationFrame(frame);
 }
+
+/* the quick splash when the app opens on a phone: the mascot wakes, then zooms past as the app fades in.
+   It waits for the first screen to be ready, but never longer than 3 seconds. */
+export const QS = { el: null, t0: 0 };
+export function quickIn() {
+  if (QS.el || SPL.el) return;
+  const el = document.createElement('div');
+  el.id = 'qsplash'; el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = `<div class="qs-in"><svg class="wolf wolf-t" viewBox="44 40 312 330">${WOLF}</svg><span class="wordmark">SYNERGYM</span></div>`;
+  document.body.appendChild(el);
+  QS.el = el; QS.t0 = performance.now();
+  setTimeout(() => quickOut(), 3000);
+}
+export function quickOut() {
+  const el = QS.el; if (!el || el.dataset.out) return; el.dataset.out = '1';
+  const wait = Math.max(0, 750 - (performance.now() - QS.t0));
+  setTimeout(() => {
+    el.classList.add('out'); hooks.playEnter($('#view'));
+    setTimeout(() => { el.remove(); if (QS.el === el) QS.el = null; }, 560);
+  }, wait);
+}
+export function quickDrop() { if (QS.el) { QS.el.remove(); QS.el = null; } }

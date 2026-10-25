@@ -76,3 +76,14 @@ test('the browser prefix is stripped and repeats are reported once', () => {
     assert.equal(sent[0].path, '/s/:id');
   });
 });
+
+test('reminder days and times read naturally', async () => {
+  const { daysText, timeText } = await import('../../src/lib/push.js');
+  assert.equal(daysText(127), 'Every day');
+  assert.equal(daysText(31), 'Weekdays');
+  assert.equal(daysText(96), 'Weekends');
+  assert.equal(daysText(0b10101), 'Mon, Wed, Fri');
+  assert.equal(timeText('18:05'), '6:05 pm');
+  assert.equal(timeText('00:30'), '12:30 am');
+  assert.equal(timeText('12:00'), '12:00 pm');
+});

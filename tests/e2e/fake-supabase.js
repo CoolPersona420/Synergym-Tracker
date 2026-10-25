@@ -7,15 +7,24 @@ const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 const pick = (row, cols) => !cols || cols === '*' ? row : Object.fromEntries(cols.split(',').map(c => [c, row[c] ?? null]));
 
 export class FakeSupabase {
-  constructor({ email = 'tester@example.com', password = 'Lift1234', profile = {}, exercises = [], sessions = [], splits = [] } = {}) {
-    this.uid = crypto.randomUUID(); this.email = email; this.password = password;
+  /* registered: false models an email nobody has signed up with yet; signing up creates the account the way
+     the real database does (an empty profile and the starter exercises, with the server's own ids) */
+  constructor({ email = 'tester@example.com', password = 'Lift1234', profile = {}, exercises = [], sessions = [], splits = [], registered = true, defaults = ['Bench Press', 'Back Squat', 'Deadlift', 'Pull-up'] } = {}) {
+    this.uid = crypto.randomUUID(); this.email = email; this.password = password; this.registered = registered; this.defaults = defaults;
+    this.pushSubs = [];
+    if (!registered) { this.profiles = []; this.exercises = []; this.sessions = []; this.splits = []; this.errors = []; this.log = []; this.calls = []; return; }
     this.profiles = [{ id: this.uid, username: 'tester', display_name: 'Test', onboarded: true, unit: 'kg', weekly_target: 3, rest_seconds: 90, rest_enabled: true, rest_sound: true, bodyweight: 80, active_session: null, bw_log: null, widgets: null, ...profile }];
     this.exercises = exercises.map(e => ({ user_id: this.uid, archived: false, is_default: true, ...e }));
     this.sessions = sessions.map(s => ({ user_id: this.uid, notes: '', split_id: null, split_day: null, ...s }));
     this.splits = splits.map(s => ({ user_id: this.uid, description: '', share_token: null, copied_from: null, updated_at: new Date().toISOString(), ...s }));
     this.errors = []; this.log = []; this.calls = [];
   }
-  table(name) { return { profiles: this.profiles, exercises: this.exercises, sessions: this.sessions, splits: this.splits }[name]; }
+  table(name) { return { profiles: this.profiles, exercises: this.exercises, sessions: this.sessions, splits: this.splits, push_subscriptions: this.pushSubs }[name]; }
+  register(email, password) {
+    this.registered = true; this.email = email; this.password = password;
+    this.profiles.push({ id: this.uid, username: null, display_name: null, onboarded: false, unit: 'kg', weekly_target: 3, rest_seconds: 90, rest_enabled: true, rest_sound: true, bodyweight: 75, active_session: null, bw_log: null, widgets: null });
+    for (const name of this.defaults) this.exercises.push({ id: crypto.randomUUID(), user_id: this.uid, name, muscle: 'Chest', kind: name === 'Pull-up' ? 'bw' : 'w', archived: false, is_default: true });
+  }
   session() {
     const sid = crypto.randomUUID(), now = Math.floor(Date.now() / 1000);
     const user = { id: this.uid, aud: 'authenticated', role: 'authenticated', email: this.email, app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
@@ -32,9 +41,16 @@ export class FakeSupabase {
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     const body = () => { try { return JSON.parse(r.postData() || 'null'); } catch { return null; } };
     this.calls.push(`${name} ${method} ${p}${u.search}`);
+    if (p.endsWith('/auth/v1/signup')) {
+      const b = body() || {};
+      if (this.registered && b.email === this.email) return json({ code: 422, error_code: 'user_already_exists', msg: 'User already registered' }, 422);
+      this.register(b.email, b.password); this.log.push(`${name} signup`);
+      return json(this.session());
+    }
     if (p.endsWith('/auth/v1/token')) {
       const b = body() || {};
-      if (u.searchParams.get('grant_type') === 'password' && (b.email !== this.email || b.password !== this.password)) return json({ code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' }, 400);
+      if (u.searchParams.get('grant_type') === 'refresh_token') { this.log.push(`${name} refresh`); return json(this.session()); }
+      if (u.searchParams.get('grant_type') === 'password' && (!this.registered || b.email !== this.email || b.password !== this.password)) return json({ code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' }, 400);
       this.log.push(`${name} login`); return json(this.session());
     }
     if (p.endsWith('/auth/v1/user')) return json(this.session().user);
@@ -52,6 +68,7 @@ export class FakeSupabase {
         return route.fulfill({ status: 204, body: '' });
       }
       if (rpc[1] === 'restore_default_exercises') return json(0);
+      if (rpc[1] === 'save_push_subscription') { this.pushSubs.splice(0, Infinity, ...this.pushSubs.filter(x => x.endpoint !== b.p_endpoint)); this.pushSubs.push({ endpoint: b.p_endpoint, user_id: this.uid, p256dh: b.p_p256dh, auth: b.p_auth }); return route.fulfill({ status: 204, body: '' }); }
       return json([]);
     }
     const t = p.match(/\/rest\/v1\/(\w+)/), rows = t && this.table(t[1]);

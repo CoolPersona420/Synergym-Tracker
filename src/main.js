@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import './style.css';
 import { suggestNext } from './lib/progress.js';
+import * as ldb from './lib/localdb.js';
+import { planSync } from './lib/sync.js';
+import { DEFAULT_EXERCISES } from './data/exercises.js';
 import { reduced, LITE } from './lib/env.js';
 import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays } from './lib/sanitize.js';
@@ -8,12 +11,14 @@ import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
 import { parseImport } from './lib/importer.js';
 import { ICON, brand, lockup, big, disp, countUp } from './ui/brand.js';
 import { THEMES, themePref, isDark, applyTheme, themePicker } from './ui/themes.js';
-import { SPL, setSplashHooks, splashIn, splashOut } from './ui/splash.js';
+import { SPL, QS, setSplashHooks, splashIn, splashOut, quickIn, quickOut } from './ui/splash.js';
 import { TEMPLATES, recommendTemplate } from './data/templates.js';
 import { QUOTES } from './data/quotes.js';
+import { guideSections, tourSlides } from './ui/guide.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
 import { trackErrors, startAnalytics } from './lib/telemetry.js';
+import { pushSupported, isIOS, subscribe as pushSubscribe, unsubscribe as pushUnsubscribe, DAY_LETTERS, DAY_NAMES, daysText, timeText } from './lib/push.js';
 
 /* ================= config ================= */
 // The project URL and publishable key are public by design (every browser receives them; Row Level
@@ -27,7 +32,7 @@ const sb = SB_URL && SB_KEY
 
 /* errors reach the database only for a signed-in user (S is defined below; this runs later, on an error) */
 const BUILD = (document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || 'dev').replace(/^.*\//, '');
-const reportError = trackErrors(e => { if (sb && S.user) sb.rpc('report_error', { p_message: e.message, p_stack: e.stack, p_path: e.path, p_build: BUILD, p_ua: navigator.userAgent.slice(0, 300) }).then(() => {}, () => {}); });
+const reportError = trackErrors(e => { if (sb && S.user && !S.local) sb.rpc('report_error', { p_message: e.message, p_stack: e.stack, p_path: e.path, p_build: BUILD, p_ua: navigator.userAgent.slice(0, 300) }).then(() => {}, () => {}); });
 if (import.meta.env.PROD) startAnalytics();
 
 /* ================= constants ================= */
@@ -110,6 +115,7 @@ function queue(key, delay = 600) {
   clearTimeout(OB.timers.get(key)); OB.timers.set(key, setTimeout(() => flush(key), delay)); syncUI();
 }
 async function runJob(key) {
+  if (S.local) return runLocal(key);
   const [t, id] = splitKey(key);
   if (t === 's') { const s = S.sessions.get(id); return s ? sb.from('sessions').upsert(sessToDb(s)) : sb.from('sessions').delete().eq('id', id); }
   if (t === 'x') { const e = S.library.find(x => x.id === id); return e ? sb.from('exercises').upsert(exToDb(e)) : sb.from('exercises').delete().eq('id', id); }
@@ -140,6 +146,8 @@ function scheduleRetry() { clearTimeout(OB.retryT); OB.retryT = setTimeout(flush
 function flushAll() { for (const k of [...OB.pending]) flush(k); }
 async function flushNow(key) { if (OB.pending.has(key)) await flush(key); while (OB.inflight.has(key)) await sleep(80); return !OB.pending.has(key); }
 function saveError(key, e) {
+  /* while going online, a rejected record stops the sync so the phone keeps its copy */
+  if (S.syncing) { SYNC_FAILED.push(key); console.error('Sync rejected', key, e); return; }
   console.error('Save failed', key, e); reportError(`Save failed (${splitKey(key)[0]}): ${e.code || ''} ${e.message || ''}`, null);
   if (e.code === '23505' && key.startsWith('x:')) { toast('You already have an exercise with that name'); reloadLibrary(); return; }
   if (e.code === '23514') { toast('That value isn’t allowed. Check lengths and limits.'); return; }
@@ -151,11 +159,11 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushAll();
   else if (S.loaded && Date.now() - S.lastFetch > 120000 && !OB.pending.size && !OB.inflight.size) refresh();
 });
-const autosaveText = () => OB.pending.has('p') || OB.inflight.has('p') ? 'Saving…' : OB.failing ? 'Saved on this device · syncs when online' : 'Changes save automatically';
+const autosaveText = () => OB.pending.has('p') || OB.inflight.has('p') ? 'Saving…' : S.local ? (OB.failing ? 'Couldn’t save on this phone · retrying' : 'Saved on this phone') : OB.failing ? 'Saved on this device · syncs when online' : 'Changes save automatically';
 function syncUI() {
   const busy = OB.pending.size || OB.inflight.size;
   let txt = 'Synced';
-  if (OB.failing) txt = navigator.onLine ? 'Couldn’t save · retrying' : 'Offline · saved on this device';
+  if (OB.failing) txt = S.local ? 'Couldn’t save on this phone · retrying' : navigator.onLine ? 'Couldn’t save · retrying' : 'Offline · saved on this device';
   else if (busy) txt = 'Saving';
   const net = $('#net'); if (net && !net.classList.contains('upd')) { net.hidden = !OB.failing; if (OB.failing) net.textContent = txt; }
   const as = $('#autosave'); if (as) as.textContent = autosaveText();
@@ -188,7 +196,9 @@ async function loadAll() {
   }
   const keep = k => OB.pending.has(k) || OB.inflight.has(k) || (OB.lastOk.get(k) || 0) >= t0;
   const prof = profFromDb(pr.data);
-  S.profile = keep('p') ? { ...S.profile, username: prof.username } : prof;
+  /* a profile change still waiting to save wins, but the account's own facts (set-up done, username, device)
+     always come from the server: the waiting copy was built before they were known */
+  S.profile = keep('p') ? { ...S.profile, username: prof.username, onboarded: prof.onboarded || S.profile.onboarded, activeSession: prof.activeSession } : prof;
   const lib = new Map(ex.map(r => [r.id, exFromDb(r)]));
   for (const e of S.library) if (keep('x:' + e.id)) lib.set(e.id, e);
   for (const id of [...lib.keys()]) if (keep('x:' + id) && !S.library.some(e => e.id === id)) lib.delete(id);
@@ -204,8 +214,8 @@ async function loadAll() {
   S.shared = (sh.error ? [] : sh.data || []).map(r => ({ id: r.split_id, name: r.name, description: r.description || '', days: cleanDays(r.days), from: r.from_username, sharedAt: Date.parse(r.shared_at) }));
   S.lastFetch = S.sharedAt = Date.now();
 }
-async function refresh() { try { await loadAll(); soft(); } catch (e) { console.warn(e); } }
-async function reloadLibrary() { try { const ex = await fetchAll(() => sb.from('exercises').select('*').order('name')); S.library = ex.map(exFromDb); render(false); } catch {} }
+async function refresh() { if (S.local || S.syncing) return; try { await loadAll(); soft(); } catch (e) { console.warn(e); } }
+async function reloadLibrary() { if (S.local) return render(false); try { const ex = await fetchAll(() => sb.from('exercises').select('*').order('name')); S.library = ex.map(exFromDb); render(false); } catch {} }
 
 /* ================= metrics ================= */
 const exOf = id => S.library.find(e => e.id === id);
@@ -402,12 +412,13 @@ function parsePath() {
     case 'splits': if (seg[1] === 'shared' && seg[2]) return ['shared', seg[2]]; return seg[1] ? ['split', seg[1]] : ['splits'];
     case 'session': return seg[1] ? ['session', seg[1]] : ['today'];
     case 'settings': return ['prefs'];
+    case 'guide': return ['guide'];
     case 'w': return seg[1] ? ['widget', seg[1]] : ['today'];
     case 's': return seg[1] ? ['public', seg[1]] : ['today'];
     default: return ['today'];
   }
 }
-const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', public: '/s/' + a, widget: '/w/' + a })[v] || '/';
+const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', public: '/s/' + a, widget: '/w/' + a })[v] || '/';
 function go(v, a = null, { replace = false } = {}) {
   const path = pathOf(v, a);
   if (replace) history.replaceState({ d: depth }, '', path); else { depth++; history.pushState({ d: depth }, '', path); }
@@ -415,7 +426,7 @@ function go(v, a = null, { replace = false } = {}) {
 }
 function back() {
   if (depth > 0) return history.back();
-  const up = { exercise: 'exercises', split: 'splits', shared: 'splits' }[S.view] || 'today';
+  const up = { exercise: 'exercises', split: 'splits', shared: 'splits', guide: 'prefs' }[S.view] || 'today';
   navDir = 'back'; go(up, null, { replace: true });
 }
 addEventListener('popstate', e => { const d = e.state?.d || 0; navDir = d < depth ? 'back' : 'fwd'; depth = d; route(true); });
@@ -497,6 +508,7 @@ function render(enter) {
   try {
     if (!sb) { html = vNoConfig(); bare = true; }
     else if (S.recover) { html = vRecover(); bare = true; }
+    else if (S.syncFlow) { html = vAuth(); bare = true; }
     else if (S.view === 'public') { html = vPublic(); app = !!(S.user && S.loaded && S.profile.onboarded); }
     else if (!S.authReady || (S.user && !S.loaded && !S.loadError)) html = '<div class="boot"></div>';
     else if (!S.user) { html = vAuth(); bare = true; }
@@ -513,6 +525,7 @@ function render(enter) {
         case 'split': html = S.splits.has(S.arg) ? vSplit() : vMissing('That split doesn’t exist any more.'); break;
         case 'shared': html = vShared(); break;
         case 'prefs': html = vPrefs(); break;
+        case 'guide': html = vGuide(); break;
         case 'widget': html = vWidget(); break;
         default: html = vToday();
       }
@@ -528,19 +541,21 @@ function render(enter) {
   document.body.classList.toggle('no-nav', !app);
   document.body.classList.toggle('bare', bare);
   document.body.classList.toggle('in-session', app && S.view === 'session');
-  document.body.classList.toggle('on-prefs', app && S.view === 'prefs');
+  document.body.classList.toggle('on-prefs', app && (S.view === 'prefs' || S.view === 'guide'));
   document.body.classList.toggle('in-full', app && S.view === 'widget');
   if (enter) {
     const hr = S.view === 'today' && S.homeRestore;
     if (hr) { const d = $('#dash', v); if (d) d.scrollLeft = hr.x; scrollTo(0, hr.y); S.homeRestore = null; } else scrollTo(0, 0);
-    if (!SPL.el) playEnter(v);
+    if (!SPL.el && !QS.el) playEnter(v);
   }
   else { v.classList.remove('enter'); scrollTo(0, y); }
   if (app) renderNav();
   syncUI(); tick();
   wake(app && S.view === 'session' && cur() && !cur().endedAt);
   afterRender(enter);
-  if (SPL.el && !(sb && (!S.authReady || (S.user && !S.loaded && !S.loadError)))) splashOut();
+  const ready = !(sb && (!S.authReady || (S.user && !S.loaded && !S.loadError)));
+  if (SPL.el && ready) splashOut();
+  if (QS.el && ready) quickOut();
 }
 let rvObs = null;
 function playEnter(v) {
@@ -567,8 +582,19 @@ function wireCarousel() {
     dots.forEach((b, i) => { b.classList.toggle('on', i === best); b.setAttribute('aria-selected', i === best); });
   }); }, { passive: true });
 }
+/* phones: the widget carousel is one card size, tall enough to fill the screen down to the dock */
+const phoneDash = () => matchMedia('(max-width:47.99rem)').matches;
+function sizeDash() {
+  const d = $('#dash'); if (!d) return;
+  if (!phoneDash()) return d.style.removeProperty('--dash-h');
+  const dots = $('#dash-dots'), edit = $('#view .home-edit'), nav = $('#nav');
+  const below = (dots ? dots.offsetHeight + 14 : 0) + (edit ? edit.offsetHeight + 22 : 0);
+  const dock = nav && !nav.hidden ? innerHeight - nav.getBoundingClientRect().top + 12 : 24;
+  d.style.setProperty('--dash-h', Math.max(15 * 16, Math.floor(innerHeight - (d.getBoundingClientRect().top + scrollY) - below - dock)) + 'px');
+}
+addEventListener('resize', () => { if (S.view === 'today') sizeDash(); });
 function afterRender(entered) {
-  if (S.view === 'today') wireCarousel();
+  if (S.view === 'today') { sizeDash(); wireCarousel(); }
   if (S.view === 'today' && S.loaded && !S.hinted && coarse.matches && !reduced) {
     S.hinted = true;
     let n = 0; try { n = +localStorage.getItem('sg-fab-hint') || 0; localStorage.setItem('sg-fab-hint', n + 1); } catch {}
@@ -580,6 +606,7 @@ function afterRender(entered) {
   if (S.view === 'splits' && S.loaded && entered && Date.now() - (S.sharedAt || 0) > 3000) loadShared();
 }
 async function loadShared() {
+  if (S.local) return;
   S.sharedAt = Date.now();
   const { data, error } = await sb.rpc('shared_with_me');
   if (error) return;
@@ -588,25 +615,32 @@ async function loadShared() {
 }
 let navKey = null;
 function renderNav() {
-  const a = activeSession(), on = v => S.view === v || (v === 'exercises' && S.view === 'exercise') || (v === 'splits' && (S.view === 'split' || S.view === 'shared'));
+  const a = activeSession(), on = v => S.view === v || (v === 'exercises' && S.view === 'exercise') || (v === 'splits' && (S.view === 'split' || S.view === 'shared')) || (v === 'prefs' && S.view === 'guide');
   const key = ['today', 'splits', 'exercises', 'history', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
   const it = (v, l, i) => `<button class="nav-i${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}">${i}${roll(l)}</button>`;
-  $('#nav').innerHTML = `<div class="nav-brand">${brand()}</div>
-  ${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}
-  <button class="nav-train${a ? ' live' : ''}" data-act="${a ? 'resume' : 'start-menu'}" data-id="${a ? a.id : ''}" aria-label="${a ? 'Resume session' : 'Start session'}"><span class="ring">${a ? ICON.play : ICON.plus}</span><span class="nl">${a ? roll('Resume session') : roll('Start session')}</span></button>
-  ${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}
-  <button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>`;
+  /* the session button is kept across renders (only its contents change), so hiding and showing it can animate */
+  const nav = $('#nav'); let fab = nav.querySelector(':scope > .nav-train');
+  if (!fab) { nav.innerHTML = ''; fab = document.createElement('button'); fab.className = 'nav-train'; nav.appendChild(fab); }
+  for (const c of [...nav.children]) if (c !== fab) c.remove();
+  const mode = a ? 'live:' + a.id : 'idle';
+  if (fab.dataset.mode !== mode) {
+    fab.dataset.mode = mode; fab.classList.toggle('live', !!a);
+    fab.dataset.act = a ? 'resume' : 'start-menu'; fab.dataset.id = a ? a.id : ''; fab.setAttribute('aria-label', a ? 'Resume session' : 'Start session');
+    fab.innerHTML = `<span class="ring">${a ? ICON.play : ICON.plus}</span><span class="nl">${a ? roll('Resume session') : roll('Start session')}</span>`;
+  }
+  fab.insertAdjacentHTML('beforebegin', `<div class="nav-brand">${brand()}</div>${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}`);
+  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}<button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>`);
 }
 function pageTop(title, extra = '', logo = false) {
   return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div>${extra ? `<div class="hx">${extra}</div>` : ''}</header>`;
 }
 const vMissing = msg => `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button></header><div class="empty rv"><b>${esc(msg)}</b>It may have been deleted on another device.</div>`;
-const shell = inner => `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}</div>${inner}</div></div>`;
+const shell = inner => `<div class="ob ob-plain"><div class="ob-main"><div class="ob-top">${brand()}</div><div class="ob-in">${inner}</div></div></div>`;
 const vNoConfig = () => shell(`<div class="msg err">This deployment is missing its Supabase settings. Set VITE_SUPABASE_URL and VITE_SUPABASE_KEY in Vercel, then redeploy.</div>`);
 const vLoadError = () => shell(`<h1>Couldn’t load <em>your log</em>.</h1><p class="lead">${esc(S.loadError)}</p><button class="btn lg" data-act="retry-load">Try again</button><button class="linkbtn" data-act="signout">Sign out</button>`);
 
 /* ---------- auth ---------- */
-function obBar(step) { return `<div class="ob-bar" aria-label="Step ${step} of 5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= step ? 'on' : ''}"></i>`).join('')}</div>`; }
+function obBar(step) { return `<div class="ob-bar" style="--n:${OB_N}" aria-label="Step ${step} of ${OB_N}">${OB_STEPS.map((_, i) => `<i class="${i < step ? 'on' : ''}"></i>`).join('')}</div>`; }
 function vAuth() {
   const m = S.authMode, msg = S.authMsg;
   const msgHTML = msg ? `<div class="msg${msg.err ? ' err' : ''}" role="alert">${esc(msg.text)}</div>` : '';
@@ -614,9 +648,9 @@ function vAuth() {
   if (m === 'forgot') box = `<div><h2>Reset your password</h2><p class="muted" style="margin-top:6px">We’ll email you a link to set a new one.</p></div>
     <form id="f-forgot" novalidate><label>Email<input class="field" type="email" name="email" autocomplete="email" required></label>${msgHTML}<button class="btn lg" type="submit">Send reset link</button></form>
     <button class="linkbtn" data-act="auth-mode" data-m="signin">Back to log in</button>`;
-  else if (m === 'check') box = `${obBar(1)}<div><span class="lbl">Step 1 of 5</span><h2 style="margin-top:6px">Check your inbox</h2><p class="muted" style="margin-top:6px">We sent a confirmation link to <b style="color:var(--ink)">${esc(S.pendingEmail || 'your email')}</b>. Tap it to confirm your account, and you’ll come straight back here to finish setting up.</p></div>
+  else if (m === 'check') box = `${obBar(1)}<div><span class="lbl">Step 1 of ${OB_N}</span><h2 style="margin-top:6px">Check your inbox</h2><p class="muted" style="margin-top:6px">We sent a confirmation link to <b style="color:var(--ink)">${esc(S.pendingEmail || 'your email')}</b>. Tap it to confirm your account, and you’ll come straight back here to finish setting up.</p></div>
     ${msgHTML}<button class="btn line lg" data-act="resend">Resend the email</button><button class="linkbtn" data-act="auth-mode" data-m="signin">I’ve confirmed, log in</button>`;
-  else if (m === 'signup') box = `${obBar(1)}<div><span class="lbl">Step 1 of 5 · Account</span><h2 style="margin-top:6px">Create your account</h2><p class="muted" style="margin-top:6px">Free. Your log stays private to you.</p></div>
+  else if (m === 'signup') box = `${S.syncFlow ? '' : obBar(1)}<div>${S.syncFlow ? '' : `<span class="lbl">Step 1 of ${OB_N} · Account</span>`}<h2 style="margin-top:6px">Create your account</h2><p class="muted" style="margin-top:6px">Free. Your log stays private to you.</p></div>
     <div class="auth-tabs"><button data-act="auth-mode" data-m="signin">Log in</button><button class="on">Register</button></div>
     <form id="f-auth" novalidate>
       <label>Email<input class="field" type="email" name="email" autocomplete="email" required></label>
@@ -628,12 +662,19 @@ function vAuth() {
   else box = `<div><h2>Welcome back</h2><p class="muted" style="margin-top:6px">Log in to pick up where you left off.</p></div>
     <div class="auth-tabs"><button class="on">Log in</button><button data-act="auth-mode" data-m="signup">Register</button></div>
     <form id="f-auth" novalidate>
-      <label>Email<input class="field" type="email" name="email" autocomplete="email" required></label>
+      <label>Email<input class="field" type="email" name="email" autocomplete="email" required value="${esc(S.syncFlow ? S.authEmail || '' : '')}"></label>
       <label>Password<input class="field" type="password" name="password" autocomplete="current-password" required></label>
       ${msgHTML}<button class="btn lg" type="submit">Log in</button>
     </form><button class="linkbtn" data-act="auth-mode" data-m="forgot" style="align-self:flex-start">Forgot password?</button>`;
   const swap = S.authSwap; S.authSwap = false;
-  return `<div class="auth"><main class="auth-main"><div class="auth-box${swap ? ' swap' : ''}"><div class="auth-logo">${lockup()}</div>${box}</div></main></div>`;
+  /* going online from offline: same forms, with what will happen spelled out and a way back */
+  const sync = S.syncFlow ? `<div class="sync-note"><b>Go online</b><span>${m === 'signup' ? 'Create an account' : 'Log in'} and everything on this phone is uploaded to ${m === 'signup' ? 'it' : 'that account'}. Nothing on the phone is removed until the upload finishes.</span></div>` : '';
+  const back = S.syncFlow ? `<button class="linkbtn" data-act="sync-cancel" style="align-self:center">Stay offline</button>` : '';
+  /* offline is for the installed app on a phone; in a phone browser, say how to get it */
+  const off = S.syncFlow || m === 'forgot' || m === 'check' ? '' : canGoLocal()
+    ? `<div class="auth-or"><span>or</span></div><button class="btn line lg auth-off" data-act="go-local-new">Use offline without an account</button><p class="muted auth-off-n">Everything stays on this phone. Create an account later to sync.</p>`
+    : coarse.matches && !standalone() ? `<p class="muted auth-off-n">Want to use Synergym without an account? Add it to your Home Screen and open it from there.</p>` : '';
+  return `<div class="auth"><main class="auth-main"><div class="auth-box${swap ? ' swap' : ''}"><div class="auth-logo">${lockup()}</div>${sync}${box}${off}${back}</div></main></div>`;
 }
 function vRecover() {
   return shell(`<h1>Set a <em>new password</em>.</h1>
@@ -641,36 +682,49 @@ function vRecover() {
 }
 const GOALS = [['strength', 'Get stronger', 'Heavier lifts, lower reps'], ['muscle', 'Build muscle', 'More volume, moderate reps'], ['fitness', 'General fitness', 'Feel good, stay consistent'], ['fat_loss', 'Lose fat', 'Keep strength while you cut']];
 const LEVELS = [['beginner', 'Beginner', 'Under a year of lifting'], ['intermediate', 'Intermediate', 'One to three years'], ['advanced', 'Advanced', 'Three years or more']];
+/* onboarding: six steps. Phones get a progress bar and Back / Continue pinned to the bottom; wider screens get a
+   side rail with every step named */
+const OB_STEPS = ['Account', 'You', 'Body', 'Goal', 'Split', 'Look'], OB_N = OB_STEPS.length;
+function obRail(step) {
+  return `<aside class="ob-rail" aria-hidden="true"><div class="ob-rail-in">${lockup()}
+    <ol class="ob-steps">${OB_STEPS.map((t, i) => `<li class="${i + 1 < step ? 'done' : i + 1 === step ? 'now' : ''}"><span class="n">${i + 1 < step ? ICON.check : i + 1}</span><span class="t">${i === 0 && S.local ? 'Offline' : t}</span></li>`).join('')}</ol>
+    <p class="ob-rail-f">Every answer can be changed later in Settings.</p></div></aside>`;
+}
 function vWizard() {
-  const o = S.ob, step = o.step, msg = S.authMsg ? `<div class="msg${S.authMsg.err ? ' err' : ''}" role="alert">${esc(S.authMsg.text)}</div>` : '';
-  const head = (t, lead) => `${obBar(step)}<div><span class="lbl">Step ${step} of 5</span><h1 style="margin-top:8px">${t}</h1>${lead ? `<p class="lead" style="margin-top:10px">${lead}</p>` : ''}</div>`;
-  const nav = (next, label = 'Continue') => `<div class="ob-nav">${step > 2 ? `<button class="btn line" data-act="ob-back">Back</button>` : '<span></span>'}<button class="btn lg" ${next}>${label}</button></div>`;
+  const o = S.ob, step = Math.min(Math.max(o.step, 2), OB_N), msg = S.authMsg ? `<div class="msg${S.authMsg.err ? ' err' : ''}" role="alert">${esc(S.authMsg.text)}</div>` : '';
+  const head = (t, lead) => `<div class="ob-head">${obBar(step)}<span class="lbl">Step ${step} of ${OB_N} · ${OB_STEPS[step - 1]}</span><h1>${t}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</div>`;
+  const nav = (next, label = 'Continue') => `<div class="ob-nav">${step > 2 ? `<button class="btn line lg" data-act="ob-back">Back</button>` : '<span></span>'}<button class="btn lg" ${next}>${label}</button></div>`;
+  const card = (k, v, on, t, d, extra = '') => `<button class="opt${on ? ' on' : ''}" data-act="ob-pick" data-k="${k}" data-v="${v}" aria-pressed="${on}"><span class="opt-t"><b>${t}</b>${extra}</span><span>${d}</span><i class="opt-c" aria-hidden="true">${ICON.check}</i></button>`;
   let body = '';
-  if (step === 2) body = head('Who’s <em>lifting</em>?', 'Your name is just for you. Your username is how other lifters share splits with you.') + `
-    <form id="f-ob2" novalidate>
+  if (step === 2) body = head('Who’s <em>lifting</em>?', S.local ? 'Your name is just for you. It’s used in your greeting.' : 'Your name is just for you. Your username is how other lifters share splits with you.') + `
+    <form id="f-ob2" class="ob-form" novalidate>
       <label>Your name<input class="field" name="name" value="${esc(o.name)}" maxlength="40" autocomplete="given-name" placeholder="e.g. Alex"></label>
-      <label>Username<input class="field" name="username" value="${esc(o.username)}" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. heavy_alex"></label>
-      <span class="muted" style="font-size:.78rem;margin-top:-6px">Lowercase letters, numbers and underscores, 3 to 20 characters.</span>
+      ${S.local ? '' : `<label>Username<input class="field" name="username" value="${esc(o.username)}" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. heavy_alex"><span class="hint">Lowercase letters, numbers and underscores, 3 to 20 characters.</span></label>`}
       ${msg}<div class="ob-nav"><span></span><button class="btn lg" type="submit">Continue</button></div></form>`;
   else if (step === 3) body = head('Your body, <em>your units</em>.', 'Bodyweight counts toward pull-ups, dips and other bodyweight moves.') + `
-    <div class="pref" style="border:0;padding:0"><span class="k">Units</span><span class="seg"><button class="${o.unit === 'kg' ? 'on' : ''}" data-act="ob-unit" data-u="kg">kg</button><button class="${o.unit === 'lb' ? 'on' : ''}" data-act="ob-unit" data-u="lb">lb</button></span></div>
-    <label style="display:grid;gap:6px;font-size:.82rem;font-weight:600;color:var(--ink-2)">Bodyweight (${o.unit})<input class="field" data-f="obbw" inputmode="decimal" value="${o.bw ? Math.round((o.unit === 'lb' ? o.bw * KG_LB : o.bw) * 10) / 10 : ''}" placeholder="${o.unit === 'lb' ? '165' : '75'}"></label>
-    <div><span class="lbl">Experience</span><div class="choice" style="margin-top:8px">${LEVELS.map(([k, t, d]) => `<button class="opt${o.exp === k ? ' on' : ''}" data-act="ob-pick" data-k="exp" data-v="${k}"><b>${t}</b><span>${d}</span></button>`).join('')}</div></div>
-    ${msg}${nav('data-act="ob-next"')}`;
+    <div class="ob-form">
+      <div class="ob-row"><span class="k">Units</span><span class="seg"><button class="${o.unit === 'kg' ? 'on' : ''}" data-act="ob-unit" data-u="kg">kg</button><button class="${o.unit === 'lb' ? 'on' : ''}" data-act="ob-unit" data-u="lb">lb</button></span></div>
+      <label>Bodyweight<span class="unitin"><input class="field" data-f="obbw" inputmode="decimal" value="${o.bw ? Math.round((o.unit === 'lb' ? o.bw * KG_LB : o.bw) * 10) / 10 : ''}" placeholder="${o.unit === 'lb' ? '165' : '75'}"><span class="lbl">${o.unit}</span></span></label>
+      <div><span class="lbl">Experience</span><div class="choice">${LEVELS.map(([k, t, d]) => card('exp', k, o.exp === k, t, d)).join('')}</div></div>
+    </div>${msg}${nav('data-act="ob-next"')}`;
   else if (step === 4) body = head('What are you <em>training for</em>?', 'This shapes the split we suggest next. You can change everything later.') + `
-    <div class="choice two">${GOALS.map(([k, t, d]) => `<button class="opt${o.goal === k ? ' on' : ''}" data-act="ob-pick" data-k="goal" data-v="${k}"><b>${t}</b><span>${d}</span></button>`).join('')}</div>
-    <div><span class="lbl">Days a week you can train</span><div class="daysel" style="margin-top:8px">${[1, 2, 3, 4, 5, 6, 7].map(n => `<button class="${o.days === n ? 'on' : ''}" data-act="ob-pick" data-k="days" data-v="${n}" aria-label="${n} days">${n}</button>`).join('')}</div>
-    <p class="muted" style="font-size:.82rem;margin-top:8px">This becomes your weekly target for the consistency score.</p></div>
-    ${msg}${nav('data-act="ob-next"')}`;
-  else {
-    const rec = recommendTemplate(o.days, o.exp);
-    const list = [rec, ...TEMPLATES.filter(t => t.id !== rec.id)];
+    <div class="ob-form">
+      <div class="choice two">${GOALS.map(([k, t, d]) => card('goal', k, o.goal === k, t, d)).join('')}</div>
+      <div><span class="lbl">Days a week you can train</span><div class="daysel">${[1, 2, 3, 4, 5, 6, 7].map(n => `<button class="${o.days === n ? 'on' : ''}" data-act="ob-pick" data-k="days" data-v="${n}" aria-label="${n} days" aria-pressed="${o.days === n}">${n}</button>`).join('')}</div>
+      <p class="hint">This becomes your weekly target for the consistency score.</p></div>
+    </div>${msg}${nav('data-act="ob-next"')}`;
+  else if (step === 5) {
+    const rec = recommendTemplate(o.days, o.exp), list = [rec, ...TEMPLATES.filter(t => t.id !== rec.id)];
+    const days = t => `<span class="tpl-days">${t.plan.map(d => (d[1] ? `<i>${esc(d[0].replace(/^Full body /, 'FB '))}</i>` : '<i class="r" title="Rest"></i>')).join('')}</span>`;
     body = head('Pick a <em>starting split</em>.', `Based on ${o.days} day${o.days === 1 ? '' : 's'} a week. It’s yours to edit in the Splits tab.`) + `
-    <div class="choice">${list.map(t => `<button class="opt${o.tpl === t.id ? ' on' : ''}" data-act="ob-pick" data-k="tpl" data-v="${t.id}"><b>${esc(t.name)}${t.id === rec.id ? ' <span class="badge acc">recommended</span>' : ''}</b><span>${esc(t.desc)}</span><span style="margin-top:6px">${t.plan.map(d => esc(d[0])).join(' · ')}</span></button>`).join('')}
-    <button class="opt${o.tpl === 'none' ? ' on' : ''}" data-act="ob-pick" data-k="tpl" data-v="none"><b>I’ll build my own</b><span>Start with an empty Splits tab</span></button></div>
-    ${msg}${nav('data-act="ob-finish"' + (o.tpl ? '' : ' disabled'), 'Finish setup')}`;
-  }
-  return `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}<div style="display:flex;gap:8px;align-items:center"><button class="linkbtn" data-act="signout">Sign out</button></div></div>${body}</div></div>`;
+    <div class="choice">${list.map(t => card('tpl', t.id, o.tpl === t.id, esc(t.name), esc(t.desc) + days(t), t.id === rec.id ? '<span class="badge acc">recommended</span>' : '')).join('')}
+    ${card('tpl', 'none', o.tpl === 'none', 'I’ll build my own', 'Start with an empty Splits tab')}</div>
+    ${msg}${nav('data-act="ob-next"' + (o.tpl ? '' : ' disabled'))}`;
+  } else body = head('Make it <em>yours</em>.', 'Pick a look. It changes right away, and you can switch any time in Settings.') + `
+    <div class="ob-themes">${themePicker('ob-theme')}</div>
+    ${msg}${nav('data-act="ob-finish"', 'Finish setup')}`;
+  const exit = S.local ? `<button class="linkbtn" data-act="leave-local">Use an account instead</button>` : `<button class="linkbtn" data-act="signout">Sign out</button>`;
+  return `<div class="ob ob-step-${step}">${obRail(step)}<div class="ob-main"><div class="ob-top">${brand()}${exit}</div><div class="ob-in">${body}</div></div></div>`;
 }
 
 function splitFromTemplate(t) {
@@ -737,9 +791,9 @@ document.addEventListener('submit', async e => {
       const name = String(fd.get('name') || '').trim().slice(0, 40);
       S.ob.name = name; S.ob.username = String(fd.get('username') || '');
       if (!name) return done('Tell us what to call you.', true);
-      if (!(await setUsername(S.ob.username))) return;
+      if (!S.local && !(await setUsername(S.ob.username))) return;
       S.profile.name = name;
-      const { error } = await sb.from('profiles').update({ display_name: name }).eq('id', S.user.id);
+      const { error } = S.local ? (queue('p', 0), { error: null }) : await sb.from('profiles').update({ display_name: name }).eq('id', S.user.id);
       if (error) return done('Couldn’t save your name. Try again.', true);
       S.authMsg = null; S.ob.step = 3; render(true);
     }
@@ -809,7 +863,7 @@ function vToday() {
       <figure class="quote"><blockquote>${esc(qt)}</blockquote><figcaption>${esc(qa)}</figcaption></figure></div>
     <div class="hero-cta">${cta}</div>
   </section>
-  ${ws.length ? `<div class="dash" id="dash">${ents.map((e, i) => wCard(e.id, e.size, spans[i])).join('')}</div>
+  ${ws.length ? `<div class="dash" id="dash">${ents.map((e, i) => wCard(e.id, phoneDash() ? 'm' : e.size, spans[i])).join('')}</div>
   <div class="dash-dots" id="dash-dots" role="tablist" aria-label="Home widgets">${ws.map((id, i) => `<button role="tab" data-act="dash-go" data-i="${i}" aria-label="${esc(WIDGETS[id].title)}"${i ? '' : ' class="on" aria-selected="true"'}></button>`).join('')}</div>`
     : `<div class="empty rv"><b>Your home screen is empty.</b>Add widgets to see your training at a glance.</div>`}
   <div class="home-edit rv"><button class="btn ghost sm" data-act="edit-home">${ICON.pen}${roll('Edit home')}</button></div>`;
@@ -1335,10 +1389,41 @@ async function loadPublic(token) {
   render(false);
 }
 async function loadRecipients(id) {
+  if (S.local) return;
   S.recipients.set(id, []);
   if (!(await flushNow('sp:' + id))) return;
   const { data, error } = await sb.rpc('split_recipients', { p_split: id });
   if (!error) { S.recipients.set(id, data || []); if (S.view === 'split' || S.view === 'splits') soft(); }
+}
+
+/* ---------- User guide ---------- */
+const guideDevice = () => S.guideDev || (coarse.matches || innerWidth < 768 ? 'phone' : 'desktop');
+function vGuide() {
+  const dev = guideDevice(), secs = guideSections(dev);
+  return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button></header>
+  <div class="guide">
+    <div class="guide-hero rv"><span class="lbl">Help</span><h1 class="h1">User guide</h1><p class="lead">Everything Synergym does, in a few short steps each.</p>
+      <div class="guide-dev"><span class="seg" role="group" aria-label="Show steps for"><button class="${dev === 'phone' ? 'on' : ''}" data-act="guide-dev" data-v="phone">Phone</button><button class="${dev === 'desktop' ? 'on' : ''}" data-act="guide-dev" data-v="desktop">Desktop</button></span>
+      <button class="btn ghost sm" data-act="tour">${roll('Replay the tour')}</button></div></div>
+    <nav class="guide-toc rv" aria-label="Topics">${secs.map(x => `<a href="#g-${x.id}" data-act="guide-jump" data-id="${x.id}"><span class="gi">${x.icon}</span>${esc(x.t)}</a>`).join('')}</nav>
+    ${secs.map((x, i) => `<details class="guide-sec rv" id="g-${x.id}"${i === 0 ? ' open' : ''}><summary><span class="gi">${x.icon}</span><span class="gt"><b>${esc(x.t)}</b><small>${esc(x.s)}</small></span><span class="chev" aria-hidden="true"></span></summary>
+      <ol class="guide-steps">${x.steps.map(st => `<li>${st}</li>`).join('')}</ol>${x.tip ? `<p class="guide-tip"><b>Tip</b>${x.tip}</p>` : ''}</details>`).join('')}
+    <p class="muted guide-foot rv">Want the maths? <button class="linkbtn" data-act="how">How the numbers work</button></p>
+  </div>`;
+}
+function openTour() {
+  const slides = tourSlides(coarse.matches || innerWidth < 768 ? 'phone' : 'desktop');
+  let i = 0;
+  const draw = body => {
+    const x = slides[i], last = i === slides.length - 1;
+    body.innerHTML = `<div class="tour" aria-live="polite"><div class="tour-art" aria-hidden="true"><span>${x.icon}</span></div>
+      <span class="lbl">${i + 1} of ${slides.length}</span><h3>${esc(x.t)}</h3><p>${esc(x.b)}</p>
+      <div class="tour-dots" aria-hidden="true">${slides.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+      <div class="btns">${last ? `<button class="btn line" id="tour-guide">Open the guide</button><button class="btn" data-act="close">Start training</button>` : `<button class="btn ghost" data-act="close">Skip</button><button class="btn" id="tour-next">Next</button>`}</div></div>`;
+    body.querySelector('#tour-next')?.addEventListener('click', () => { i++; buzz(); draw(body); });
+    body.querySelector('#tour-guide')?.addEventListener('click', () => { closeSheet(); go('guide'); });
+  };
+  openSheet('', draw);
 }
 
 /* ---------- Settings ---------- */
@@ -1351,7 +1436,7 @@ function vPrefs() {
   const who = d.name || S.profile.username || '?';
   return pageTop('Settings') + `<h1 class="h1 rv" style="margin:10px 0 4px">Settings</h1><p class="lbl autosave rv" id="autosave">${autosaveText()}</p>
   <div class="settings">
-  <section class="sg rv"><div class="sg-b me"><span class="avatar" aria-hidden="true">${esc(who.trim().charAt(0).toUpperCase())}</span><span class="me-t"><b>${esc(who)}</b><span>@${esc(S.profile.username)}${S.user.email ? ' · ' + esc(S.user.email) : ''}</span></span></div></section>
+  <section class="sg rv"><div class="sg-b me"><span class="avatar" aria-hidden="true">${esc(who.trim().charAt(0).toUpperCase())}</span><span class="me-t"><b>${esc(who)}</b><span>${S.local ? 'Offline · saved on this phone' : '@' + esc(S.profile.username) + (S.user.email ? ' · ' + esc(S.user.email) : '')}</span></span></div></section>
   ${group('Profile',
     row('Name', `<input class="field" data-f="d-name" value="${esc(d.name)}" maxlength="40" aria-label="Your name">`, 'Shown in your greeting') +
     row('Bodyweight', `<span class="unitin"><input class="field" data-f="d-bw" inputmode="decimal" value="${bwShown}" aria-label="Bodyweight"><span class="lbl">${du}</span></span>`, 'Used for bodyweight exercises'))}
@@ -1363,15 +1448,66 @@ function vPrefs() {
       row('Rest sound', `<button class="toggle${d.sound ? ' on' : ''}" data-act="d-toggle" data-k="sound" aria-pressed="${d.sound}" aria-label="Rest sound"></button>`, 'A short beep when rest ends') : ''),
     'Your weekly target drives the consistency score and streak.')}
   ${group('Appearance', `<div class="srow"><span class="k">Theme</span><span class="v">${esc((THEMES.find(t => t.id === themePref()) || THEMES[0]).name)}</span></div><div class="sg-pad">${themePicker()}</div>` + link('Home widgets', 'data-act="edit-home"', plural(homeWidgets().length, 'widget')))}
-  ${group('Account',
+  ${remGroup(row, link, group)}
+  ${S.local ? group('Account',
+    `<div class="srow"><span class="k">Offline<small class="keep">Everything is saved on this phone only</small></span><span class="off-dot" aria-hidden="true"></span></div>` +
+    link('Go online', 'data-act="go-online"', 'Sync to an account'),
+    'Going online asks you to log in or create an account, then uploads this phone’s workouts to it.')
+  : group('Account',
     link('Username', 'data-act="change-username"', '@' + esc(S.profile.username)) +
+    (canGoLocal() ? link('Use offline', 'data-act="go-offline"', 'Keep data on this phone') : '') +
     (standalone() ? '' : link('Install the app', 'data-act="install"')),
     'Your sessions, exercises and splits are private to your account. Others only see a split when you share it.')}
   ${group('Your data', link('Export JSON', 'data-act="export" data-f="json"') + link('Export CSV', 'data-act="export" data-f="csv"') + link('Import JSON', 'data-act="import"'))}
-  ${group('About', link('How the numbers work', 'data-act="how"'))}
-  <section class="sg rv"><div class="sg-b">${link('Sign out', 'data-act="signout"', '', ' center')}${link('Delete account', 'data-act="delete-account"', '', ' center danger')}</div></section>
+  ${group('Help', link('User guide', 'data-act="nav" data-v="guide"') + link('Replay the tour', 'data-act="tour"') + link('How the numbers work', 'data-act="how"'))}
+  <section class="sg rv"><div class="sg-b">${S.local ? link('Delete data on this phone', 'data-act="delete-local"', '', ' center danger') : link('Sign out', 'data-act="signout"', '', ' center') + link('Delete account', 'data-act="delete-account"', '', ' center danger')}</div></section>
   </div>`;
 }
+/* reminders: phones only; they need an account (the server sends them) and a browser that can receive push */
+const localTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
+function remGroup(row, link, group) {
+  if (!coarse.matches) return '';
+  const d = S.profile, note = t => group('Reminders', `<div class="srow"><span class="k">Workout reminders<small class="keep">${t}</small></span></div>`);
+  if (S.local) return note('Reminders need an online account. Go online below to turn them on.');
+  if (!pushSupported()) return note(isIOS() && !standalone() ? 'On iPhone, add Synergym to your Home Screen and open it from there to get reminders.' : 'This browser can’t show reminders. Try the app from your Home Screen.');
+  const blocked = Notification.permission === 'denied', on = d.reminderOn && !blocked;
+  return group('Reminders',
+    row('Workout reminders', `<button class="toggle${on ? ' on' : ''}" data-act="rem-toggle" aria-pressed="${on}" aria-label="Workout reminders"></button>`, blocked ? 'Blocked. Allow notifications for Synergym in your phone’s settings.' : 'A nudge on your training days') +
+    (on ? row('Time', `<input class="field rem-time" type="time" data-f="rem-time" value="${esc(d.reminderTime)}" aria-label="Reminder time">`) +
+      `<div class="srow rem-row"><span class="k">Days<small class="keep" id="rem-days-t">${daysText(d.reminderDays)}</small></span><span class="rem-days" role="group" aria-label="Reminder days">${DAY_LETTERS.map((l, i) => `<button class="${d.reminderDays & (1 << i) ? 'on' : ''}" data-act="rem-day" data-i="${i}" aria-pressed="${!!(d.reminderDays & (1 << i))}" aria-label="${DAY_NAMES[i]}">${l}</button>`).join('')}</span></div>` +
+      link('Send a test reminder', 'data-act="rem-test"') : ''),
+    on ? `<span id="rem-foot">At ${timeText(d.reminderTime)}, ${daysText(d.reminderDays).toLowerCase()}. Days you’ve already trained stay quiet.</span>` : '');
+}
+async function reminderOn() {
+  if (S.local) return toast('Go online to use reminders');
+  if (!pushSupported()) return toast('This browser can’t show reminders');
+  let perm = Notification.permission;
+  if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; } }
+  if (perm !== 'granted') { render(false); return toast('Notifications are blocked. Allow them for Synergym in your phone’s settings.'); }
+  try {
+    const sub = await pushSubscribe();
+    const { error } = await sb.rpc('save_push_subscription', { p_endpoint: sub.endpoint, p_p256dh: sub.keys.p256dh, p_auth: sub.keys.auth });
+    if (error) throw error;
+  } catch (e) { console.error(e); return toast(e && /worker/.test(e.message || '') ? e.message : 'Couldn’t turn on reminders. Check your connection and try again.'); }
+  S.profile.reminderOn = true; S.profile.tz = localTz(); queue('p', 0); buzz(); render(false);
+  toast(`Reminders on · ${timeText(S.profile.reminderTime)}`);
+}
+/* stop reminders on this device (and for the account, which uses one device at a time) */
+async function reminderOff() {
+  const ep = await pushUnsubscribe().catch(() => null);
+  if (S.local || !S.user || !sb) return;
+  if (ep) await sb.from('push_subscriptions').delete().eq('endpoint', ep).then(() => {}, () => {});
+  if (S.profile.reminderOn) { S.profile.reminderOn = false; queue('p', 0); await flushNow('p'); }
+}
+async function reminderTest() {
+  const { data } = await sb.auth.getSession(), t = data.session && data.session.access_token;
+  if (!t) return toast('Log in again to send a test');
+  try {
+    const r = await fetch('/api/reminders', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true }) });
+    toast(r.ok ? 'Test sent. It should arrive in a few seconds.' : r.status === 404 ? 'This phone isn’t registered. Turn reminders off and on again.' : 'Couldn’t send a test right now.');
+  } catch { toast('Couldn’t reach the server'); }
+}
+
 const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
@@ -1733,6 +1869,7 @@ function dexMenu(di, xi) {
   menuSheet(x.name, items);
 }
 async function shareSheet(id) {
+  if (S.local) return toast('Go online to share splits. Settings › Go online.');
   const sp = S.splits.get(id); if (!sp) return;
   const draw = () => {
     const rec = S.recipients.get(id) || [], link = sp.shareToken ? `${location.origin}/s/${sp.shareToken}` : '';
@@ -1791,7 +1928,7 @@ $('#imp').addEventListener('change', async e => {
   const now = [plural(S.sessions.size, 'session'), plural(S.library.length, 'exercise'), plural(S.splits.size, 'split')];
   const incoming = [plural(d.sessions.length, 'session'), plural(d.library.length, 'exercise'), plural(d.splits.length, 'split')];
   openSheet(`<div class="sh-h"><h3>Replace all your data?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
-  <div class="imp-warn"><b>This overwrites everything in your account.</b> Your current ${now.join(', ')} will be permanently deleted and replaced by the file. This can’t be undone.</div>
+  <div class="imp-warn"><b>This overwrites everything ${S.local ? 'on this phone' : 'in your account'}.</b> Your current ${now.join(', ')} will be permanently deleted and replaced by the file. This can’t be undone.</div>
   <p class="muted" style="margin-top:12px">The file${d.exportedAt ? ` from ${esc(fmtDate(d.exportedAt))}` : ''} has ${incoming.join(', ')}. Your username and login stay the same. Splits you had shared by link stop working.</p>
   <div class="btns" style="flex-wrap:wrap"><button class="btn line" id="imp-backup" style="margin-right:auto">Export current data first</button><button class="btn ghost" data-act="close">Cancel</button><button class="btn danger" id="imp-go">Replace my data</button></div>`, r => {
     r.querySelector('#imp-backup').onclick = () => { exportData('json'); toast('Saved a copy of your current data'); };
@@ -1799,6 +1936,15 @@ $('#imp').addEventListener('change', async e => {
       const btn = ev.currentTarget; btn.disabled = true; btn.textContent = 'Replacing…';
       flushAll(); for (const end = Date.now() + 8000; (OB.pending.size || OB.inflight.size) && Date.now() < end;) await sleep(150);
       if (OB.pending.size || OB.inflight.size) { btn.disabled = false; btn.textContent = 'Replace my data'; return toast('Some changes are still saving. Connect and try again.'); }
+      if (S.local) {
+        /* offline: replace what's on the phone, and remember every change so going online uploads it */
+        const keys = [...S.sessions.keys()].map(k => 's:' + k).concat(S.library.map(e => 'x:' + e.id), [...S.splits.keys()].map(k => 'sp:' + k), d.sessions.map(x => 's:' + x.id), d.library.map(x => 'x:' + x.id), d.splits.map(x => 'sp:' + x.id), ['p']);
+        const prof = d.profile ? { ...d.profile, username: S.profile.username, onboarded: true, name: d.profile.name || S.profile.name } : S.profile;
+        try { await ldb.replaceAll({ profile: clone(prof), exercises: clone(d.library), sessions: clone(d.sessions), splits: clone(d.splits), dirty: [...new Set([...LDIRTY, ...keys])] }); }
+        catch { btn.disabled = false; btn.textContent = 'Replace my data'; return toast('Import failed. Nothing was changed.'); }
+        closeSheet(); await loadLocal(); if (S.profile.theme) applyTheme(S.profile.theme);
+        render(false); return toast(`Imported ${incoming.join(', ')}`);
+      }
       const payload = { library: d.library.map(exToDb), sessions: d.sessions.map(sessToDb), splits: d.splits.map(splitToDb), profile: d.profile ? (({ onboarded, ...rest }) => rest)(profToDb(d.profile)) : null };
       const { error } = await sb.rpc('import_replace', { p: payload });
       if (error) { console.error(error); btn.disabled = false; btn.textContent = 'Replace my data'; return toast('Import failed. Nothing was changed.'); }
@@ -1812,13 +1958,17 @@ $('#imp').addEventListener('change', async e => {
 
 /* ================= account ================= */
 async function signOut() {
+  if (S.local) return toast('You’re using Synergym offline. Go online in Settings to use an account.');
   flushAll(); const t0 = Date.now();
   while ((OB.pending.size || OB.inflight.size) && Date.now() - t0 < 5000) await sleep(150);
   if (OB.pending.size && !confirmLeave) { confirmLeave = true; return toast('Some changes haven’t saved yet. They’ll sync when you sign back in. Tap Sign out again to leave.'); }
-  confirmLeave = false; await sb.auth.signOut();
+  confirmLeave = false;
+  const ep = await pushUnsubscribe().catch(() => null); if (ep) await sb.from('push_subscriptions').delete().eq('endpoint', ep).then(() => {}, () => {});
+  await sb.auth.signOut();
 }
 let confirmLeave = false;
 function deleteAccount() {
+  if (S.local) return deleteLocalSheet();
   openSheet(`<div class="sh-h"><h3>Delete your account?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
   <p class="muted">This permanently deletes your sessions, exercises, splits and shares. Export your data first if you want a copy. Type DELETE to confirm.</p>
   <div class="form" style="margin-top:14px"><input class="field" id="del-c" autocomplete="off" placeholder="DELETE"></div>
@@ -1830,8 +1980,9 @@ function deleteAccount() {
     };
   });
 }
-function changeUsername() {
-  openSheet(`<div class="sh-h"><h3>Change username</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+function changeUsername(intro = false) {
+  if (S.local) return toast('Go online to pick a username');
+  openSheet(`<div class="sh-h"><h3>${intro ? 'Pick a username' : 'Change username'}</h3><button class="btn ghost sm" data-act="close">${intro ? 'Later' : 'Close'}</button></div>${intro ? '<p class="muted" style="margin-bottom:12px">You’re online. A username lets other lifters share splits with you. You can do this later in Settings.</p>' : ''}
   <div class="form"><label>New username<input class="field" id="un" value="${esc(S.profile.username)}" autocapitalize="none" spellcheck="false" maxlength="20"></label><p class="muted" style="font-size:12px">Splits already shared with you stay. People will need the new name to share with you.</p></div>
   <div class="btns"><button class="btn" id="un-save">Save</button></div>`, r => {
     r.querySelector('#un-save').onclick = async () => { if (await setUsername(r.querySelector('#un').value)) { closeSheet(); render(false); toast('Username updated'); } };
@@ -1843,7 +1994,19 @@ const ACT = {
   nav: el => go(el.dataset.v),
   'auth-mode': el => { S.authMode = el.dataset.m; S.authMsg = null; S.authSwap = true; render(false); },
   signout: signOut,
-  'retry-load': () => startApp(),
+  'retry-load': () => S.local ? startLocal() : startApp(),
+  tour: () => openTour(),
+  'rem-toggle': () => S.profile.reminderOn && Notification.permission !== 'denied' ? reminderOff().then(() => { render(false); toast('Reminders off'); }) : reminderOn(),
+  'rem-day': el => { const m = S.profile.reminderDays ^ (1 << +el.dataset.i); if (!(m & 127)) return toast('Keep at least one day'); S.profile.reminderDays = m; queue('p', 500); buzz(); render(false); },
+  'rem-test': () => reminderTest(),
+  'guide-dev': el => { S.guideDev = el.dataset.v; render(false); },
+  'guide-jump': el => { const d = $('#g-' + el.dataset.id); if (!d) return; d.open = true; d.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); },
+  'go-local-new': () => startOfflineNew(),
+  'go-offline': () => goOfflineSheet(),
+  'go-online': () => goOnline(),
+  'sync-cancel': () => { S.syncFlow = false; S.authMsg = null; try { sb.auth.stopAutoRefresh(); } catch {} render(true); },
+  'leave-local': () => confirmSheet('Use an account instead?', 'This removes the offline profile on this phone. You can create an account or log in next.', 'Continue', () => leaveLocal()),
+  'delete-local': () => deleteLocalSheet(),
   start: startSession,
   'start-menu': startMenu,
   'start-day': el => startFromSplit(el.dataset.sp, +el.dataset.day),
@@ -1862,7 +2025,7 @@ const ACT = {
   'toggle-arch': () => { S.showArchived = !S.showArchived; $('#exlist').innerHTML = exList(); },
   'lib-menu': () => menuSheet('Exercise list', [
     { label: 'Edit muscle groups', hint: 'add, rename, remove', fn: editMuscles },
-    { label: 'Restore default list', hint: 'adds back removed defaults', fn: async () => { const { data, error } = await sb.rpc('restore_default_exercises'); if (error) return toast('Couldn’t restore. Try again.'); await reloadLibrary(); toast(data ? `Restored ${plural(data, 'exercise')}` : 'Your default list is complete'); } },
+    { label: 'Restore default list', hint: 'adds back removed defaults', fn: async () => { if (S.local) return restoreDefaultsLocal(); const { data, error } = await sb.rpc('restore_default_exercises'); if (error) return toast('Couldn’t restore. Try again.'); await reloadLibrary(); toast(data ? `Restored ${plural(data, 'exercise')}` : 'Your default list is complete'); } },
     { label: S.showArchived ? 'Hide removed exercises' : 'Show removed exercises', fn: () => { S.showArchived = !S.showArchived; render(false); } }
   ]),
   'pk-m': el => { S.pk.m = el.dataset.m; pickerList(); },
@@ -1946,22 +2109,25 @@ const ACT = {
   'd-toggle': el => { const k = el.dataset.k; S.profile[k] = !S.profile[k]; queue('p', 300); render(false); },
   resend: async () => { if (!S.pendingEmail) return; const { error } = await sb.auth.resend({ type: 'signup', email: S.pendingEmail, options: { emailRedirectTo: location.origin } }); S.authMsg = error ? { text: authErr(error), err: true } : { text: 'Sent again. It can take a minute to arrive.', err: false }; render(false); },
   'ob-unit': el => { S.ob.unit = S.profile.unit = el.dataset.u; render(false); },
-  'ob-pick': el => { const k = el.dataset.k, v = el.dataset.v; S.ob[k] = k === 'days' ? +v : v; S.authMsg = null; render(false); },
+  'ob-pick': el => { const k = el.dataset.k, v = el.dataset.v; S.ob[k] = k === 'days' ? +v : v; S.authMsg = null; buzz(); render(false); },
+  'ob-theme': el => { S.ob.theme = el.dataset.t; applyTheme(el.dataset.t); buzz(); render(false); },
   'ob-back': () => { S.ob.step = Math.max(2, S.ob.step - 1); S.authMsg = null; render(true); },
   'ob-next': () => {
     const o = S.ob, bad = t => { S.authMsg = { text: t, err: true }; render(false); };
     if (o.step === 3) { if (!(o.bw >= 30 && o.bw <= 300)) return bad('Enter your bodyweight so bodyweight exercises are scored correctly.'); if (!o.exp) return bad('Pick your experience level.'); }
     if (o.step === 4) { if (!o.goal) return bad('Pick a goal.'); o.tpl = o.tpl || recommendTemplate(o.days, o.exp).id; }
-    S.authMsg = null; o.step++; render(true);
+    if (o.step === 5 && !o.tpl) return bad('Pick a split, or choose to build your own.');
+    S.authMsg = null; o.step = Math.min(OB_N, o.step + 1); render(true);
   },
   'ob-finish': async el => {
     const o = S.ob, p = S.profile; el.disabled = true;
-    Object.assign(p, { unit: o.unit, bw: o.bw, bwLog: logBw(p.bwLog, o.bw), exp: o.exp, goal: o.goal, target: o.days, onboarded: true });
-    const { error } = await sb.from('profiles').update(profToDb(p)).eq('id', S.user.id);
+    const th = o.theme || themePref();
+    Object.assign(p, { unit: o.unit, bw: o.bw, bwLog: logBw(p.bwLog, o.bw), exp: o.exp, goal: o.goal, target: o.days, theme: th === 'auto' ? null : th, onboarded: true });
+    const { error } = S.local ? (queue('p', 0), { error: null }) : await sb.from('profiles').update(profToDb(p)).eq('id', S.user.id);
     if (error) { p.onboarded = false; el.disabled = false; S.authMsg = { text: 'Couldn’t finish setup. Check your connection and try again.', err: true }; return render(false); }
     if (o.tpl && o.tpl !== 'none') splitFromTemplate(TEMPLATES.find(t => t.id === o.tpl));
     S.authMsg = null; const t = pendingPublic();
-    if (t) go('public', t, { replace: true }); else go('today', null, { replace: true });
+    if (t) go('public', t, { replace: true }); else { go('today', null, { replace: true }); setTimeout(() => openTour(), 700); }
     toast(`Welcome to Synergym${p.name ? ', ' + p.name : ''}`);
   }
 };
@@ -1986,6 +2152,7 @@ document.addEventListener('input', e => {
     case 'notes': if (s) { s.notes = el.value.slice(0, 4000); queue('s:' + s.id, 1200); } break;
     case 'q': S.q = el.value; $('#hlist').innerHTML = historyList(); break;
     case 'exq': S.exq = el.value; $('#exlist').innerHTML = exList(); break;
+    case 'rem-time': if (/^\d{2}:\d{2}$/.test(el.value)) { S.profile.reminderTime = el.value; queue('p', 800); const f = $('#rem-foot'); if (f) f.textContent = `At ${timeText(el.value)}, ${daysText(S.profile.reminderDays).toLowerCase()}. Days you’ve already trained stay quiet.`; } break;
     case 'd-bw': { const v = parseFloat(el.value.replace(',', '.')), kg = unit() === 'lb' ? v / KG_LB : v; const ok = isFinite(kg) && kg >= 30 && kg <= 300; el.classList.toggle('bad', !ok && el.value.trim() !== ''); if (ok) { S.profile.bw = kg; S.profile.bwLog = logBw(S.profile.bwLog, kg); queue('p', 900); } break; }
     case 'pw': { const v = el.value; let sc = 0; if (v.length >= 8) sc++; if (v.length >= 12) sc++; if (/[a-z]/.test(v) && /[A-Z]/.test(v)) sc++; if (/\d/.test(v)) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
       const m = $('#pwm'), t = $('#pwt'); if (m) { m.style.width = (sc * 20) + '%'; m.style.background = sc <= 1 ? 'var(--bad)' : sc <= 3 ? 'var(--accent)' : 'var(--good)'; }
@@ -2044,14 +2211,14 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = 
 const DEV = { sid: null, t: 0, busy: false };
 const jwtSid = s => { try { return JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).session_id || null; } catch { return null; } };
 async function claimDevice() {
-  if (!sb || !S.user || !DEV.sid) return;
+  if (!sb || !S.user || S.local || !DEV.sid) return;
   const { error } = await sb.from('profiles').update({ active_session: DEV.sid }).eq('id', S.user.id);
   if (error) return console.error('Device claim failed', error);
   S.profile.activeSession = DEV.sid;
   sb.auth.signOut({ scope: 'others' }).catch(() => {});
 }
 async function checkDevice(known) {
-  if (!sb || !S.user || !S.loaded || !DEV.sid || DEV.busy || S.recover) return;
+  if (!sb || !S.user || S.local || S.syncing || !S.loaded || !DEV.sid || DEV.busy || S.recover) return;
   let a = known;
   if (a === undefined) {
     if (Date.now() - DEV.t < 20000) return; DEV.t = Date.now();
@@ -2091,6 +2258,208 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 addEventListener('focus', checkUpdate);
 setInterval(checkUpdate, 10 * 60 * 1000);
 
+/* ================= offline mode (mobile home-screen app) =================
+   An offline account keeps everything in IndexedDB on the phone and never talks to the server.
+   - New users can start offline from the login screen, with no account.
+   - Online users can switch to offline in Settings; their data is copied to the phone.
+   - Going online (Settings) logs in or creates an account, merges this phone's data into it (lib/sync.js)
+     and uploads it. The phone's copy is only cleared once the upload has finished, so a dropped connection
+     or a closed app mid-way leaves everything on the phone and the next attempt picks up again.
+   The mode lives in localStorage ('sg-mode') so it is known before anything loads. */
+const MODE_KEY = 'sg-mode';
+const readMode = () => { try { const m = JSON.parse(localStorage.getItem(MODE_KEY) || 'null'); return m && (m.mode === 'local' || m.mode === 'syncing') ? m : null; } catch { return null; } };
+const writeMode = m => { try { m ? localStorage.setItem(MODE_KEY, JSON.stringify(m)) : localStorage.removeItem(MODE_KEY); } catch {} };
+/* only where data on the device is safe from the browser clearing it: an installed app on a phone */
+const canGoLocal = () => standalone() && coarse.matches;
+const LOCAL_USER = { id: 'local', email: null, local: true };
+/* keys changed on the phone since it went offline: these are what going online uploads */
+const LDIRTY = new Set();
+const SYNC_FAILED = [];
+
+async function runLocal(key) {
+  const [t, id] = splitKey(key);
+  try {
+    if (t === 's') { const x = S.sessions.get(id); x ? await ldb.put('sessions', clone(x)) : await ldb.del('sessions', id); }
+    else if (t === 'x') { const x = S.library.find(e => e.id === id); x ? await ldb.put('exercises', clone(x)) : await ldb.del('exercises', id); }
+    else if (t === 'sp') { const x = S.splits.get(id); x ? await ldb.put('splits', clone(x)) : await ldb.del('splits', id); }
+    else if (t === 'p') await ldb.kvSet('profile', clone(S.profile));
+    else return { error: null };
+    if (!LDIRTY.has(key)) { LDIRTY.add(key); await ldb.kvSet('dirty', [...LDIRTY]); }
+    return { error: null };
+  } catch (e) { return { error: { message: (e && e.message) || 'Couldn’t save on this phone', code: 'LOCAL' } }; }
+}
+async function loadLocal() {
+  const d = await ldb.loadAllLocal();
+  S.profile = { ...DEFAULT_PROFILE, ...(d.profile || {}) };
+  S.library = d.exercises.filter(e => e && e.id && e.name).map(e => ({ id: e.id, name: String(e.name).slice(0, 60), muscle: e.muscle || 'Full body', kind: e.kind === 'bw' ? 'bw' : 'w', archived: !!e.archived, isDefault: !!e.isDefault, oneRm: num(e.oneRm), oneRmAt: num(e.oneRmAt) }));
+  S.sessions = new Map(d.sessions.map(cleanSession).filter(Boolean).map(x => [x.id, x]));
+  S.splits = new Map(d.splits.filter(x => x && x.id).map(x => [x.id, { ...x, days: cleanDays(x.days) }]));
+  S.shared = []; S.lastFetch = Date.now();
+  LDIRTY.clear(); for (const k of d.dirty) LDIRTY.add(k);
+}
+/* what both kinds of start do once the data is in memory */
+function afterLoad() {
+  S.loaded = true; flushAll();
+  if (S.profile.theme) applyTheme(S.profile.theme);
+  const p = S.profile;
+  if (!S.local && p.reminderOn && localTz() && p.tz !== localTz()) { p.tz = localTz(); queue('p', 3000); }
+  S.ob = { step: (S.local ? p.name : p.username) ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null, theme: themePref() };
+}
+async function startLocal() {
+  S.local = true; S.user = LOCAL_USER; S.authReady = true; S.loaded = false; S.loadError = null; S.syncFlow = false;
+  try { sb && sb.auth.stopAutoRefresh(); } catch {}
+  render(false);
+  try { await loadLocal(); }
+  catch (e) { console.error(e); S.loadError = 'Couldn’t open the data on this phone. Close the app fully and open it again.'; return render(true); }
+  restoreOutbox(); afterLoad();
+  route(true);
+}
+/* a brand-new offline account: the starter exercise list, then onboarding */
+async function startOfflineNew() {
+  if (!canGoLocal()) return toast('Offline use needs the app on your Home Screen');
+  if (!(await ldb.localSupported())) return toast('This phone won’t let the app keep data. Create an account instead.');
+  try { await navigator.storage?.persist?.(); } catch {}
+  const exercises = DEFAULT_EXERCISES.map(([name, muscle, kind]) => ({ id: uuid(), name, muscle, kind, archived: false, isDefault: true, oneRm: null, oneRmAt: null }));
+  try { await ldb.replaceAll({ profile: { ...DEFAULT_PROFILE, theme: themePref() === 'auto' ? null : themePref() }, exercises, sessions: [], splits: [], dirty: [] }); }
+  catch { return toast('Couldn’t set up storage on this phone. Try again.'); }
+  writeMode({ mode: 'local', linked: null, since: Date.now() });
+  S.authMsg = null; await startLocal(); buzz();
+}
+/* online → offline: copy everything to the phone; anything not yet uploaded goes with it */
+function goOfflineSheet() {
+  if (!canGoLocal()) return toast('Offline use is for the app on your phone’s Home Screen');
+  openSheet(`<div class="sh-h"><h3>Use Synergym offline?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="off-pts"><p><b>Everything stays on this phone.</b> Your sessions, exercises, splits and settings are copied here, and new workouts are saved here only.</p>
+  <p><b>Nothing syncs until you go online.</b> Then you log in, and this phone’s changes are uploaded to your account.</p>
+  <p><b>Some things wait for online:</b> sharing splits, reminders and changing your username.</p></div>
+  <div class="btns"><button class="btn ghost" data-act="close">Cancel</button><button class="btn" id="off-go">Go offline</button></div>`, r => {
+    r.querySelector('#off-go').onclick = async ev => {
+      const b = ev.currentTarget; b.disabled = true; b.textContent = 'Copying…';
+      if (!(await ldb.localSupported())) { b.disabled = false; b.textContent = 'Go offline'; return toast('This phone won’t let the app keep data, so offline use isn’t available.'); }
+      try { await navigator.storage?.persist?.(); } catch {}
+      flushAll(); for (const end = Date.now() + 6000; (OB.pending.size || OB.inflight.size) && navigator.onLine && Date.now() < end;) await sleep(150);
+      const carry = [...OB.pending, ...OB.inflight], linked = { id: S.user.id, email: S.user.email || null }, oldKey = obKey();
+      await reminderOff().catch(() => {});
+      try { await ldb.replaceAll({ profile: clone(S.profile), exercises: clone(S.library), sessions: clone([...S.sessions.values()]), splits: clone([...S.splits.values()]), dirty: carry }); }
+      catch { b.disabled = false; b.textContent = 'Go offline'; return toast('Couldn’t copy your data to this phone. Nothing changed.'); }
+      for (const t of OB.timers.values()) clearTimeout(t); OB.timers.clear(); OB.pending.clear(); OB.failing = false;
+      try { localStorage.removeItem(oldKey); } catch {}
+      writeMode({ mode: 'local', linked, since: Date.now() });
+      LDIRTY.clear(); for (const k of carry) LDIRTY.add(k);
+      S.local = true; S.user = LOCAL_USER; try { sb.auth.stopAutoRefresh(); } catch {}
+      closeSheet(); render(false); syncUI(); buzz(); toast('You’re offline. Everything is saved on this phone.');
+    };
+  });
+}
+/* offline → online: log in or register (or reuse the session this phone still has), then merge and upload */
+async function goOnline() {
+  if (!navigator.onLine) return toast('You’re not connected. Connect to the internet, then try again.');
+  await drainOutbox(5000);
+  const m = readMode() || {};
+  if (m.linked && sb) {
+    try {
+      const { data } = await sb.auth.getSession();
+      if (data.session && data.session.user.id === m.linked.id) {
+        const r = await sb.auth.refreshSession();
+        if (!r.error && r.data.session) return syncUp(r.data.session.user);
+      }
+    } catch {}
+  }
+  S.syncFlow = true; S.authMode = m.linked ? 'signin' : 'signup'; S.authEmail = m.linked?.email || ''; S.authMsg = null;
+  try { sb.auth.startAutoRefresh(); } catch {}
+  render(true); scrollTo(0, 0);
+}
+async function drainOutbox(ms) { flushAll(); for (const end = Date.now() + ms; (OB.pending.size || OB.inflight.size) && Date.now() < end;) await sleep(100); return !OB.pending.size && !OB.inflight.size; }
+function syncSheet(text) {
+  if ($('#sheet').hidden || !$('#sync-t')) openSheet(`<div class="sync-box"><div class="sync-ring" aria-hidden="true"></div><h3>Going online</h3><p class="muted" id="sync-t"></p></div>`);
+  const t = $('#sync-t'); if (t) t.textContent = text;
+}
+async function syncUp(u) {
+  if (S.syncing) return; S.syncing = true; S.syncFlow = false;
+  const m = readMode() || { mode: 'local', linked: null };
+  const fresh = !m.linked || m.linked.id !== u.id;
+  writeMode({ ...m, mode: 'syncing', target: u.id });
+  syncSheet('Saving what’s on this phone…');
+  try {
+    if (!S.loaded || !S.local) { S.local = true; S.user = LOCAL_USER; await loadLocal(); }
+    if (!(await drainOutbox(8000))) throw new Error('local-writes');
+    const local = { profile: clone(S.profile), library: clone(S.library), sessions: clone([...S.sessions.values()]), splits: clone([...S.splits.values()]), dirty: new Set(LDIRTY) };
+    /* from here every save goes to the account */
+    S.local = false; S.user = u; DEV.sid = null;
+    try { const { data } = await sb.auth.getSession(); if (data.session) DEV.sid = jwtSid(data.session); } catch {}
+    syncSheet('Checking your account…');
+    let pr = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle(); if (pr.error) throw pr.error;
+    if (!pr.data) { pr = await sb.from('profiles').insert({ id: u.id }).select().single(); if (pr.error) throw pr.error; await sb.rpc('restore_default_exercises'); }
+    const serverLib = (await fetchAll(() => sb.from('exercises').select('*').order('name'))).map(exFromDb);
+    const plan = planSync(local, serverLib, { fresh });
+    const server = profFromDb(pr.data);
+    S.library = plan.library; S.sessions = new Map(plan.sessions.map(x => [x.id, x])); S.splits = new Map(plan.splits.map(x => [x.id, x]));
+    S.profile = { ...plan.profile, username: server.username, activeSession: server.activeSession, onboarded: plan.profile.onboarded || server.onboarded };
+    const n = plan.upload.size;
+    SYNC_FAILED.length = 0;
+    for (const k of plan.upload) { OB.pending.add(k); }
+    persistOutbox(); flushAll();
+    /* give up (keeping everything on the phone) if a record is rejected, the connection drops, or the server
+       keeps failing for 15 seconds */
+    let failSince = 0;
+    for (const end = Date.now() + 180000; OB.pending.size || OB.inflight.size;) {
+      syncSheet(`Uploading ${Math.max(0, n - OB.pending.size - OB.inflight.size)} of ${n}…`);
+      if (SYNC_FAILED.length) throw new Error('Rejected: ' + SYNC_FAILED.join(', '));
+      if (OB.failing) { failSince = failSince || Date.now(); if (!navigator.onLine || Date.now() - failSince > 15000) throw new Error('upload'); } else failSince = 0;
+      if (Date.now() > end) throw new Error('timeout');
+      await sleep(250);
+    }
+    if (SYNC_FAILED.length) throw new Error('Rejected: ' + SYNC_FAILED.join(', '));
+    syncSheet('Almost done…');
+    await loadAll();
+    await ldb.clearLocal(); writeMode(null); LDIRTY.clear();
+    S.loaded = true; S.syncing = false; claimDevice();
+    closeSheet(); go('today', null, { replace: true });
+    const ns = [...plan.upload].filter(k => k.startsWith('s:')).length;
+    toast(ns ? `You’re online. ${plural(ns, 'session')} synced.` : 'You’re online. Everything is in sync.');
+    if (!S.profile.username) setTimeout(() => changeUsername(true), 900);
+  } catch (e) {
+    console.error(e); reportError('Go online failed: ' + (e && e.message), e && e.stack);
+    for (const t of OB.timers.values()) clearTimeout(t); OB.timers.clear(); OB.pending.clear(); OB.failing = false;
+    try { if (S.user && !S.user.local) localStorage.removeItem('sg-outbox-' + S.user.id); } catch {}
+    writeMode({ ...m, mode: 'local' });
+    S.syncing = false; closeSheet();
+    await startLocal();
+    toast('Couldn’t finish going online. Everything is still on this phone. Try again with a steady connection.');
+  } finally { S.syncing = false; }
+}
+/* restore missing starter exercises on the phone */
+function restoreDefaultsLocal() {
+  let n = 0;
+  for (const [name, muscle, kind] of DEFAULT_EXERCISES) {
+    const e = S.library.find(x => x.name.toLowerCase() === name.toLowerCase());
+    if (!e) { const x = { id: uuid(), name, muscle, kind, archived: false, isDefault: true, oneRm: null, oneRmAt: null }; S.library.push(x); queue('x:' + x.id, 0); n++; }
+    else if (e.archived && e.isDefault) { e.archived = false; queue('x:' + e.id, 0); n++; }
+  }
+  render(false); toast(n ? `Restored ${plural(n, 'exercise')}` : 'Your default list is complete');
+}
+function deleteLocalSheet() {
+  openSheet(`<div class="sh-h"><h3>Delete the data on this phone?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <p class="muted">This permanently deletes every session, exercise, split and setting stored on this phone. ${readMode()?.linked ? 'Your online account keeps what it had before you went offline.' : 'You have no online account, so nothing else has a copy.'} Export first if you want one. Type DELETE to confirm.</p>
+  <div class="form" style="margin-top:14px"><input class="field" id="del-c" autocomplete="off" placeholder="DELETE"></div>
+  <div class="btns"><button class="btn line" data-act="export" data-f="json" style="margin-right:auto">Export first</button><button class="btn danger" id="del-go">Delete</button></div>`, r => {
+    r.querySelector('#del-go').onclick = async () => {
+      if (r.querySelector('#del-c').value.trim() !== 'DELETE') return toast('Type DELETE to confirm');
+      await leaveLocal(); toast('Deleted from this phone');
+    };
+  });
+}
+/* forget the offline account and go back to the login screen */
+async function leaveLocal() {
+  for (const t of OB.timers.values()) clearTimeout(t); OB.timers.clear(); OB.pending.clear(); OB.failing = false;
+  try { localStorage.removeItem('sg-outbox-local'); } catch {}
+  try { await ldb.clearLocal(); } catch {}
+  writeMode(null); LDIRTY.clear(); closeSheet();
+  resetState(); S.local = false; S.syncFlow = false; S.authMode = 'signin'; S.authMsg = null;
+  try { sb && sb.auth.startAutoRefresh(); } catch {}
+  go('today', null, { replace: true });
+}
+
 /* ================= boot ================= */
 function resetState() {
   Object.assign(S, { user: null, loaded: false, loadError: null, profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(), rest: null, link: null, q: '', exq: '', exm: '' });
@@ -2101,27 +2470,38 @@ async function startApp() {
   restoreOutbox();
   try { await loadAll(); }
   catch (e) { console.error(e); S.loadError = navigator.onLine ? (e.message || 'The server didn’t respond.') : 'You’re offline. Connect and try again.'; return render(true); }
-  S.loaded = true; flushAll();
+  afterLoad();
   if (S.claim) { S.claim = false; claimDevice(); } else checkDevice(S.profile.activeSession);
-  if (S.profile.theme) applyTheme(S.profile.theme);
-  const p = S.profile;
-  S.ob = { step: p.username ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null };
   const t = S.profile.onboarded && pendingPublic();
   if (t) return go('public', t, { replace: true });
   route(true);
 }
 function boot() {
   setSplashHooks({ render, playEnter });
+  /* the service worker lets the app open without a connection and receives reminders */
+  if ('serviceWorker' in navigator && import.meta.env.PROD) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').then(r => { if (r && r.active) r.active.postMessage('refresh-shell'); }).catch(() => {}));
   document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
-  route(true);
+  const mode = readMode();
+  /* phones get a quick splash each time the app opens */
+  if (coarse.matches && !reduced) quickIn();
+  if (mode && mode.mode === 'local') startLocal(); else route(true);
+  if (mode && mode.mode === 'syncing') S.pendingSync = mode;
   if (!sb) return;
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') { S.recover = true; S.authMsg = null; render(false); }
     const u = session?.user || null;
     if (session) DEV.sid = jwtSid(session);
     setTimeout(() => {
+      /* offline: the account is ignored, except when going online (or finishing an interrupted go-online) */
+      if (S.pendingSync) {
+        const m = S.pendingSync; S.pendingSync = null;
+        if (u && u.id === m.target) { S.authReady = true; S.local = true; S.user = LOCAL_USER; syncUp(u); }
+        else { writeMode({ ...m, mode: 'local' }); startLocal().then(() => toast('Log in again in Settings › Go online to finish syncing.')); }
+        return;
+      }
+      if (S.local || S.syncing) { if (S.syncFlow && u && event === 'SIGNED_IN') syncUp(u); return; }
       /* the splash plays for a sign-in from the login page, not when a reload restores the session */
       const first = !S.authReady; S.authReady = true;
       if (u && (!S.user || S.user.id !== u.id)) { const fresh = event === 'SIGNED_IN' && !first; if (fresh) splashIn(); resetState(); S.user = u; S.claim = fresh; startApp(); }

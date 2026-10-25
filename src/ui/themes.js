@@ -26,7 +26,7 @@ export function applyTheme(t) {
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   for (const m of $$('meta[name="theme-color"]')) m.content = bg || (isDark() ? '#050505' : '#EDEDED');
 }
-export const themePicker = () => `<div class="themes">${THEMES.map(t => `<button class="theme-card${themePref() === t.id ? ' on' : ''}" data-act="d-theme" data-t="${t.id}" aria-pressed="${themePref() === t.id}">
+export const themePicker = (act = 'd-theme') => `<div class="themes">${THEMES.map(t => `<button class="theme-card${themePref() === t.id ? ' on' : ''}" data-act="${act}" data-t="${t.id}" aria-pressed="${themePref() === t.id}">
   <span class="tp" style="background:${t.c[0]}"><b style="background:${t.c[4]}"></b><em style="background:${t.c[1]}"></em><i style="background:${t.c[2]}"></i><u style="background:${t.c[3]}"></u></span>
   <span>${t.name}<small>${t.note}</small></span></button>`).join('')}</div>`;
 export const themeBtn = () => `<button class="theme-btn" data-act="theme-flip" aria-label="Switch to ${isDark() ? 'light' : 'dark'} mode" title="Switch to ${isDark() ? 'light' : 'dark'} mode">${isDark() ? ICON.sun : ICON.moon}</button>`;

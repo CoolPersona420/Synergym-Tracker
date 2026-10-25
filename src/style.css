@@ -1284,3 +1284,183 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 .bw-list{display:flex;flex-direction:column}
 .bw-e{display:flex;align-items:center;gap:var(--s-1);padding:6px 0;border-top:1px solid var(--line)}
 .bw-e span{flex:1}.bw-e b{font-variant-numeric:tabular-nums}
+
+/* ---------- onboarding: progress, pinned actions on phones, a step rail on wider screens ---------- */
+.ob{min-height:100vh;min-height:100dvh;display:block;padding:0}
+.ob-rail{display:none}
+.ob-main{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;padding:calc(var(--s0) + env(safe-area-inset-top,0px)) var(--gr) 0 var(--gl)}
+.ob-top{display:flex;justify-content:space-between;align-items:center;min-height:2.75rem}
+.ob-in{width:min(34rem,100%);margin:0 auto;display:flex;flex-direction:column;gap:var(--s1);flex:1;padding:var(--s0) 0 calc(7rem + env(safe-area-inset-bottom,0px))}
+.ob-plain .ob-in{padding-bottom:var(--s3)}
+.ob-head{display:flex;flex-direction:column;gap:10px}
+.ob-head .ob-bar{margin-bottom:var(--s-1)}
+.ob-head .lead{margin:0}
+.ob-bar{grid-template-columns:repeat(var(--n,6),1fr)}
+.ob-bar i{transition:background .6s var(--ease)}
+.ob-form{display:flex;flex-direction:column;gap:var(--s0)}
+.ob-form label{display:flex;flex-direction:column;gap:6px;font-size:.82rem;font-weight:600;color:var(--ink-2)}
+.ob .hint{font-size:.78rem;font-weight:400;color:var(--muted);margin:0}
+.ob-row{display:flex;justify-content:space-between;align-items:center;gap:var(--s0)}
+.ob-row .k{font-weight:600;font-size:.95rem}
+.ob-form .unitin{display:flex;align-items:center;gap:10px}.ob-form .unitin .field{flex:1}
+.ob .choice{margin-top:8px}
+.ob .opt{position:relative;gap:4px;padding:var(--s0) calc(var(--s0) + 1.9rem) var(--s0) var(--s0)}
+.opt-t{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.opt-c{position:absolute;top:var(--s0);right:var(--s0);width:1.4rem;height:1.4rem;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;color:var(--solid-ink);transition:background .3s var(--ease),border-color .3s}
+.opt-c .ico{width:13px;height:13px;stroke-width:3;opacity:0;transform:scale(.3);transition:opacity .2s,transform .45s var(--spring)}
+.opt.on .opt-c{background:var(--solid);border-color:var(--solid)}
+.opt.on .opt-c .ico{opacity:1;transform:none}
+.ob .daysel{margin-top:8px}
+.ob .daysel button{aspect-ratio:1;display:grid;place-items:center;font-family:var(--font-display);font-weight:700;font-size:1.5rem;line-height:1;padding-top:.14em}
+.tpl-days{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.tpl-days i{font-style:normal;font-size:.68rem;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.tpl-days{align-items:center}
+.tpl-days i.r{width:6px;height:6px;padding:0;border-radius:50%;background:var(--line)}
+.ob-themes .themes{grid-template-columns:repeat(auto-fill,minmax(9rem,1fr))}
+.ob-themes .theme-card{background:var(--surface)}
+.ob-nav .btn.lg{min-height:3.25rem}
+/* phones: Back and Continue sit on the bottom edge, always in reach */
+@media (max-width:47.99rem){
+  .ob-nav{position:fixed;left:0;right:0;bottom:0;z-index:5;margin:0;padding:var(--s1) var(--gr) calc(var(--s0) + env(safe-area-inset-bottom,0px)) var(--gl);background:linear-gradient(to top,var(--bg) 62%,color-mix(in srgb,var(--bg) 0%,transparent))}
+  .ob-nav .btn{flex:1}
+  .ob-nav .btn.line{flex:0 0 34%}
+  .ob-nav > span:empty{display:none}
+}
+/* wider screens: the steps in a rail beside the form */
+@media (min-width:48rem){
+  .ob:has(.ob-rail){display:grid;grid-template-columns:minmax(17rem,23rem) 1fr}
+  .ob-rail{display:block;--ink:var(--solid-ink);--bg:var(--solid);background:var(--solid);color:var(--solid-ink)}
+  .ob-rail-in{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:var(--s2);padding:var(--s2) var(--s1)}
+  .ob-rail .lockup{align-items:flex-start}
+  .ob-rail .lockup .wolf{width:4.2rem;height:4.2rem}
+  .ob-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+  .ob-steps li{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-md);font-weight:600;color:color-mix(in srgb,var(--solid-ink) 50%,transparent);transition:background .4s var(--ease),color .4s}
+  .ob-steps .n{width:1.9rem;height:1.9rem;border-radius:50%;display:grid;place-items:center;font-size:.8rem;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--solid-ink) 30%,transparent)}
+  .ob-steps .n .ico{width:14px;height:14px;stroke-width:3}
+  .ob-steps li.done{color:color-mix(in srgb,var(--solid-ink) 80%,transparent)}
+  .ob-steps li.done .n{background:color-mix(in srgb,var(--solid-ink) 16%,transparent);box-shadow:none}
+  .ob-steps li.now{background:color-mix(in srgb,var(--solid-ink) 10%,transparent);color:var(--solid-ink)}
+  .ob-steps li.now .n{background:var(--solid-ink);color:var(--solid);box-shadow:none}
+  .ob-rail-f{margin-top:auto;font-size:.8rem;color:color-mix(in srgb,var(--solid-ink) 55%,transparent);max-width:24ch}
+  .ob:has(.ob-rail) .ob-top .brand{visibility:hidden}
+  .ob:has(.ob-rail) .ob-main{padding-left:var(--s2);padding-right:var(--s2)}
+  .ob:has(.ob-rail) .ob-in{justify-content:center;padding:var(--s1) 0 var(--s3)}
+  .ob .ob-head .ob-bar{display:none}
+}
+@media (prefers-reduced-motion:reduce){.opt-c .ico,.ob-bar i,.ob-steps li{transition:none}}
+
+/* ---------- offline mode ---------- */
+.auth-or{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.12em}
+.auth-or::before,.auth-or::after{content:"";flex:1;height:1px;background:var(--line)}
+.auth-off{width:100%}
+.auth-off-n{font-size:.78rem;text-align:center;margin:-4px 0 0}
+.sync-note{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:var(--r-md);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font-size:.86rem;color:var(--ink-2);line-height:1.45}
+.sync-note b{color:var(--ink);font-size:.95rem}
+.off-pts{display:flex;flex-direction:column;gap:10px;margin:4px 0 6px;color:var(--ink-2);line-height:1.45}
+.off-pts b{color:var(--ink)}
+.off-dot{width:.7rem;height:.7rem;border-radius:50%;background:var(--muted);box-shadow:0 0 0 4px color-mix(in srgb,var(--muted) 18%,transparent);flex:none}
+.sync-box{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:var(--s1) 0 var(--s0)}
+.sync-ring{width:3rem;height:3rem;border-radius:50%;border:3px solid var(--line);border-top-color:var(--ink);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- reminders ---------- */
+.rem-time{width:auto;min-width:7.5rem;height:2.5rem;text-align:center;font-weight:700}
+.rem-row{flex-wrap:wrap}
+.rem-days{display:flex;gap:6px;flex-wrap:wrap}
+.rem-days button{width:2.2rem;height:2.2rem;padding:0;display:grid;place-items:center;line-height:1;flex:none;border-radius:50%;font-weight:700;font-size:.8rem;background:var(--surface-2);color:var(--ink-2);transition:background .3s var(--ease),color .3s,transform .4s var(--spring)}
+.rem-days button.on{background:var(--solid);color:var(--solid-ink)}
+.rem-days button:active{transform:scale(.9)}
+
+/* ---------- user guide and tour ---------- */
+.guide{display:flex;flex-direction:column;gap:var(--s0);max-width:46rem;margin:0 auto var(--s2)}
+.guide-hero{display:flex;flex-direction:column;gap:8px;margin:var(--s-1) 0 var(--s-1)}
+.guide-hero .lead{color:var(--ink-2);margin:0}
+.guide-dev{display:flex;align-items:center;justify-content:space-between;gap:var(--s-1);flex-wrap:wrap;margin-top:6px}
+.guide-toc{display:flex;flex-wrap:wrap;gap:6px}
+.guide-toc a{display:inline-flex;align-items:center;gap:6px;padding:7px 12px 7px 8px;border-radius:999px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font-size:.8rem;font-weight:600;color:var(--ink);text-decoration:none;transition:transform .4s var(--spring),background .2s}
+.guide-toc a:active{transform:scale(.95)}
+.guide-toc .gi .ico{width:16px;height:16px}
+.gi{display:inline-grid;place-items:center;color:var(--ink)}
+.guide-sec{background:var(--surface);border-radius:var(--r-lg,1.1rem);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;scroll-margin-top:5rem}
+.guide-sec summary{display:flex;align-items:center;gap:14px;padding:var(--s0);cursor:pointer;list-style:none}
+.guide-sec summary::-webkit-details-marker{display:none}
+.guide-sec summary .gi{width:2.6rem;height:2.6rem;border-radius:.8rem;background:var(--surface-2);flex:none}
+.guide-sec summary .gi .ico{width:20px;height:20px}
+.guide-sec .gt{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.guide-sec .gt b{font-family:var(--font-display);font-weight:700;font-size:1.35rem;line-height:1;text-transform:uppercase;letter-spacing:.01em}
+.guide-sec .gt small{color:var(--muted);font-size:.82rem}
+.guide-sec .chev{width:.6rem;height:.6rem;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .4s var(--spring);margin-right:6px}
+.guide-sec[open] .chev{transform:rotate(225deg)}
+.guide-steps{margin:0;padding:0 var(--s0) var(--s0) calc(var(--s0) + 2.6rem + 14px);display:flex;flex-direction:column;gap:10px;counter-reset:st;list-style:none}
+.guide-steps li{position:relative;line-height:1.5;color:var(--ink-2);font-size:.95rem}
+.guide-steps li b{color:var(--ink)}
+.guide-steps li::before{counter-increment:st;content:counter(st);position:absolute;left:calc(-1 * (2.6rem + 14px) + .7rem);top:.05rem;width:1.4rem;height:1.4rem;border-radius:50%;display:grid;place-items:center;background:var(--solid);color:var(--solid-ink);font-size:.72rem;font-weight:800}
+.guide-sec[open] .guide-steps li{animation:rise .5s var(--ease) both}
+.guide-sec[open] .guide-steps li:nth-child(2){animation-delay:.04s}.guide-sec[open] .guide-steps li:nth-child(3){animation-delay:.08s}.guide-sec[open] .guide-steps li:nth-child(4){animation-delay:.12s}.guide-sec[open] .guide-steps li:nth-child(5){animation-delay:.16s}
+.guide-tip{margin:0 var(--s0) var(--s0) calc(var(--s0) + 2.6rem + 14px);padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2);font-size:.86rem;color:var(--ink-2);line-height:1.45}
+.guide-tip b{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;color:var(--ink);margin-bottom:2px}
+.guide-foot{text-align:center;font-size:.85rem}
+@media (max-width:30rem){
+  .guide-steps{padding-left:calc(var(--s0) + 2rem)}
+  .guide-steps li::before{left:-2rem}
+  .guide-tip{margin-left:var(--s0)}
+}
+.tour{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:var(--s0) 0 0}
+.tour-art{width:6rem;height:6rem;border-radius:1.6rem;background:var(--solid);color:var(--solid-ink);display:grid;place-items:center;margin-bottom:6px;animation:auth-pop .7s var(--spring) both}
+.tour-art .ico{width:42px;height:42px}
+.tour h3{font-family:var(--font-display);font-size:var(--t3);line-height:.95;text-transform:uppercase}
+.tour p{color:var(--ink-2);max-width:32ch;line-height:1.5;margin:0}
+.tour h3,.tour p{animation:rise .6s var(--ease) both}.tour p{animation-delay:.06s}
+.tour-dots{display:flex;gap:6px;margin:6px 0}
+.tour-dots i{width:7px;height:7px;border-radius:999px;background:var(--line);transition:width .35s var(--ease),background .35s}
+.tour-dots i.on{width:20px;background:var(--ink)}
+.tour .btns{width:100%;justify-content:space-between}
+@media (prefers-reduced-motion:reduce){.guide-sec[open] .guide-steps li,.tour-art,.tour h3,.tour p,.sync-ring{animation:none}}
+.srow .k small.keep{display:block}
+
+/* ---------- phone dock: floating, and it slides away (with the session button) instead of vanishing ---------- */
+@media (max-width:59.99rem){
+  .nav{left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);border:0;border-radius:1.7rem;padding:6px 6px;
+    background:color-mix(in srgb,var(--surface) 80%,transparent);
+    box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent);
+    visibility:visible;transition:transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
+  html.lite .nav{background:var(--surface)}
+  body.in-session .nav{display:flex;transform:translateY(calc(100% + 24px + env(safe-area-inset-bottom,0px)));opacity:0;pointer-events:none;visibility:hidden;transition:transform .45s var(--ease),opacity .3s,visibility 0s .45s}
+}
+@media (max-width:47.99rem){
+  .nav-train{right:6px;bottom:calc(100% + 12px);visibility:visible;transition:transform .5s var(--spring),opacity .3s var(--ease),visibility 0s}
+  .nav-train .ring{box-shadow:0 .618rem 1.618rem rgba(0,0,0,.3),0 0 0 4px var(--bg)}
+  /* hidden on Settings and full-screen widgets: it sinks and shrinks into the dock */
+  body.on-prefs .nav-train,body.in-full .nav-train{display:flex;transform:translateY(28px) scale(.2);opacity:0;pointer-events:none;visibility:hidden;transition:transform .4s cubic-bezier(.5,0,.75,0),opacity .25s .08s,visibility 0s .4s}
+  body.in-full .nav{display:flex;transform:translateY(calc(100% + 24px + env(safe-area-inset-bottom,0px)));opacity:0;pointer-events:none;visibility:hidden;transition:transform .45s var(--ease),opacity .3s,visibility 0s .45s}
+  #view{padding-bottom:9rem}
+}
+/* while the page changes, show only the live dock so its own animation is what you see */
+::view-transition-old(nav){display:none}
+@media (prefers-reduced-motion:reduce){.nav,.nav-train{transition:none}}
+
+/* ---------- phone Home: every widget the same size, filling the space to the dock ---------- */
+@media (max-width:47.99rem){
+  #dash{align-items:stretch}
+  #dash > .w,#dash > .w-s,#dash > .w-m,#dash > .w-l{flex:0 0 86%;min-height:var(--dash-h,auto);display:flex;flex-direction:column}
+  #dash > .w .chart{flex:1;display:flex;flex-direction:column;justify-content:flex-end;min-height:0}
+  #dash > .w .chart svg{flex:1;height:auto;min-height:6.5rem}
+  #dash > .w .list,#dash > .w .hbars,#dash > .w .plan,#dash > .w .wk-gs{flex:1}
+  #dash > .w .mkv{margin-top:auto}
+  #dash > .w .heat{margin-top:auto;margin-bottom:auto}
+  #dash > .w .empty{flex:1;display:grid;place-items:center;text-align:center}
+}
+
+/* ---------- quick splash when the app opens on a phone ---------- */
+#qsplash{position:fixed;inset:0;z-index:101;display:grid;place-items:center;background:var(--bg)}
+#qsplash .qs-in{display:flex;flex-direction:column;align-items:center;gap:var(--s-1);animation:qs-in .55s var(--spring) both}
+#qsplash .wolf{width:6.6rem;height:6.6rem}
+#qsplash .wordmark{font-size:var(--t2);animation:qs-word .5s var(--ease) .12s both}
+#qsplash .w-eyes{transform-box:fill-box;transform-origin:50% 50%;animation:qs-eyes .7s cubic-bezier(.2,.9,.3,1) .18s both}
+#qsplash.out{animation:qs-fade .5s var(--ease) both;pointer-events:none}
+#qsplash.out .qs-in{animation:qs-zoom .5s cubic-bezier(.6,0,.4,1) both}
+@keyframes qs-in{from{opacity:0;transform:scale(.8)}}
+@keyframes qs-word{from{opacity:0;transform:translateY(8px) skewX(-12deg)}to{transform:skewX(-12deg)}}
+@keyframes qs-eyes{0%{transform:scaleY(.08)}45%{transform:scaleY(1.2);fill:#ff6a4d}100%{transform:none}}
+@keyframes qs-fade{to{opacity:0}}
+@keyframes qs-zoom{to{opacity:0;transform:scale(1.4)}}

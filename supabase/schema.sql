@@ -320,6 +320,101 @@ end $$;
 revoke execute on function public.report_error(text, text, text, text, text), public.import_replace(jsonb) from public, anon;
 grant execute on function public.report_error(text, text, text, text, text), public.import_replace(jsonb) to authenticated;
 
+-- ---------------------------------------------------------------- workout reminders
+-- The schedule and the shared secret are set up separately: see supabase/reminders-cron.sql.
+
+-- Workout reminders: when and on which days (bit 0 = Monday … bit 6 = Sunday), in the user's time zone
+alter table public.profiles add column if not exists reminder_on boolean not null default false;
+alter table public.profiles add column if not exists reminder_time time not null default '18:00';
+alter table public.profiles add column if not exists reminder_days smallint not null default 127 check (reminder_days between 0 and 127);
+alter table public.profiles add column if not exists tz text check (char_length(tz) <= 64);
+alter table public.profiles add column if not exists reminder_sent_on date;
+
+-- A time zone the database doesn't know would break the reminder query for everyone, so it is dropped on write
+create or replace function public.profiles_check_tz() returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.tz is not null then
+    begin perform now() at time zone new.tz; exception when others then new.tz := null; end;
+  end if;
+  return new;
+end $$;
+drop trigger if exists profiles_tz on public.profiles;
+create trigger profiles_tz before insert or update of tz on public.profiles for each row execute function public.profiles_check_tz();
+
+-- Where to deliver reminders: one row per device (a browser's push endpoint)
+create table if not exists public.push_subscriptions (
+  endpoint   text primary key check (char_length(endpoint) <= 1000),
+  user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  p256dh     text not null check (char_length(p256dh) <= 200),
+  auth       text not null check (char_length(auth) <= 100),
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subscriptions_user on public.push_subscriptions (user_id);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists push_own on public.push_subscriptions;
+create policy push_own on public.push_subscriptions for all to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+revoke all on public.push_subscriptions from anon;
+
+-- Save this device for the signed-in user. A device that was signed in as someone else is moved over.
+create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Sign in first'; end if;
+  delete from public.push_subscriptions where endpoint = p_endpoint;
+  insert into public.push_subscriptions (endpoint, user_id, p256dh, auth) values (p_endpoint, auth.uid(), p_p256dh, p_auth);
+end $$;
+
+-- Called by the reminders function every few minutes with the shared secret (kept in Vault).
+-- Returns the devices to remind now and marks those users as reminded for their local day. Users who
+-- already trained today are marked but not reminded. The window is 45 minutes so a late run still sends.
+create or replace function public.reminders_due(p_secret text)
+returns table (endpoint text, p256dh text, auth text, title text, body text)
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_secret is null or not exists (select 1 from vault.decrypted_secrets where name = 'reminder_secret' and decrypted_secret = p_secret) then
+    raise exception 'forbidden';
+  end if;
+  return query
+  with due as (
+    select p.id, p.tz, coalesce(p.weekly_target, 3) as target, (now() at time zone p.tz) as lt
+    from public.profiles p
+    where p.reminder_on and p.tz is not null
+      and (p.reminder_days & (1 << (extract(isodow from now() at time zone p.tz)::int - 1))) <> 0
+      and ((extract(epoch from (now() at time zone p.tz)::time) - extract(epoch from p.reminder_time))::int + 86400) % 86400 < 2700
+      and (p.reminder_sent_on is null or p.reminder_sent_on < (now() at time zone p.tz)::date)
+  ), marked as (
+    update public.profiles t set reminder_sent_on = d.lt::date from due d where t.id = d.id
+    returning t.id, d.tz, d.target, d.lt
+  ), info as (
+    select m.id, m.target,
+      exists (select 1 from public.sessions s where s.user_id = m.id and (s.started_at at time zone m.tz)::date = m.lt::date) as trained,
+      (select count(*) from public.sessions s where s.user_id = m.id and s.items <> '[]'::jsonb
+         and (s.started_at at time zone m.tz) >= date_trunc('week', m.lt)) as wk
+    from marked m
+  )
+  select ps.endpoint, ps.p256dh, ps.auth, 'Time to train'::text,
+    case when i.wk = 0 then 'Start your week strong. Your first session is waiting.'
+         when i.wk < i.target then i.wk || ' of ' || i.target || ' sessions done this week. Keep it going.'
+         else 'Weekly target hit. Up for a bonus session?' end
+  from info i join public.push_subscriptions ps on ps.user_id = i.id
+  where not i.trained;
+end $$;
+
+-- Devices the push service says are gone (uninstalled, permission revoked)
+create or replace function public.reminders_drop(p_secret text, p_endpoints text[])
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_secret is null or not exists (select 1 from vault.decrypted_secrets where name = 'reminder_secret' and decrypted_secret = p_secret) then
+    raise exception 'forbidden';
+  end if;
+  delete from public.push_subscriptions where endpoint = any(p_endpoints);
+end $$;
+
+revoke execute on function public.save_push_subscription(text, text, text), public.reminders_due(text), public.reminders_drop(text, text[]) from public, anon, authenticated;
+grant execute on function public.save_push_subscription(text, text, text) to authenticated;
+grant execute on function public.reminders_due(text), public.reminders_drop(text, text[]) to anon;
+
 -- ---------------------------------------------------------------- starter exercise list
 
 insert into public.default_exercises (name, muscle, kind) values
