@@ -925,6 +925,8 @@ const authErr = e => {
   const m = (e && e.message) || 'Something went wrong. Try again.';
   if (/invalid login/i.test(m)) return 'That email and password don’t match.';
   if (/email not confirmed/i.test(m)) return 'Confirm your email first. Check your inbox for the link.';
+  /* the project-wide cap on outgoing auth emails, not this person's attempts */
+  if ((e && e.code === 'over_email_send_rate_limit') || /email rate limit/i.test(m)) return 'We can’t send emails right now because too many went out recently. Try again in an hour.';
   if (/rate limit|too many/i.test(m)) return 'Too many attempts. Wait a minute and try again.';
   return m;
 };
