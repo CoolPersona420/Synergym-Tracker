@@ -663,8 +663,8 @@ function splashIn() {
   /* the stage is a full-screen copy of the wolf for the lunge; a clip-path cuts the eye-shaped hole that reveals the app */
   const glow = id => `<path class="w-glow" d="${WOLF_EYES}" filter="url(#${id})"/>`;
   const blur = id => `<filter id="${id}" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="7"/></filter>`;
-  el.innerHTML = `<div class="spl-stage"><svg class="spl-bg"><defs>${blur('spl-glow-c')}</defs><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/></g><g class="spl-hot"><path class="a" d="${EYE_D}"/><path class="b" d="${EYE_D}"/></g></svg></div><span class="spl-flash"></span>
-  <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">SYNERGYM</span></span></div><span class="spl-streak"></span><span class="spl-lb t"></span><span class="spl-lb b"></span>`;
+  el.innerHTML = `<div class="spl-stage"><svg class="spl-bg"><defs>${blur('spl-glow-c')}</defs><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/></g><g class="spl-hot"><path class="a" d="${EYE_D}"/><path class="b" d="${EYE_D}"/></g></svg></div><svg class="spl-echo" viewBox="44 40 312 330"><path d="${WOLF_BODY}"/><path class="b" d="${WOLF_BODY}"/></svg>
+  <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">SYNERGYM</span></span></div>`;
   document.body.appendChild(el);
   SPL.el = el; SPL.t0 = performance.now(); SPL.leaving = false;
   setTimeout(() => { if (SPL.el === el && !SPL.leaving) splashOut(); }, 10000);
@@ -676,7 +676,7 @@ function splashFit(el) {
   const s = Math.min(r.width / 312, r.height / 330);
   return { s, ox: r.left + (r.width - 312 * s) / 2 - 44 * s, oy: r.top + (r.height - 330 * s) / 2 - 40 * s };
 }
-/* reveal: the eyes snap open with a flare and a growl, then the wolf lunges at the screen.
+/* reveal: the eyes ignite from white to red with a jolt and a shockwave, then the wolf lunges at the screen.
    Only reduced motion and data saver get the plain lift instead: it is all vector work, and device hints
    (cores, memory) are randomised by privacy browsers such as Brave */
 function splashOut() {
@@ -687,7 +687,8 @@ function splashOut() {
     const c = navigator.connection, plain = reduced || !!(c && c.saveData);
     const f = !plain && el.querySelector('.spl-cam') && splashFit(el);
     if (!f) { el.classList.add('out'); playEnter($('#view')); setTimeout(finish, 1000); return; }
-    el.style.setProperty('--rx', `${f.ox + 200 * f.s}px`); el.style.setProperty('--ry', `${f.oy + 204 * f.s}px`);
+    const r = el.querySelector('.spl-wolf').getBoundingClientRect();
+    Object.assign(el.querySelector('.spl-echo').style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
     el.classList.add('wake');
     setTimeout(() => splashConsume(el, finish), 420);
   }, wait);
@@ -723,7 +724,6 @@ function splashConsume(el, done) {
       s = sb * (1 + .05 * v); jx = Math.sin(v * 26) * a; jy = Math.cos(v * 20) * a * .6;
     } else {
       const v = (t - C - L - B) / T, e = io(v);
-      if (!el.classList.contains('tear')) el.classList.add('tear');
       s = sb * 1.05 * Math.pow(s1 / (sb * 1.05), e); open = smooth(v / .45); w = 14 * (1 - smooth((v - .75) / .25));
     }
     /* the eye drifts to the middle of the screen as the wolf closes in */

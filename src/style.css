@@ -1150,39 +1150,30 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 #splash .spl-stage{position:absolute;inset:0;background:var(--bg)}
 #splash .spl-hot{opacity:0}
 #splash .spl-in{position:relative}
-/* login only: the lockup rises quickly, then the eyes wake */
+/* login only: the lockup rises quickly, then the eyes ignite */
 #splash .wolf{animation-duration:.6s}#splash .wordmark{animation-duration:.6s;animation-delay:.08s}
-#splash .spl-wolf .w-eyes,#splash .spl-wolf .w-glow{transform-box:fill-box;transform-origin:50% 50%;transform:scaleY(.07)}
-#splash .spl-wolf .w-glow{fill:#ff3b2a;opacity:0}
-/* the eyes: a white-hot slit that snaps wide open, overshoots and settles red */
-#splash.wake .spl-wolf .w-eyes{transform:scaleY(1);animation:spl-eye .34s cubic-bezier(.2,.9,.3,1) both}
-#splash.wake .spl-wolf .w-glow{transform:scaleY(1);opacity:.85;animation:spl-bloom .7s cubic-bezier(.2,.9,.3,1) both}
-@keyframes spl-eye{0%{transform:scaleY(.07);fill:#fff}45%{transform:scaleY(1.18);fill:#ff5a3d}100%{transform:scaleY(1);fill:#E8261A}}
-@keyframes spl-bloom{0%{transform:scaleY(.07);opacity:0}30%{transform:scaleY(1.5);opacity:1}100%{transform:scaleY(1);opacity:.85}}
-/* a slow push in on the wolf while it wakes, with a short growl */
-#splash .spl-in{transition:transform .5s cubic-bezier(.2,.8,.3,1)}
-#splash.wake .spl-in{transform:scale(1.07)}
-#splash.wake .spl-wolf{animation:spl-growl .26s linear .12s both}
+/* while waiting the eyes are white and breathe a soft glow (pulled toward the page colour so they still read on a light wolf) */
+#splash .spl-wolf .w-eyes{fill:color-mix(in srgb,#fff 55%,var(--bg));transition:fill .14s cubic-bezier(.3,0,.2,1)}
+#splash .spl-wolf .w-glow{fill:#fff;opacity:0;transition:fill .14s,opacity .3s}
+#splash:not(.wake) .spl-wolf .w-glow{animation:spl-ember 2.4s ease-in-out .6s infinite}
+@keyframes spl-ember{50%{opacity:.4}}
+/* ignition: white to red through a hot orange, the glow blooms, and the wolf punches forward with a jolt */
+#splash.wake .spl-wolf .w-eyes{fill:#E8261A;animation:spl-ignite .3s linear both}
+#splash.wake .spl-wolf .w-glow{fill:#ff3b2a;opacity:.85;transform-box:fill-box;transform-origin:50% 50%;animation:spl-bloom .6s cubic-bezier(.2,.9,.3,1) both}
+@keyframes spl-ignite{0%{fill:#fff}35%{fill:#ffb199}60%{fill:#ff4a2e}100%{fill:#E8261A}}
+@keyframes spl-bloom{0%{opacity:0;transform:scale(1)}25%{opacity:1;transform:scale(1.35)}100%{opacity:.85;transform:scale(1)}}
+#splash.wake .spl-wolf{animation:spl-thump .42s cubic-bezier(.2,.8,.3,1) both}
+@keyframes spl-thump{0%{transform:none}22%{transform:scale(1.16)}40%{transform:scale(.97) translate(-2px,1px)}55%{transform:scale(1.02) translate(2px,-1px)}70%{transform:translate(-1px,0)}100%{transform:none}}
+#splash.wake .spl-mask{overflow:visible}
 #splash .spl-word{transition:opacity .2s var(--ease),transform .4s var(--ease)}
 #splash.wake .spl-word{opacity:0;transform:translateY(12px)}
 #splash.consume .spl-in{visibility:hidden}
-/* while waiting the closed eyes breathe a faint ember */
-#splash:not(.wake) .spl-wolf .w-glow{animation:spl-ember 2.4s ease-in-out .6s infinite}
-@keyframes spl-ember{50%{opacity:.35}}
-@keyframes spl-growl{0%,100%{transform:none}25%{transform:translate(-1.5px,1px)}50%{transform:translate(1.5px,-1px)}75%{transform:translate(-1px,-1px)}}
-/* cinematic: letterbox bars close in, a red flare and an anamorphic streak cut across the eyes */
-#splash .spl-flash,#splash .spl-streak{position:absolute;pointer-events:none;opacity:0}
-#splash .spl-flash{inset:0;background:radial-gradient(circle at var(--rx,50%) var(--ry,45%),rgba(232,38,26,.32),transparent 40%)}
-#splash.wake .spl-flash{animation:spl-flash .7s var(--ease) both}
-@keyframes spl-flash{25%{opacity:1}}
-#splash .spl-streak{left:0;right:0;top:var(--ry,45%);height:2px;margin-top:-1px;background:linear-gradient(90deg,transparent 4%,rgba(255,59,42,.5) 30%,#ff6a4d 46%,#fff 50%,#ff6a4d 54%,rgba(255,59,42,.5) 70%,transparent 96%);box-shadow:0 0 14px 3px rgba(255,59,42,.45)}
-#splash.wake .spl-streak{animation:spl-streak .62s cubic-bezier(.15,.85,.3,1) .04s both}
-@keyframes spl-streak{0%{opacity:1;transform:scaleX(0)}35%{opacity:1;transform:scaleX(1)}100%{opacity:0;transform:scaleX(1.15) scaleY(.4)}}
-#splash .spl-lb{position:absolute;left:0;right:0;height:11vh;background:#09090a;pointer-events:none;transition:transform .42s cubic-bezier(.7,0,.2,1)}
-#splash .spl-lb.t{top:0;transform:translateY(-101%)}#splash .spl-lb.b{bottom:0;transform:translateY(101%)}
-#splash.wake .spl-lb{transform:none}
-#splash.wake.tear .spl-lb{transition-duration:.32s;transition-timing-function:cubic-bezier(.5,0,.2,1)}
-#splash.wake.tear .spl-lb.t{transform:translateY(-101%)}#splash.wake.tear .spl-lb.b{transform:translateY(101%)}
+/* the impact: two wolf-shaped shockwaves burst out from the silhouette */
+#splash .spl-echo{position:absolute;overflow:visible;pointer-events:none}
+#splash .spl-echo path{fill:none;stroke:#E8261A;stroke-width:3;stroke-linejoin:miter;vector-effect:non-scaling-stroke;transform-box:fill-box;transform-origin:50% 55%;opacity:0}
+#splash.wake .spl-echo path{animation:spl-echo .75s cubic-bezier(.1,.75,.25,1) .05s both}
+#splash.wake .spl-echo path.b{animation-delay:.15s;stroke-width:1.5}
+@keyframes spl-echo{0%{opacity:.95;transform:scale(1)}100%{opacity:0;transform:scale(3.4)}}
 /* the lunge happens in one full-screen SVG: the wolf, a shade that darkens it, and the eye that tears open */
 #splash .spl-cam{display:none}
 #splash.consume .spl-cam{display:inline}
