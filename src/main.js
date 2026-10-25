@@ -666,7 +666,7 @@ function splashIn() {
   const glow = id => `<path class="w-glow" d="${WOLF_EYES}" filter="url(#${id})"/>`;
   const blur = id => `<filter id="${id}" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="7"/></filter>`;
   el.innerHTML = `<div class="spl-stage"><svg class="spl-bg"><defs>${blur('spl-glow-c')}</defs><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/></g><g class="spl-hot"><path class="a" d="${EYE_D}"/><path class="b" d="${EYE_D}"/></g></svg></div><svg class="spl-echo" viewBox="44 40 312 330"><path d="${WOLF_BODY}"/><path class="b" d="${WOLF_BODY}"/></svg>
-  <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">SYNERGYM</span></span></div>`;
+  <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">${[...'SYNERGYM'].map((c, i) => `<i style="--i:${i}">${c}</i>`).join('')}</span></span></div>`;
   /* after signing in, the splash starts from the mascot on the login page */
   const from = !reduced && $('.auth-logo .lockup');
   SPL.hand = !!(from && from.getBoundingClientRect().width);
