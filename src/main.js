@@ -32,7 +32,11 @@ const sb = SB_URL && SB_KEY
 
 /* errors reach the database only for a signed-in user (S is defined below; this runs later, on an error) */
 const REPO = 'https://github.com/CoolPersona420/Synergym-Tracker';
-const BUILD = (document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || 'dev').replace(/^.*\//, '');
+/* version from package.json (semver, e.g. 1.0.0-alpha); the build file name tells deploys of it apart */
+const VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0-dev';
+const [VER_NUM, VER_PRE] = VERSION.split('-');
+const BUILD_ID = (document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || 'dev').replace(/^.*\/index-|\.js$/g, '');
+const BUILD = `${VERSION}+${BUILD_ID}`;
 const reportError = trackErrors(e => { if (sb && S.user && !S.local) sb.rpc('report_error', { p_message: e.message, p_stack: e.stack, p_path: e.path, p_build: BUILD, p_ua: navigator.userAgent.slice(0, 300) }).then(() => {}, () => {}); });
 if (import.meta.env.PROD) startAnalytics();
 
@@ -1462,9 +1466,9 @@ function vPrefs() {
   ${group('Your data', link('Export JSON', 'data-act="export" data-f="json"') + link('Export CSV', 'data-act="export" data-f="csv"') + link('Import JSON', 'data-act="import"'))}
   ${group('Help', link('User guide', 'data-act="nav" data-v="guide"') + link('Replay the tour', 'data-act="tour"') + link('How the numbers work', 'data-act="how"'))}
   ${group('About',
-    `<div class="srow"><span class="k">Version</span><span class="v">${esc(BUILD.replace(/^index-|\.js$/g, '') || 'dev')}</span></div>` +
+    `<div class="srow"><span class="k">Version<small class="keep">Build ${esc(BUILD_ID)}</small></span><span class="v ver">v${esc(VER_NUM)}${VER_PRE ? ` <span class="badge acc">${esc(VER_PRE.replace(/[.\d]+$/, ''))}</span>` : ''}</span></div>` +
     `<a class="srow link" href="${REPO}" target="_blank" rel="noopener noreferrer"><span class="k">Source code on GitHub</span><span class="v">${esc(REPO.replace('https://github.com/', ''))}</span><span class="chev" aria-hidden="true"></span></a>`,
-    'Synergym is open source. Read the code, report a problem or suggest something on GitHub.')}
+    `${VER_PRE && /alpha/.test(VER_PRE) ? 'This is an early alpha: features may change and you may meet the odd bug. ' : ''}Synergym is open source. Read the code, report a problem or suggest something on GitHub.`)}
   <section class="sg rv"><div class="sg-b">${S.local ? link('Delete data on this phone', 'data-act="delete-local"', '', ' center danger') : link('Sign out', 'data-act="signout"', '', ' center') + link('Delete account', 'data-act="delete-account"', '', ' center danger')}</div></section>
   </div>`;
 }

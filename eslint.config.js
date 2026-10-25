@@ -5,7 +5,7 @@ export default [
   { ignores: ['dist/', 'node_modules/', 'test-results/', 'playwright-report/'] },
   {
     files: ['**/*.js', '**/*.mjs'],
-    languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: { ...globals.browser, ...globals.node } },
+    languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: { ...globals.browser, ...globals.node, __APP_VERSION__: 'readonly' } },
     rules: { 'no-undef': 'error', 'no-redeclare': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error', 'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }] }
   }
 ];

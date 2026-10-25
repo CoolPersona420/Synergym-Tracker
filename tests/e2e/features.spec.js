@@ -120,3 +120,15 @@ test('quick splash on phones only', async ({ page }, info) => {
   }
   await expect(page.locator('#f-auth')).toBeVisible();
 });
+
+test('Settings › About shows the version from package.json, marked as alpha', async ({ page }) => {
+  const { readFileSync } = await import('node:fs');
+  const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const fake = new FakeSupabase(benchHistory());
+  await login(page, fake, 'A');
+  await page.goto('/settings');
+  const row = page.locator('.srow', { hasText: 'Version' });
+  await expect(row.locator('.ver')).toContainText('v' + version.split('-')[0]);
+  if (version.includes('alpha')) { await expect(row.locator('.badge')).toHaveText('alpha'); await expect(page.locator('.sg', { hasText: 'Source code on GitHub' })).toContainText('early alpha'); }
+  await expect(row).toContainText('Build ');
+});
