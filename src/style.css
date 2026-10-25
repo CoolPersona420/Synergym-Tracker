@@ -704,7 +704,10 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-in-back}
 @media (min-width:48rem){.hero .hero-ctl{margin-top:var(--s1);padding-top:var(--s0);border-top:1px solid var(--hero-line);align-self:stretch;align-items:flex-start}.hero-ctl .restctl{padding-top:.45rem}}
 
 /* ---------- phones: feel like an installed app ---------- */
+/* no pull-to-refresh or Android stretch: src/ui/rubber.js gives the page an iOS-style rubber band instead.
+   iOS has its own, so it stays on there. */
 html{overscroll-behavior-y:none}
+html.ios{overscroll-behavior-y:auto}
 button,a,label,input,select,textarea,[data-act]{touch-action:manipulation}
 .ttl-c{display:none}
 @media (hover:none){

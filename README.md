@@ -29,7 +29,8 @@ The version lives in `package.json` (`1.0.0-alpha`) and shows in Settings › Ab
   muscle groups.
 - **Themes:** Auto (follows the device) plus eleven named palettes.
 - **Phone app:** install it to the Home Screen. It opens without a connection, has a floating dock and a
-  quick opening splash, and never zooms.
+  quick opening splash, never zooms, and the page stretches and springs back at the top and bottom like
+  iOS (native on iPhone, recreated on Android).
   - **Reminders** at a chosen time on chosen days (see below).
   - **Offline mode:** use it without an account, or take an account offline; going online merges and
     uploads (see below).

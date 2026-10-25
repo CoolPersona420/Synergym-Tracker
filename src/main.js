@@ -15,6 +15,7 @@ import { SPL, QS, setSplashHooks, splashIn, splashOut, quickIn, quickOut } from 
 import { TEMPLATES, recommendTemplate } from './data/templates.js';
 import { QUOTES } from './data/quotes.js';
 import { guideSections, tourSlides } from './ui/guide.js';
+import { rubberBand } from './ui/rubber.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
 import { trackErrors, startAnalytics } from './lib/telemetry.js';
@@ -2568,6 +2569,8 @@ function boot() {
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
   lockAppZoom();
+  /* pulling past the top or bottom stretches the page and springs back, as on iOS */
+  if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced });
   const mode = readMode();
   /* phones get a quick splash each time the app opens */
   if (coarse.matches && !reduced) quickIn();
