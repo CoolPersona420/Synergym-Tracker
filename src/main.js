@@ -542,7 +542,7 @@ const KEEPX = ['#dash', '.hscroll', '.themes'];
 const POPSEL = '.chip,.daysel button,.opt,.theme-card';
 function fluidCapture(root) {
   return {
-    seg: $$('.seg', root).map(s => { const b = s.querySelector('button.on'); return b ? [b.offsetLeft, b.offsetWidth] : null; }),
+    seg: $$('.seg, .auth-tabs', root).map(s => { const b = s.querySelector('button.on'); return b ? [b.offsetLeft, b.offsetWidth] : null; }),
     tog: $$('.toggle', root).map(t => t.classList.contains('on')),
     pop: $$(POPSEL, root).map(e => e.classList.contains('on'))
   };
@@ -558,7 +558,7 @@ function wireScrollers(root) {
 }
 function fluidApply(root, prev) {
   wireScrollers(root);
-  $$('.seg', root).forEach((s, i) => {
+  $$('.seg, .auth-tabs', root).forEach((s, i) => {
     const b = s.querySelector('button.on'); s.classList.add('pill');
     if (!b) { s.style.setProperty('--w', '0px'); return; }
     const x = b.offsetLeft, w = b.offsetWidth, p = prev && prev.seg[i];
@@ -772,7 +772,8 @@ function vAuth() {
       <label>Password<input class="field" type="password" name="password" autocomplete="current-password" required></label>
       ${msgHTML}<button class="btn lg" type="submit">Log in</button>
     </form><button class="linkbtn" data-act="auth-mode" data-m="forgot" style="align-self:flex-start">Forgot password?</button>`;
-  return `<div class="auth"><main class="auth-main"><div class="auth-box"><div class="auth-logo">${lockup()}</div>${box}</div></main></div>`;
+  const swap = S.authSwap; S.authSwap = false;
+  return `<div class="auth"><main class="auth-main"><div class="auth-box${swap ? ' swap' : ''}"><div class="auth-logo">${lockup()}</div>${box}</div></main></div>`;
 }
 function vRecover() {
   return shell(`<h1>Set a <em>new password</em>.</h1>
@@ -1924,7 +1925,7 @@ function changeUsername() {
 /* ================= event wiring ================= */
 const ACT = {
   nav: el => go(el.dataset.v),
-  'auth-mode': el => { S.authMode = el.dataset.m; S.authMsg = null; render(false); },
+  'auth-mode': el => { S.authMode = el.dataset.m; S.authMsg = null; S.authSwap = true; render(false); },
   signout: signOut,
   'retry-load': () => startApp(),
   start: startSession,
