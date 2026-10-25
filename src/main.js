@@ -20,7 +20,13 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const KG_LB = 2.2046226;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* low-end devices (few cores, little memory, data saver) get the same motion with cheaper effects */
-const LITE = (() => { try { const n = navigator, c = n.connection; return !!(c && c.saveData) || (n.deviceMemory && n.deviceMemory <= 2) || (n.hardwareConcurrency && n.hardwareConcurrency <= 4 && (!n.deviceMemory || n.deviceMemory <= 4)); } catch { return false; } })();
+const LITE = (() => { try {
+  const n = navigator, c = n.connection;
+  if (c && c.saveData) return true;
+  /* Brave randomises the core count and memory to resist fingerprinting, so they say nothing about the device there */
+  if (n.brave) return false;
+  return (n.deviceMemory && n.deviceMemory <= 2) || (n.hardwareConcurrency && n.hardwareConcurrency <= 4 && (!n.deviceMemory || n.deviceMemory <= 4));
+} catch { return false; } })();
 if (LITE) document.documentElement.classList.add('lite');
 if (!document.startViewTransition) document.documentElement.classList.add('no-vt');
 
@@ -671,13 +677,14 @@ function splashFit(el) {
   return { s, ox: r.left + (r.width - 312 * s) / 2 - 44 * s, oy: r.top + (r.height - 330 * s) / 2 - 40 * s };
 }
 /* reveal: the eyes snap open with a flare and a growl, then the wolf lunges at the screen.
-   Only reduced motion, data saver and very low memory get the plain lift instead */
+   Only reduced motion and data saver get the plain lift instead: it is all vector work, and device hints
+   (cores, memory) are randomised by privacy browsers such as Brave */
 function splashOut() {
   if (SPL.leaving) return; SPL.leaving = true;
   const el = SPL.el, wait = Math.max(0, (reduced ? 500 : 1100) - (performance.now() - SPL.t0));
   const finish = () => { el.remove(); if (SPL.el === el) { SPL.el = null; SPL.leaving = false; } };
   setTimeout(() => {
-    const n = navigator, plain = reduced || !!(n.connection && n.connection.saveData) || n.deviceMemory <= 1;
+    const c = navigator.connection, plain = reduced || !!(c && c.saveData);
     const f = !plain && el.querySelector('.spl-cam') && splashFit(el);
     if (!f) { el.classList.add('out'); playEnter($('#view')); setTimeout(finish, 1000); return; }
     el.style.setProperty('--rx', `${f.ox + 200 * f.s}px`); el.style.setProperty('--ry', `${f.oy + 204 * f.s}px`);
