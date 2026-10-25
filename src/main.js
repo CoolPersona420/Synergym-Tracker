@@ -835,7 +835,7 @@ function vAuth() {
     <form id="f-auth" novalidate>
       <label>Email<input class="field" type="email" name="email" autocomplete="email" required></label>
       <label>Password<input class="field" type="password" name="password" data-f="pw" autocomplete="new-password" minlength="8" required></label>
-      <div class="pw-meter" aria-hidden="true"><i id="pwm"></i></div><span class="muted" id="pwt" style="font-size:.78rem;margin-top:-8px">At least 8 characters. A passphrase is best.</span>
+      <div class="pw-meter" aria-hidden="true"><i id="pwm"></i></div><span class="muted" id="pwt" style="font-size:.78rem;margin-top:-8px">${PW_HINT}</span>
       <label>Confirm password<input class="field" type="password" name="password2" autocomplete="new-password" minlength="8" required></label>
       ${msgHTML}<button class="btn lg" type="submit">Create account</button>
     </form><p class="muted" style="font-size:.78rem">Passwords are handled by Supabase Auth and stored hashed. We never see them.</p>`;
@@ -851,7 +851,7 @@ function vAuth() {
 }
 function vRecover() {
   return shell(`<h1>Set a <em>new password</em>.</h1>
-  <form id="f-recover" novalidate><label>New password<input class="field" type="password" name="password" data-f="pw" autocomplete="new-password" minlength="8" required></label><div class="pw-meter" aria-hidden="true"><i id="pwm"></i></div>${S.authMsg ? `<div class="msg${S.authMsg.err ? ' err' : ''}">${esc(S.authMsg.text)}</div>` : ''}<button class="btn lg wide" type="submit">Save password</button></form>`);
+  <form id="f-recover" novalidate><label>New password<input class="field" type="password" name="password" data-f="pw" autocomplete="new-password" minlength="8" required></label><div class="pw-meter" aria-hidden="true"><i id="pwm"></i></div><span class="muted" id="pwt" style="font-size:.78rem;margin-top:-8px">${PW_HINT}</span>${S.authMsg ? `<div class="msg${S.authMsg.err ? ' err' : ''}">${esc(S.authMsg.text)}</div>` : ''}<button class="btn lg wide" type="submit">Save password</button></form>`);
 }
 const GOALS = [['strength', 'Get stronger', 'Heavier lifts, lower reps'], ['muscle', 'Build muscle', 'More volume, moderate reps'], ['fitness', 'General fitness', 'Feel good, stay consistent'], ['fat_loss', 'Lose fat', 'Keep strength while you cut']];
 const LEVELS = [['beginner', 'Beginner', 'Under a year of lifting'], ['intermediate', 'Intermediate', 'One to three years'], ['advanced', 'Advanced', 'Three years or more']];
@@ -921,8 +921,14 @@ function splitFromTemplate(t) {
   const sp = { id: uuid(), name: t.name, description: t.desc, days, shareToken: null, copiedFrom: null, updatedAt: Date.now() };
   S.splits.set(sp.id, sp); queue('sp:' + sp.id, 0); return sp;
 }
+/* the same rule the auth server enforces: 8+ characters with a lowercase letter, a capital and a number */
+const PW_HINT = 'At least 8 characters, with a capital letter and a number.';
+const pwIssue = v => v.length < 8 ? 'Use at least 8 characters for your password.' : !/[a-z]/.test(v) || !/[A-Z]/.test(v) ? 'Add both a capital and a lowercase letter to your password.' : !/\d/.test(v) ? 'Add a number to your password.' : null;
 const authErr = e => {
   const m = (e && e.message) || 'Something went wrong. Try again.';
+  if ((e && e.code === 'weak_password') || /password should/i.test(m)) return PW_HINT;
+  if (/failed to fetch|networkerror|load failed/i.test(m)) return navigator.onLine ? 'Couldn’t reach the server. Try again in a moment.' : 'You’re offline. Connect and try again.';
+  if ((e && e.code === 'user_already_exists') || /already registered/i.test(m)) return 'There’s already an account with that email. Log in instead.';
   if (/invalid login/i.test(m)) return 'That email and password don’t match.';
   if (/email not confirmed/i.test(m)) return 'Confirm your email first. Check your inbox for the link.';
   /* the project-wide cap on outgoing auth emails, not this person's attempts */
@@ -939,7 +945,7 @@ document.addEventListener('submit', async e => {
       const email = String(fd.get('email') || '').trim(), password = String(fd.get('password') || '');
       if (!/^\S+@\S+\.\S+$/.test(email)) return done('Enter a valid email address.', true);
       if (S.authMode === 'signup') {
-        if (password.length < 8) return done('Use at least 8 characters for your password.', true);
+        const bad = pwIssue(password); if (bad) return done(bad, true);
         if (password !== String(fd.get('password2') || '')) return done('The two passwords don’t match.', true);
         const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin } });
         if (error) return done(authErr(error), true);
@@ -957,7 +963,7 @@ document.addEventListener('submit', async e => {
       done('If that email has an account, a reset link is on its way.', false);
     } else if (f.id === 'f-recover') {
       const password = String(fd.get('password') || '');
-      if (password.length < 8) return done('Use at least 8 characters.', true);
+      const bad = pwIssue(password); if (bad) return done(bad, true);
       const { error } = await sb.auth.updateUser({ password });
       if (error) return done(authErr(error), true);
       S.recover = false; S.authMsg = null; toast('Password updated'); go('today', null, { replace: true });
@@ -2146,7 +2152,8 @@ document.addEventListener('input', e => {
     case 'd-bw': { const v = parseFloat(el.value.replace(',', '.')), kg = unit() === 'lb' ? v / KG_LB : v; const ok = isFinite(kg) && kg >= 30 && kg <= 300; el.classList.toggle('bad', !ok && el.value.trim() !== ''); if (ok) { S.profile.bw = kg; queue('p', 900); } break; }
     case 'pw': { const v = el.value; let sc = 0; if (v.length >= 8) sc++; if (v.length >= 12) sc++; if (/[a-z]/.test(v) && /[A-Z]/.test(v)) sc++; if (/\d/.test(v)) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
       const m = $('#pwm'), t = $('#pwt'); if (m) { m.style.width = (sc * 20) + '%'; m.style.background = sc <= 1 ? 'var(--bad)' : sc <= 3 ? 'var(--accent)' : 'var(--good)'; }
-      if (t) t.textContent = !v ? 'At least 8 characters. A passphrase is best.' : v.length < 8 ? `${8 - v.length} more character${8 - v.length === 1 ? '' : 's'}` : ['Weak', 'Weak', 'Okay', 'Good', 'Strong', 'Very strong'][sc];
+      const need = [!/[A-Z]/.test(v) && 'a capital', !/[a-z]/.test(v) && 'a lowercase letter', !/\d/.test(v) && 'a number'].filter(Boolean);
+      if (t) t.textContent = !v ? PW_HINT : v.length < 8 ? `${8 - v.length} more character${8 - v.length === 1 ? '' : 's'}` : need.length ? `Add ${need.join(' and ')}` : ['Weak', 'Weak', 'Okay', 'Good', 'Strong', 'Very strong'][sc];
       break; }
     case 'obbw': { const v = parseFloat(el.value.replace(',', '.')); S.ob.bw = isFinite(v) && v > 0 ? (S.ob.unit === 'lb' ? v / KG_LB : v) : null; break; }
     case 'd-name': { const v = el.value.trim().slice(0, 40); if (v) { S.profile.name = v; queue('p', 900); } break; }

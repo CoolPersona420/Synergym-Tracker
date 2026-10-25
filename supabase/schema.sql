@@ -98,6 +98,7 @@ create table if not exists public.split_shares (
   primary key (split_id, to_user)
 );
 create index if not exists split_shares_to on public.split_shares (to_user);
+create index if not exists split_shares_from_user_idx on public.split_shares (from_user);
 
 -- ---------------------------------------------------------------- row level security
 
@@ -108,32 +109,33 @@ alter table public.sessions          enable row level security;
 alter table public.splits            enable row level security;
 alter table public.split_shares      enable row level security;
 
+-- (select auth.uid()) is evaluated once per query rather than once per row.
 drop policy if exists profiles_own on public.profiles;
 create policy profiles_own on public.profiles for all to authenticated
-  using (id = auth.uid()) with check (id = auth.uid());
+  using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 drop policy if exists default_exercises_read on public.default_exercises;
 create policy default_exercises_read on public.default_exercises for select to authenticated using (true);
 
 drop policy if exists exercises_own on public.exercises;
 create policy exercises_own on public.exercises for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 drop policy if exists sessions_own on public.sessions;
 create policy sessions_own on public.sessions for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 drop policy if exists splits_own on public.splits;
 create policy splits_own on public.splits for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 -- Shares are created only through share_split(); either side may remove one.
 drop policy if exists split_shares_read on public.split_shares;
 create policy split_shares_read on public.split_shares for select to authenticated
-  using (from_user = auth.uid() or to_user = auth.uid());
+  using (from_user = (select auth.uid()) or to_user = (select auth.uid()));
 drop policy if exists split_shares_delete on public.split_shares;
 create policy split_shares_delete on public.split_shares for delete to authenticated
-  using (from_user = auth.uid() or to_user = auth.uid());
+  using (from_user = (select auth.uid()) or to_user = (select auth.uid()));
 
 -- Anonymous visitors get nothing from the tables directly.
 revoke all on public.profiles, public.exercises, public.sessions, public.splits, public.split_shares, public.default_exercises from anon;
