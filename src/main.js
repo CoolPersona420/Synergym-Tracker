@@ -582,6 +582,8 @@ let fluidT = 0;
 addEventListener('resize', () => { clearTimeout(fluidT); fluidT = setTimeout(() => { fluidApply($('#view'), null); wireScrollers($('#sheet-body')); }, 150); }, { passive: true });
 document.fonts?.ready.then(() => fluidApply($('#view'), null));
 function render(enter) {
+  /* while the login mascot glides into the splash, the login page stays put underneath; the render runs when it lands */
+  if (SPL.hold) { SPL.dirty = true; SPL.dirtyEnter = SPL.dirtyEnter || !!enter; return; }
   const v = $('#view'), y = scrollY, nav = $('#nav');
   let html = '', app = false, bare = false;
   S.animate = !!enter;
@@ -650,7 +652,7 @@ function playEnter(v) {
 }
 
 /* splash: the mascot after logging in (not on a reload), then the wolf lunges and the app appears through its eye */
-const SPL = { el: null, t0: 0, leaving: false };
+const SPL = { el: null, t0: 0, leaving: false, hold: false, dirty: false, dirtyEnter: false, hand: false }, HAND = 700;
 const wolfPath = c => (WOLF.match(new RegExp(`class="${c}" d="([^"]+)"`)) || [])[1] || '';
 const WOLF_BODY = wolfPath('w-body'), WOLF_EYES = wolfPath('w-eyes'), WOLF_NOSE = wolfPath('w-nose');
 /* the right eye on its own, with its incentre and inradius: scaled about that point, its edges move in evenly.
@@ -665,9 +667,31 @@ function splashIn() {
   const blur = id => `<filter id="${id}" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="7"/></filter>`;
   el.innerHTML = `<div class="spl-stage"><svg class="spl-bg"><defs>${blur('spl-glow-c')}</defs><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/></g><g class="spl-hot"><path class="a" d="${EYE_D}"/><path class="b" d="${EYE_D}"/></g></svg></div><svg class="spl-echo" viewBox="44 40 312 330"><path d="${WOLF_BODY}"/><path class="b" d="${WOLF_BODY}"/></svg>
   <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">SYNERGYM</span></span></div>`;
+  /* after signing in, the splash starts from the mascot on the login page */
+  const from = !reduced && $('.auth-logo .lockup');
+  SPL.hand = !!(from && from.getBoundingClientRect().width);
+  if (SPL.hand) el.classList.add('handoff');
   document.body.appendChild(el);
   SPL.el = el; SPL.t0 = performance.now(); SPL.leaving = false;
+  if (SPL.hand) splashHandoff(el, from);
   setTimeout(() => { if (SPL.el === el && !SPL.leaving) splashOut(); }, 10000);
+}
+/* the login page's wolf and wordmark glide to the middle and grow into the splash lockup while the page fades out behind them */
+function splashHandoff(el, from) {
+  const pairs = [[$('.wolf', from), el.querySelector('.spl-wolf')], [$('.wordmark', from), el.querySelector('.spl-word .wordmark')]];
+  for (const [a, b] of pairs) {
+    if (!a || !b) continue;
+    const r = a.getBoundingClientRect(), q = b.getBoundingClientRect(), box = b.parentElement, m = box.getBoundingClientRect();
+    box.style.transformOrigin = `${q.left + q.width / 2 - m.left}px ${q.top + q.height / 2 - m.top}px`;
+    box.animate([{ transform: `translate(${r.left + r.width / 2 - (q.left + q.width / 2)}px, ${r.top + r.height / 2 - (q.top + q.height / 2)}px) scale(${r.width / q.width})` }, { transform: 'none' }], { duration: HAND, easing: 'cubic-bezier(.65,0,.25,1)' });
+  }
+  el.querySelector('.spl-stage').animate([{ opacity: 0 }, { opacity: 1 }], { duration: HAND * .75, easing: 'cubic-bezier(.4,0,.2,1)' });
+  from.style.visibility = 'hidden';
+  SPL.hold = true;
+  setTimeout(() => {
+    SPL.hold = false;
+    if (SPL.dirty) { const e = SPL.dirtyEnter; SPL.dirty = SPL.dirtyEnter = false; render(e); }
+  }, HAND);
 }
 /* where the drawn wolf's viewBox lands on screen (xMidYMid meet) */
 function splashFit(el) {
@@ -676,12 +700,12 @@ function splashFit(el) {
   const s = Math.min(r.width / 312, r.height / 330);
   return { s, ox: r.left + (r.width - 312 * s) / 2 - 44 * s, oy: r.top + (r.height - 330 * s) / 2 - 40 * s };
 }
-/* reveal: the eyes ignite from white to red with a jolt and a shockwave, then the wolf lunges at the screen.
+/* reveal: the eyes flare with a jolt and a shockwave, then the wolf lunges at the screen.
    Only reduced motion and data saver get the plain lift instead: it is all vector work, and device hints
    (cores, memory) are randomised by privacy browsers such as Brave */
 function splashOut() {
   if (SPL.leaving) return; SPL.leaving = true;
-  const el = SPL.el, wait = Math.max(0, (reduced ? 400 : 650) - (performance.now() - SPL.t0));
+  const el = SPL.el, wait = Math.max(0, (reduced ? 400 : SPL.hand ? HAND + 120 : 650) - (performance.now() - SPL.t0));
   const finish = () => { el.remove(); if (SPL.el === el) { SPL.el = null; SPL.leaving = false; } };
   setTimeout(() => {
     const c = navigator.connection, plain = reduced || !!(c && c.saveData);
