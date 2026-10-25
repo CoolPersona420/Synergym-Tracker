@@ -40,6 +40,8 @@ alter table public.profiles add column if not exists rest_days jsonb check (rest
 alter table public.profiles add column if not exists next_day jsonb check (next_day is null or jsonb_typeof(next_day) = 'object');
 -- One device per account: the auth session id of the newest sign-in. Other devices sign themselves out.
 alter table public.profiles add column if not exists active_session uuid;
+-- Bodyweight history: [{"d":"YYYY-MM-DD","kg":80.5}], one entry per day, most recent 400 kept
+alter table public.profiles add column if not exists bw_log jsonb check (bw_log is null or (jsonb_typeof(bw_log) = 'array' and jsonb_array_length(bw_log) <= 400));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
@@ -248,6 +250,75 @@ grant execute on function public.restore_default_exercises(), public.share_split
   public.split_recipients(uuid), public.shared_with_me(), public.delete_account() to authenticated;
 revoke execute on function public.get_public_split(uuid) from public;
 grant execute on function public.get_public_split(uuid) to anon, authenticated;
+
+-- Errors the app hit in someone's browser, so problems surface without the user reporting them.
+-- Written only through report_error() (signed-in users, at most 30 an hour each); nobody can read it
+-- through the API. Rows older than 30 days are cleared as new ones arrive.
+create table if not exists public.client_errors (
+  id      bigint generated always as identity primary key,
+  user_id uuid references auth.users(id) on delete cascade,
+  at      timestamptz not null default now(),
+  message text not null check (char_length(message) <= 500),
+  stack   text check (char_length(stack) <= 4000),
+  path    text check (char_length(path) <= 200),
+  build   text check (char_length(build) <= 80),
+  ua      text check (char_length(ua) <= 300)
+);
+create index if not exists client_errors_user_at on public.client_errors (user_id, at desc);
+alter table public.client_errors enable row level security;
+revoke all on public.client_errors from anon, authenticated;
+
+create or replace function public.report_error(p_message text, p_stack text, p_path text, p_build text, p_ua text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return; end if;
+  if (select count(*) from public.client_errors where user_id = auth.uid() and at > now() - interval '1 hour') >= 30 then return; end if;
+  insert into public.client_errors (user_id, message, stack, path, build, ua)
+  values (auth.uid(), left(coalesce(p_message, ''), 500), left(p_stack, 4000), left(p_path, 200), left(p_build, 80), left(p_ua, 300));
+  if random() < 0.02 then delete from public.client_errors where at < now() - interval '30 days'; end if;
+end $$;
+
+-- Replace all of the signed-in user's data with an export, in one transaction: if anything fails,
+-- nothing changes. Runs as the caller, so row level security still applies to every statement.
+-- The app gives every row a fresh id before sending. Username, onboarding and the active device are kept.
+create or replace function public.import_replace(p jsonb)
+returns void language plpgsql security invoker set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'Sign in first'; end if;
+  if jsonb_typeof(p->'library') <> 'array' or jsonb_typeof(p->'sessions') <> 'array' or jsonb_typeof(p->'splits') <> 'array' then
+    raise exception 'Invalid import';
+  end if;
+  if jsonb_array_length(p->'sessions') > 20000 or jsonb_array_length(p->'library') > 2000 or jsonb_array_length(p->'splits') > 200 then
+    raise exception 'Import too large';
+  end if;
+  delete from public.sessions where user_id = uid;
+  delete from public.splits where user_id = uid;
+  delete from public.exercises where user_id = uid;
+  insert into public.exercises (id, user_id, name, muscle, kind, archived, is_default, one_rm, one_rm_at)
+    select x.id, uid, x.name, x.muscle, x.kind, coalesce(x.archived, false), coalesce(x.is_default, false), x.one_rm, x.one_rm_at
+    from jsonb_to_recordset(p->'library') as x(id uuid, name text, muscle text, kind text, archived boolean, is_default boolean, one_rm numeric, one_rm_at timestamptz);
+  insert into public.sessions (id, user_id, name, started_at, ended_at, notes, items, split_id, split_day)
+    select x.id, uid, x.name, x.started_at, x.ended_at, coalesce(x.notes, ''), coalesce(x.items, '[]'), x.split_id, x.split_day
+    from jsonb_to_recordset(p->'sessions') as x(id uuid, name text, started_at timestamptz, ended_at timestamptz, notes text, items jsonb, split_id uuid, split_day int);
+  insert into public.splits (id, user_id, name, description, days, copied_from)
+    select x.id, uid, x.name, coalesce(x.description, ''), coalesce(x.days, '[]'), x.copied_from
+    from jsonb_to_recordset(p->'splits') as x(id uuid, name text, description text, days jsonb, copied_from text);
+  if jsonb_typeof(p->'profile') = 'object' then
+    update public.profiles t set
+      unit = coalesce(r.unit, t.unit), weekly_target = coalesce(r.weekly_target, t.weekly_target),
+      rest_seconds = coalesce(r.rest_seconds, t.rest_seconds), rest_enabled = coalesce(r.rest_enabled, t.rest_enabled),
+      rest_sound = coalesce(r.rest_sound, t.rest_sound), bodyweight = coalesce(r.bodyweight, t.bodyweight),
+      display_name = coalesce(r.display_name, t.display_name), experience = coalesce(r.experience, t.experience),
+      goal = coalesce(r.goal, t.goal), theme = r.theme, muscles = r.muscles, widgets = r.widgets,
+      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log
+    from jsonb_populate_record(null::public.profiles, p->'profile') r
+    where t.id = uid;
+  end if;
+end $$;
+
+revoke execute on function public.report_error(text, text, text, text, text), public.import_replace(jsonb) from public, anon;
+grant execute on function public.report_error(text, text, text, text, text), public.import_replace(jsonb) to authenticated;
 
 -- ---------------------------------------------------------------- starter exercise list
 

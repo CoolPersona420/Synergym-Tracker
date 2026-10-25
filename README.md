@@ -65,22 +65,58 @@ npm install
 npm run dev
 ```
 
-## Moving data from an earlier version
+## Tests
 
-Open the old version (Plate Log), go to **Settings → Export JSON**, then in the new site go to
-**Settings → Import JSON**. Exercises are matched by name, and anything missing is added to
-your list as a custom exercise.
+```bash
+npm run lint   # undefined names, duplicate keys, unreachable code
+npm test       # unit tests for the pure logic in src/lib (Node's built-in test runner)
+npm run e2e    # browser tests on phone and desktop sizes, with Supabase faked in the browser
+```
+
+`npm run build` runs lint and the unit tests before building, and Vercel deploys with `npm run build`,
+so a change that breaks them never goes live. GitHub Actions (`.github/workflows/test.yml`) also runs
+the browser tests on every push. They need no secrets: `tests/e2e/fake-supabase.js` answers the app's
+auth and database calls in memory.
+
+## Code layout
+
+| Path | What's in it |
+|---|---|
+| `src/main.js` | app state, screens, actions, saving and sync |
+| `src/lib/` | logic with no UI: progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, error reports and stats |
+| `src/ui/` | brand and icons, themes, the login splash |
+| `src/data/` | starter split templates, quotes |
+
+## Errors and usage stats
+
+Errors in a signed-in user's browser are saved to `client_errors` (at most 30 an hour per user, kept 30
+days, not readable through the API). Read them in the Supabase SQL editor:
+
+```sql
+select at, message, path, build from client_errors order by at desc limit 50;
+```
+
+Page views go to Vercel Web Analytics (no cookies; ids in addresses are replaced with `:id`). Turn it on
+once in the Vercel dashboard: project → Analytics → Enable.
+
+## Export and import
+
+**Settings → Export JSON** saves everything (exercises, sessions, splits, settings, bodyweight log);
+**Export CSV** saves every set as a spreadsheet row. **Import JSON** replaces all of the account's data
+with a file: it shows what will be deleted and offers to export first, then swaps everything in one
+database transaction (`import_replace`), so a failed import changes nothing.
 
 ## Data model
 
 | Table | Holds | Who can see it |
 |---|---|---|
-| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, active device (one signed-in device per account) | owner |
+| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account) | owner |
 | `exercises` | each user's own exercise list (seeded from `default_exercises`) | owner |
 | `sessions` | one row per workout; sets are stored as JSON inside it | owner |
 | `splits` | training plans: days, session types, exercises with sets × reps | owner |
 | `split_shares` | which user a split was shared with | sender and recipient |
+| `client_errors` | errors reported by the app | nobody through the API (SQL editor only) |
 
 The functions `share_split`, `unshare_split`, `split_recipients`, `shared_with_me`,
-`get_public_split`, `restore_default_exercises` and `delete_account` handle the
+`get_public_split`, `restore_default_exercises`, `delete_account`, `import_replace` and `report_error` handle the
 cross-user actions safely.

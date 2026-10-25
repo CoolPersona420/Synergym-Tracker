@@ -1,5 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import './style.css';
+import { suggestNext } from './lib/progress.js';
+import { reduced, LITE } from './lib/env.js';
+import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, roll, toast } from './lib/util.js';
+import { num, cleanSession, cleanDays } from './lib/sanitize.js';
+import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
+import { parseImport } from './lib/importer.js';
+import { ICON, brand, lockup, big, disp, countUp } from './ui/brand.js';
+import { THEMES, themePref, isDark, applyTheme, themePicker } from './ui/themes.js';
+import { SPL, setSplashHooks, splashIn, splashOut } from './ui/splash.js';
+import { TEMPLATES, recommendTemplate } from './data/templates.js';
+import { QUOTES } from './data/quotes.js';
+import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
+import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
+import { trackErrors, startAnalytics } from './lib/telemetry.js';
 
 /* ================= config ================= */
 // The project URL and publishable key are public by design (every browser receives them; Row Level
@@ -11,6 +25,11 @@ const sb = SB_URL && SB_KEY
   ? createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } })
   : null;
 
+/* errors reach the database only for a signed-in user (S is defined below; this runs later, on an error) */
+const BUILD = (document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || 'dev').replace(/^.*\//, '');
+const reportError = trackErrors(e => { if (sb && S.user) sb.rpc('report_error', { p_message: e.message, p_stack: e.stack, p_path: e.path, p_build: BUILD, p_ua: navigator.userAgent.slice(0, 300) }).then(() => {}, () => {}); });
+if (import.meta.env.PROD) startAnalytics();
+
 /* ================= constants ================= */
 const DEFAULT_MUSCLES = ['Chest','Back','Shoulders','Biceps','Triceps','Quads','Hamstrings','Glutes','Calves','Core','Full body'];
 const muscles = () => (Array.isArray(S.profile.muscles) && S.profile.muscles.length ? S.profile.muscles : DEFAULT_MUSCLES);
@@ -18,44 +37,9 @@ const DAY_TYPES = ['Push','Pull','Legs','Upper','Lower','Full body','Chest & Bac
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const KG_LB = 2.2046226;
-const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-/* low-end devices (few cores, little memory, data saver) get the same motion with cheaper effects */
-const LITE = (() => { try {
-  const n = navigator, c = n.connection;
-  if (c && c.saveData) return true;
-  /* Brave randomises the core count and memory to resist fingerprinting, so they say nothing about the device there */
-  if (n.brave) return false;
-  return (n.deviceMemory && n.deviceMemory <= 2) || (n.hardwareConcurrency && n.hardwareConcurrency <= 4 && (!n.deviceMemory || n.deviceMemory <= 4));
-} catch { return false; } })();
-if (LITE) document.documentElement.classList.add('lite');
-if (!document.startViewTransition) document.documentElement.classList.add('no-vt');
 
-
-const ICON={
- home:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg>',
- today:'<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
- hist:'<svg class="ico" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h8"/></svg>',
- ex:'<svg class="ico" viewBox="0 0 24 24"><path d="M3 10v4M6.5 7.5v9M17.5 7.5v9M21 10v4M6.5 12h11"/></svg>',
- split:'<svg class="ico" viewBox="0 0 24 24"><rect x="3.5" y="5" width="4" height="14" rx="1.2"/><rect x="10" y="5" width="4" height="14" rx="1.2"/><rect x="16.5" y="5" width="4" height="14" rx="1.2"/></svg>',
- prefs:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/><circle cx="12" cy="12" r="2.8"/></svg>',
- plus:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></svg>',
- play:'<svg class="ico" viewBox="0 0 24 24"><path d="M8 5.5l10.5 6.5L8 18.5z" fill="currentColor"/></svg>',
- back:'<svg class="ico" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>',
- dots:'<svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18" cy="12" r="1.3" fill="currentColor"/></svg>',
- check:'<svg class="ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
- link:'<svg class="ico" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
- x:'<svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
- expand:'<svg class="ico" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/></svg>',
- pen:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
- up:'<svg class="ico" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
- down:'<svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
- sun:'<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>',
- moon:'<svg class="ico" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
- share:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>'
-};
 
 /* ================= state ================= */
-const DEFAULT_PROFILE = { nextDay: null, restDays: [], widgets: null, muscles: null, theme: null, username: null, name: '', exp: null, goal: null, onboarded: false, unit: 'kg', target: 3, rest: 90, restOn: true, sound: true, bw: 75 };
 const S = {
   authReady: false, user: null, loaded: false, loadError: null,
   profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(),
@@ -65,74 +49,13 @@ const S = {
 };
 
 /* ================= utils ================= */
-const $ = (s, r = document) => r.querySelector(s);
-const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const uuid = () => crypto.randomUUID();
-const sid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const pad = n => String(n).padStart(2, '0');
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const clone = o => JSON.parse(JSON.stringify(o));
-const fmtDate = t => { const d = new Date(t); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${String(d.getFullYear()).slice(2)}`; };
-const fmtTime = t => { const d = new Date(t); return `${pad(d.getHours())}.${pad(d.getMinutes())}`; };
-const mmss = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
 const unit = () => S.profile.unit === 'lb' ? 'lb' : 'kg';
 const toU = kg => S.profile.unit === 'lb' ? kg * KG_LB : kg;
 const fromU = v => S.profile.unit === 'lb' ? v / KG_LB : v;
 const fmtW = kg => { if (kg == null || !isFinite(kg)) return ''; return String(Math.round(toU(kg) * 10) / 10); };
 const fmtVol = kg => { const v = toU(kg || 0); if (v >= 10000) return (v / 1000).toFixed(1) + (unit() === 'lb' ? 'k lb' : ' t'); return Math.round(v).toLocaleString('en-US') + ' ' + unit(); };
-const dayKey = t => { const d = new Date(t); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
-const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-function weekStart(t) { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); }
-function shiftWeek(t, n) { const d = new Date(t); d.setDate(d.getDate() + 7 * n); return weekStart(d.getTime()); }
-function roll(t) { return `<span class="roll"><span data-t="${esc(t)}">${esc(t)}</span></span>`; }
-let toastT; function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2800); }
 
-/* brand, contour lines, big numerals */
-const WOLF = '<path class="w-body" d="M200 142 L258 128 L292 56 L312 162 L340 196 L318 204 L330 232 L252 304 L200 358 L148 304 L70 232 L82 204 L60 196 L88 162 L108 56 L142 128 Z" stroke-width="16" stroke-linejoin="miter"/><path class="w-eyes" d="M212 220 L280 188 L268 212 Z M188 220 L120 188 L132 212 Z"/><path class="w-nose" d="M186 290 L214 290 L200 304 Z"/>';
-const MARK = `<svg class="mark wolf-t" viewBox="44 40 312 330" aria-hidden="true">${WOLF}</svg>`;
-const brand = (cls = '') => `<span class="brand ${cls}" aria-label="Synergym">${MARK}<span class="wordmark" aria-hidden="true">SYNERGYM</span></span>`;
-const lockup = () => `<div class="lockup" aria-label="Synergym"><svg class="wolf wolf-t" viewBox="44 40 312 330" aria-hidden="true">${WOLF}</svg><span class="wordmark">SYNERGYM</span></div>`;
-function big(v) {
-  const s = String(v), n = parseFloat(s);
-  return s.trim() !== '' && isFinite(n) && /^-?\d+(\.\d+)?$/.test(s) ? `<span class="n count" data-to="${n}" data-dec="${s.includes('.') ? 1 : 0}">${esc(s)}</span>` : `<span class="n">${esc(s)}</span>`;
-}
-const slantWords = html => html.replace(/(^|>)([^<]+)/g, (m, a, t) => a + t.split(/(\s+)/).map(w => w.trim() ? `<span class="w">${w}</span>` : w).join(''));
-const disp = lines => `<h1 class="display">${lines.map((l, k) => `<span class="ln"><span style="--k:${k}">${slantWords(l)}</span></span>`).join('')}</h1>`;
-function countUp(root) {
-  if (reduced) return;
-  for (const el of $$('.count', root)) {
-    const to = +el.dataset.to, dec = +el.dataset.dec, t0 = performance.now(), dur = 1100;
-    if (!isFinite(to) || to === 0) continue;
-    const step = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = (to * e).toFixed(dec); if (k < 1) requestAnimationFrame(step); };
-    el.textContent = (0).toFixed(dec); requestAnimationFrame(step);
-  }
-}
-/* themes: Auto follows the system (mono light / mono dark); the rest are named palettes */
-const THEMES = [
-  { id: 'auto', name: 'Auto', note: 'Mono, follows your device', dark: null, c: ['#EDEDED', '#FFFFFF', '#0E0E0E', '#0E0E0E', '#050505'] },
-  { id: 'light', name: 'Mono Light', note: 'Black on white', dark: false, pair: 'dark', c: ['#EDEDED', '#FFFFFF', '#0E0E0E', '#0E0E0E', '#0E0E0E'] },
-  { id: 'dark', name: 'Mono Dark', note: 'White on black', dark: true, pair: 'light', c: ['#050505', '#151515', '#F4F4F4', '#F4F4F4', '#1F1F1F'] },
-  { id: 'solarized-light', name: 'Solarized Light', note: 'Warm paper, blue ink', dark: false, pair: 'solarized-dark', c: ['#FDF6E3', '#FFFCF2', '#073642', '#268BD2', '#073642'] },
-  { id: 'solarized-dark', name: 'Solarized Dark', note: 'Deep teal, cool text', dark: true, pair: 'solarized-light', c: ['#002B36', '#073642', '#EEE8D5', '#268BD2', '#073642'] },
-  { id: 'gruvbox-light', name: 'Gruvbox Light', note: 'Retro cream and rust', dark: false, pair: 'gruvbox-dark', c: ['#FBF1C7', '#F9F5D7', '#3C3836', '#AF3A03', '#3C3836'] },
-  { id: 'gruvbox-dark', name: 'Gruvbox Dark', note: 'Retro charcoal and amber', dark: true, pair: 'gruvbox-light', c: ['#282828', '#32302F', '#EBDBB2', '#FABD2F', '#1D2021'] },
-  { id: 'nord', name: 'Nord', note: 'Arctic blue-grey', dark: true, pair: 'light', c: ['#2E3440', '#3B4252', '#ECEFF4', '#88C0D0', '#3B4252'] },
-  { id: 'dracula', name: 'Dracula', note: 'Night with violet', dark: true, pair: 'light', c: ['#282A36', '#303341', '#F8F8F2', '#BD93F9', '#21222C'] },
-  { id: 'ocean', name: 'Ocean', note: 'The deep blue original', dark: true, pair: 'light', c: ['#073F6F', '#0E4C7E', '#FFFFFF', '#8CDDF2', '#0A5690'] },
-  { id: 'sage', name: 'Sage', note: 'Olive with terracotta', dark: false, pair: 'volt', c: ['#C3C6B1', '#CED1BD', '#1F241D', '#C9583A', '#DE6F4E'] },
-  { id: 'volt', name: 'Volt', note: 'Black with electric lime', dark: true, pair: 'sage', c: ['#0A0A0A', '#161616', '#F2F2F2', '#D4F25A', '#161616'] }
-];
-const themePref = () => document.documentElement.dataset.theme || 'auto';
-const isDark = () => { const t = THEMES.find(x => x.id === themePref()); return t && t.dark != null ? t.dark : matchMedia('(prefers-color-scheme: dark)').matches; };
-function applyTheme(t) {
-  if (!THEMES.some(x => x.id === t)) t = 'auto';
-  if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
-  try { t === 'auto' ? localStorage.removeItem('sg-theme') : localStorage.setItem('sg-theme', t); } catch {}
-  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-  for (const m of $$('meta[name="theme-color"]')) m.content = bg || (isDark() ? '#050505' : '#EDEDED');
-}
-function setTheme(t) { applyTheme(t); render(false); }
+/* ================= themes ================= */
 function flipTheme() {
   const t = THEMES.find(x => x.id === themePref());
   const next = t && t.pair ? t.pair : (isDark() ? 'light' : 'dark');
@@ -140,37 +63,10 @@ function flipTheme() {
   if (S.user && S.loaded && S.profile.onboarded) { S.profile.theme = next; queue('p', 300); }
   render(false);
 }
-const themePicker = () => `<div class="themes">${THEMES.map(t => `<button class="theme-card${themePref() === t.id ? ' on' : ''}" data-act="d-theme" data-t="${t.id}" aria-pressed="${themePref() === t.id}">
-  <span class="tp" style="background:${t.c[0]}"><b style="background:${t.c[4]}"></b><em style="background:${t.c[1]}"></em><i style="background:${t.c[2]}"></i><u style="background:${t.c[3]}"></u></span>
-  <span>${t.name}<small>${t.note}</small></span></button>`).join('')}</div>`;
-const themeBtn = () => `<button class="theme-btn" data-act="theme-flip" aria-label="Switch to ${isDark() ? 'light' : 'dark'} mode" title="Switch to ${isDark() ? 'light' : 'dark'} mode">${isDark() ? ICON.sun : ICON.moon}</button>`;
 
 /* ================= sanitising ================= */
-const num = v => { v = +v; return isFinite(v) ? v : null; };
-const safeId = v => String(v || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || sid();
-function cleanSet(o) { if (!o || typeof o !== 'object') return null; const w = num(o.w), r = num(o.r), pw = num(o.pw), pr = num(o.pr); return { id: safeId(o.id), w: w == null ? null : Math.max(0, w), r: r == null ? null : Math.max(0, Math.round(r)), pw, pr, done: !!o.done, g: o.g ? safeId(o.g) : null }; }
-function cleanItem(o) { if (!o || typeof o !== 'object' || !o.exId) return null; return { id: safeId(o.id), exId: safeId(o.exId), sets: Array.isArray(o.sets) ? o.sets.slice(0, 40).map(cleanSet).filter(Boolean) : [] }; }
-function cleanSession(o) {
-  if (!o || typeof o !== 'object') return null;
-  return { id: String(o.id), name: typeof o.name === 'string' && o.name ? o.name.slice(0, 80) : null, startedAt: num(o.startedAt) || Date.now(), endedAt: num(o.endedAt) || null,
-    notes: typeof o.notes === 'string' ? o.notes.slice(0, 4000) : '', items: Array.isArray(o.items) ? o.items.slice(0, 60).map(cleanItem).filter(Boolean) : [],
-    splitId: o.splitId || null, splitDay: o.splitDay == null ? null : num(o.splitDay) };
-}
-function cleanDays(d) {
-  if (!Array.isArray(d)) return [];
-  return d.slice(0, 14).map(x => ({
-    id: safeId(x && x.id), type: String(x?.type || '').slice(0, 40), rest: !!x?.rest,
-    exercises: Array.isArray(x?.exercises) ? x.exercises.slice(0, 30).map(e => ({
-      id: safeId(e?.id), exId: e?.exId ? String(e.exId).slice(0, 40) : null, name: String(e?.name || 'Exercise').slice(0, 60),
-      muscle: String(e?.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: e?.kind === 'bw' ? 'bw' : 'w',
-      sets: Math.min(20, Math.max(1, parseInt(e?.sets) || 3)), reps: String(e?.reps ?? '8-12').slice(0, 12), g: e?.g ? safeId(e.g) : null
-    })) : []
-  }));
-}
 
 /* ================= db mapping ================= */
-const profFromDb = r => ({ nextDay: r.next_day && typeof r.next_day === 'object' && r.next_day.sp ? { sp: String(r.next_day.sp).slice(0, 40), i: Math.max(0, parseInt(r.next_day.i) || 0), at: +r.next_day.at || 0 } : null, restDays: Array.isArray(r.rest_days) ? r.rest_days.filter(d => typeof d === 'string' && /^\d{4}-\d{1,2}-\d{1,2}$/.test(d)).slice(-400) : [], widgets: Array.isArray(r.widgets) ? r.widgets.filter(id => typeof id === 'string').slice(0, 20) : null, muscles: Array.isArray(r.muscles) ? r.muscles.filter(m => typeof m === 'string' && m.trim()).map(m => m.trim().slice(0, 30)).slice(0, 40) : null, theme: r.theme || null, username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75, activeSession: r.active_session || null });
-const profToDb = p => ({ next_day: p.nextDay || null, rest_days: Array.isArray(p.restDays) && p.restDays.length ? p.restDays.slice(-400) : null, widgets: Array.isArray(p.widgets) ? p.widgets.slice(0, 20) : null, muscles: Array.isArray(p.muscles) && p.muscles.length ? p.muscles : null, theme: p.theme || null, display_name: (p.name || '').slice(0, 40) || null, experience: p.exp || null, goal: p.goal || null, onboarded: !!p.onboarded, unit: p.unit, weekly_target: p.target, rest_seconds: p.rest, rest_enabled: p.restOn, rest_sound: p.sound, bodyweight: Math.round(p.bw * 100) / 100 });
 const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: r.kind === 'bw' ? 'bw' : 'w', archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null });
 const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null });
 const sessFromDb = r => cleanSession({ id: r.id, name: r.name, startedAt: Date.parse(r.started_at), endedAt: r.ended_at ? Date.parse(r.ended_at) : null, notes: r.notes, items: r.items, splitId: r.split_id, splitDay: r.split_day });
@@ -244,7 +140,7 @@ function scheduleRetry() { clearTimeout(OB.retryT); OB.retryT = setTimeout(flush
 function flushAll() { for (const k of [...OB.pending]) flush(k); }
 async function flushNow(key) { if (OB.pending.has(key)) await flush(key); while (OB.inflight.has(key)) await sleep(80); return !OB.pending.has(key); }
 function saveError(key, e) {
-  console.error('Save failed', key, e);
+  console.error('Save failed', key, e); reportError(`Save failed (${splitKey(key)[0]}): ${e.code || ''} ${e.message || ''}`, null);
   if (e.code === '23505' && key.startsWith('x:')) { toast('You already have an exercise with that name'); reloadLibrary(); return; }
   if (e.code === '23514') { toast('That value isn’t allowed. Check lengths and limits.'); return; }
   toast('Couldn’t save a change: ' + (e.message || 'unknown error'));
@@ -469,6 +365,17 @@ function lastSetsFor(exId, excludeId) {
   for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => i.exId === exId && i.sets.some(x => +x.r > 0)); if (it) return it.sets.filter(x => +x.r > 0); }
   return null;
 }
+/* the last n sessions' logged sets for an exercise, newest first */
+function historyFor(exId, excludeId, n = 2) {
+  const out = [];
+  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => i.exId === exId && i.sets.some(x => +x.r > 0)); if (it) { out.push(it.sets.filter(x => +x.r > 0)); if (out.length >= n) break; } }
+  return out;
+}
+/* weights snap to what you can load: 2.5 kg or 5 lb steps */
+const loadStep = () => unit() === 'lb' ? 5 : 2.5;
+const snapW = kg => fromU(Math.round(toU(kg) / loadStep()) * loadStep());
+const suggestFor = (s, it) => { const ex = exOf(it.exId); return ex ? suggestNext(historyFor(it.exId, s.id), { bw: ex.kind === 'bw', step: fromU(loadStep()), round: snapW }) : null; };
+const bwNow = () => { const l = S.profile.bwLog; return l && l.length ? l[l.length - 1].kg : S.profile.bw; };
 const isRestDay = d => d.rest || /^rest$/i.test(d.type.trim());
 function nextSplitDay() {
   if (!S.splits.size) return null;
@@ -610,7 +517,7 @@ function render(enter) {
         default: html = vToday();
       }
     }
-  } catch (err) { console.error(err); html = `<div class="empty"><b>Something went wrong drawing this view.</b>Reload the page. Your data is safe.</div>`; }
+  } catch (err) { console.error(err); reportError(`Render ${S.view}: ${err && err.message}`, err && err.stack); html = `<div class="empty"><b>Something went wrong drawing this view.</b>Reload the page. Your data is safe.</div>`; }
   S.animate = false;
   const keepX = enter ? null : KEEPX.map(q => $$(q, v).map(el => el.scrollLeft)), fprev = enter ? null : fluidCapture(v);
   v.innerHTML = html;
@@ -651,127 +558,6 @@ function playEnter(v) {
   late.forEach(el => rvObs.observe(el));
 }
 
-/* splash: the mascot after logging in (not on a reload), then the wolf lunges and the app appears through its eye */
-const SPL = { el: null, t0: 0, leaving: false, hold: false, dirty: false, dirtyEnter: false, hand: false }, HAND = 700;
-const wolfPath = c => (WOLF.match(new RegExp(`class="${c}" d="([^"]+)"`)) || [])[1] || '';
-const WOLF_BODY = wolfPath('w-body'), WOLF_EYES = wolfPath('w-eyes'), WOLF_NOSE = wolfPath('w-nose');
-/* the right eye on its own, with its incentre and inradius: scaled about that point, its edges move in evenly.
-   EYE_BODY is how far that point sits from the edge of the body (stroke included) */
-const EYE = [[212, 220], [280, 188], [268, 212]], EYE_D = 'M212 220 L280 188 L268 212 Z', EYE_IX = 262.8, EYE_IY = 204.79, EYE_R = 7.871, EYE_BODY = 63;
-function splashIn() {
-  if (SPL.el) return;
-  const el = document.createElement('div');
-  el.id = 'splash'; el.setAttribute('aria-hidden', 'true');
-  /* the stage is a full-screen copy of the wolf for the lunge; a clip-path cuts the eye-shaped hole that reveals the app */
-  const glow = id => `<path class="w-glow" d="${WOLF_EYES}" filter="url(#${id})"/>`;
-  const blur = id => `<filter id="${id}" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="7"/></filter>`;
-  el.innerHTML = `<div class="spl-stage"><svg class="spl-bg"><defs>${blur('spl-glow-c')}</defs><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/></g><g class="spl-hot"><path class="a" d="${EYE_D}"/><path class="b" d="${EYE_D}"/></g></svg></div><svg class="spl-echo" viewBox="44 40 312 330"><path d="${WOLF_BODY}"/><path class="b" d="${WOLF_BODY}"/></svg>
-  <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">${[...'SYNERGYM'].map((c, i) => `<i style="--i:${i}">${c}</i>`).join('')}</span></span></div>`;
-  /* after signing in, the splash starts from the mascot on the login page */
-  const from = !reduced && $('.auth-logo .lockup');
-  SPL.hand = !!(from && from.getBoundingClientRect().width);
-  if (SPL.hand) el.classList.add('handoff');
-  document.body.appendChild(el);
-  SPL.el = el; SPL.t0 = performance.now(); SPL.leaving = false;
-  if (SPL.hand) splashHandoff(el, from);
-  setTimeout(() => { if (SPL.el === el && !SPL.leaving) splashOut(); }, 10000);
-}
-/* the login page's wolf and wordmark glide to the middle and grow into the splash lockup while the page fades out behind them */
-function splashHandoff(el, from) {
-  const pairs = [[$('.wolf', from), el.querySelector('.spl-wolf')], [$('.wordmark', from), el.querySelector('.spl-word .wordmark')]];
-  for (const [a, b] of pairs) {
-    if (!a || !b) continue;
-    const r = a.getBoundingClientRect(), q = b.getBoundingClientRect(), box = b.parentElement, m = box.getBoundingClientRect();
-    box.style.transformOrigin = `${q.left + q.width / 2 - m.left}px ${q.top + q.height / 2 - m.top}px`;
-    box.animate([{ transform: `translate(${r.left + r.width / 2 - (q.left + q.width / 2)}px, ${r.top + r.height / 2 - (q.top + q.height / 2)}px) scale(${r.width / q.width})` }, { transform: 'none' }], { duration: HAND, easing: 'cubic-bezier(.65,0,.25,1)' });
-  }
-  el.querySelector('.spl-stage').animate([{ opacity: 0 }, { opacity: 1 }], { duration: HAND * .75, easing: 'cubic-bezier(.4,0,.2,1)' });
-  from.style.visibility = 'hidden';
-  SPL.hold = true;
-  setTimeout(() => {
-    SPL.hold = false;
-    if (SPL.dirty) { const e = SPL.dirtyEnter; SPL.dirty = SPL.dirtyEnter = false; render(e); }
-  }, HAND);
-}
-/* where the drawn wolf's viewBox lands on screen (xMidYMid meet) */
-function splashFit(el) {
-  const r = el.querySelector('.spl-wolf').getBoundingClientRect();
-  if (!r.width) return null;
-  const s = Math.min(r.width / 312, r.height / 330);
-  return { s, ox: r.left + (r.width - 312 * s) / 2 - 44 * s, oy: r.top + (r.height - 330 * s) / 2 - 40 * s };
-}
-/* reveal: the eyes flare with a jolt and a shockwave, then the wolf lunges at the screen.
-   Only reduced motion and data saver get the plain lift instead: it is all vector work, and device hints
-   (cores, memory) are randomised by privacy browsers such as Brave */
-function splashOut() {
-  if (SPL.leaving) return; SPL.leaving = true;
-  const el = SPL.el, wait = Math.max(0, (reduced ? 400 : SPL.hand ? HAND + 120 : 650) - (performance.now() - SPL.t0));
-  const finish = () => { el.remove(); if (SPL.el === el) { SPL.el = null; SPL.leaving = false; } };
-  setTimeout(() => {
-    const c = navigator.connection, plain = reduced || !!(c && c.saveData);
-    const f = !plain && el.querySelector('.spl-cam') && splashFit(el);
-    if (!f) { el.classList.add('out'); playEnter($('#view')); setTimeout(finish, 1000); return; }
-    const r = el.querySelector('.spl-wolf').getBoundingClientRect();
-    Object.assign(el.querySelector('.spl-echo').style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
-    el.classList.add('wake');
-    setTimeout(() => splashConsume(el, finish), 420);
-  }, wait);
-}
-/* the lunge, in four beats:
-   crouch  - it pulls back
-   lunge   - it springs at the screen, faster and faster, until its body blacks out the view with the eye in the middle
-   impact  - a short shake while the eye burns
-   tear    - the eye rips open from its centre with a hot rim and the app is behind it */
-function splashConsume(el, done) {
-  const f = splashFit(el), stage = el.querySelector('.spl-stage'), cam = el.querySelector('.spl-cam'), hot = el.querySelector('.spl-hot');
-  if (!f || !stage || !cam) { playEnter($('#view')); return done(); }
-  const [hotA, hotB] = hot.children, shade = cam.querySelector('.spl-shade'), nose = cam.querySelector('.w-nose'), glowEl = cam.querySelector('.w-glow');
-  const W = innerWidth, H = innerHeight, cx = W / 2, cy = H / 2, R = Math.hypot(cx, cy);
-  const s0 = f.s, ix0 = f.ox + EYE_IX * s0, iy0 = f.oy + EYE_IY * s0;
-  /* sc: crouched; sb: the body just covers the screen; s1: the opened eye covers the screen */
-  const sc = s0 * .86, sb = Math.max(sc * 2, R / EYE_BODY * 1.08), s1 = R / EYE_R * 1.06;
-  const C = 170, L = 400, B = 130, T = 560, D = C + L + B + T;
-  const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
-  const io = t => t < .5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
-  const px = (x, y) => `${x.toFixed(1)}px ${y.toFixed(1)}px`;
-  let entered = false;
-  const t0 = performance.now();
-  const frame = now => {
-    const t = Math.min(D, now - t0);
-    let s, m = 1, dark = 1, open = 0, w = 14, jx = 0, jy = 0;
-    if (t < C) { s = s0 * (1 - .14 * Math.sin(t / C * Math.PI / 2)); m = 0; dark = 0; }
-    else if (t < C + L) {
-      const u = (t - C) / L;
-      s = sc * Math.pow(sb / sc, u ** 2.4); m = smooth(u / .8); dark = smooth((u - .35) / .5);
-    } else if (t < C + L + B) {
-      const v = (t - C - L) / B, a = 7 * (1 - v) ** 2;
-      s = sb * (1 + .05 * v); jx = Math.sin(v * 26) * a; jy = Math.cos(v * 20) * a * .6;
-    } else {
-      const v = (t - C - L - B) / T, e = io(v);
-      s = sb * 1.05 * Math.pow(s1 / (sb * 1.05), e); open = smooth(v / .45); w = 14 * (1 - smooth((v - .75) / .25));
-    }
-    /* the eye drifts to the middle of the screen as the wolf closes in */
-    const x = ix0 + (cx - ix0) * m + jx, y = iy0 + (cy - iy0) * m + jy, tx = x - EYE_IX * s, ty = y - EYE_IY * s;
-    cam.setAttribute('transform', `translate(${tx} ${ty}) scale(${s})`);
-    const k = Math.max(0, open * (1 - w / (EYE_R * s)));
-    if (k > 0) {
-      /* the screen minus the eye: the triangle runs against the outer edge, so the nonzero rule leaves it empty */
-      const p = EYE.map(([a, b]) => [tx + (EYE_IX + (a - EYE_IX) * k) * s, ty + (EYE_IY + (b - EYE_IY) * k) * s]);
-      stage.style.clipPath = `polygon(0px 0px, 0px ${H}px, ${px(...p[0])}, ${px(...p[1])}, ${px(...p[2])}, ${px(...p[0])}, 0px ${H}px, ${W}px ${H}px, ${W}px 0px)`;
-      hot.setAttribute('transform', `translate(${tx + EYE_IX * s * (1 - k)} ${ty + EYE_IY * s * (1 - k)}) scale(${s * k})`);
-      hot.style.opacity = Math.min(1, open * 1.6) * (1 - smooth((t - D + 160) / 160));
-      hotA.setAttribute('stroke-width', 30 / (s * k)); hotB.setAttribute('stroke-width', 5 / (s * k));
-      if (!entered) { entered = true; playEnter($('#view')); }
-    } else hot.style.opacity = 0;
-    shade.style.opacity = dark;
-    nose.style.opacity = 1 - smooth((t - C) / (L * .4));
-    const go = .85 * (1 - smooth((t - C) / (L * .3)));
-    glowEl.style.opacity = go; glowEl.style.display = go ? '' : 'none';
-    if (t < D) requestAnimationFrame(frame); else { if (!entered) playEnter($('#view')); done(); }
-  };
-  frame(t0); el.classList.add('consume');
-  requestAnimationFrame(frame);
-}
 function wireCarousel() {
   const d = $('#dash'), dots = $$('#dash-dots button'); if (!d || !dots.length) return;
   let raf = 0;
@@ -887,30 +673,6 @@ function vWizard() {
   return `<div class="ob"><div class="ob-in"><div class="ob-top">${brand()}<div style="display:flex;gap:8px;align-items:center"><button class="linkbtn" data-act="signout">Sign out</button></div></div>${body}</div></div>`;
 }
 
-/* starter splits (exercise names match the default list) */
-const R = ['Rest'];
-const FB_A = ['Full body A', [['Back Squat', 3, '5'], ['Bench Press', 3, '5'], ['Barbell Row', 3, '8'], ['Hanging Leg Raise', 3, '10-12']]];
-const FB_B = ['Full body B', [['Deadlift', 3, '5'], ['Overhead Press', 3, '6-8'], ['Pull-up', 3, '6-10'], ['Walking Lunge', 3, '10']]];
-const FB_C = ['Full body C', [['Front Squat', 3, '6-8'], ['Incline Dumbbell Press', 3, '8-10'], ['Seated Cable Row', 3, '10'], ['Cable Crunch', 3, '12']]];
-const UP_A = ['Upper A', [['Bench Press', 4, '5-6'], ['Barbell Row', 4, '6-8'], ['Overhead Press', 3, '8'], ['Lat Pulldown', 3, '10'], ['Barbell Curl', 2, '10-12'], ['Tricep Pushdown', 2, '10-12']]];
-const LO_A = ['Lower A', [['Back Squat', 4, '5'], ['Romanian Deadlift', 3, '8'], ['Leg Press', 3, '10'], ['Leg Curl', 3, '10-12'], ['Calf Raise', 3, '12']]];
-const UP_B = ['Upper B', [['Incline Dumbbell Press', 4, '8-10'], ['Pull-up', 4, '6-10'], ['Arnold Press', 3, '10'], ['Seated Cable Row', 3, '10'], ['Hammer Curl', 2, '12'], ['Skull Crusher', 2, '12']]];
-const LO_B = ['Lower B', [['Deadlift', 3, '5'], ['Front Squat', 3, '6-8'], ['Bulgarian Split Squat', 3, '10'], ['Hip Thrust', 3, '10'], ['Hanging Leg Raise', 3, '12']]];
-const PUSH = ['Push', [['Bench Press', 4, '6-8'], ['Overhead Press', 3, '8'], ['Incline Dumbbell Press', 3, '10'], ['Lateral Raise', 3, '12-15'], ['Tricep Pushdown', 3, '12']]];
-const PULL = ['Pull', [['Deadlift', 3, '5'], ['Pull-up', 3, '8'], ['Barbell Row', 3, '8-10'], ['Face Pull', 3, '15'], ['Barbell Curl', 3, '10']]];
-const LEGS = ['Legs', [['Back Squat', 4, '6-8'], ['Romanian Deadlift', 3, '8-10'], ['Leg Press', 3, '12'], ['Leg Curl', 3, '12'], ['Calf Raise', 4, '12']]];
-const TEMPLATES = [
-  { id: 'fb2', name: 'Full Body ×2', days: 2, desc: 'Two full-body days a week. Ideal when time is tight.', plan: [FB_A, R, R, FB_B, R, R, R] },
-  { id: 'fb3', name: 'Full Body ×3', days: 3, desc: 'Three full-body sessions with a rest day between each.', plan: [FB_A, R, FB_B, R, FB_C, R, R] },
-  { id: 'ul4', name: 'Upper / Lower', days: 4, desc: 'Each muscle twice a week across four sessions.', plan: [UP_A, LO_A, R, UP_B, LO_B, R, R] },
-  { id: 'ppl5', name: 'Push / Pull / Legs + Upper / Lower', days: 5, desc: 'Five days mixing PPL with an upper and a lower day.', plan: [PUSH, PULL, LEGS, R, UP_A, LO_A, R] },
-  { id: 'ppl6', name: 'Push / Pull / Legs ×2', days: 6, desc: 'The classic six-day split for building muscle.', plan: [PUSH, PULL, LEGS, PUSH, PULL, LEGS, R] }
-];
-function recommendTemplate(days, exp) {
-  let d = days || 3; if (exp === 'beginner') d = Math.min(d, 4);
-  const id = d <= 2 ? 'fb2' : d === 3 ? 'fb3' : d === 4 ? 'ul4' : d === 5 ? 'ppl5' : 'ppl6';
-  return TEMPLATES.find(t => t.id === id);
-}
 function splitFromTemplate(t) {
   const days = t.plan.map(([type, exs]) => ({ id: sid(), type, rest: !exs, exercises: (exs || []).map(([name, sets, reps]) => {
     const lib = S.library.find(e => e.name.toLowerCase() === name.toLowerCase());
@@ -955,6 +717,10 @@ document.addEventListener('submit', async e => {
         if (error) return done(authErr(error), true);
       }
       S.authMsg = null;
+    } else if (f.id === 'f-bw') {
+      const v = parseFloat(String(fd.get('bw') || '').replace(',', '.')), kg = fromU(v);
+      if (!(kg >= 30 && kg <= 300)) return toast(`Enter a weight between ${fmtW(30)} and ${fmtW(300)} ${unit()}`);
+      S.profile.bw = kg; S.profile.bwLog = logBw(S.profile.bwLog, kg); queue('p', 0); buzz(); render(false); toast('Weight logged');
     } else if (f.id === 'f-forgot') {
       const email = String(fd.get('email') || '').trim();
       if (!/^\S+@\S+\.\S+$/.test(email)) return done('Enter a valid email address.', true);
@@ -992,22 +758,6 @@ const pendingPublic = () => { try { const t = localStorage.getItem('sg-open-spli
 /* greeting and quote vary per visit, but stay put while you use the app */
 const SEED = Math.random();
 const pick = (arr, salt = 0) => arr[Math.floor(((SEED * 9301 + salt * 49297) % 1) * arr.length)];
-const QUOTES = [
-  ['The iron never lies to you.', 'Henry Rollins'],
-  ['Two hundred pounds is always two hundred pounds.', 'Henry Rollins'],
-  ['We are what we repeatedly do. Excellence, then, is not an act, but a habit.', 'Will Durant'],
-  ['The last three or four reps is what makes the muscle grow.', 'Arnold Schwarzenegger'],
-  ['Hard work beats talent when talent doesn’t work hard.', 'Tim Notke'],
-  ['I hated every minute of training, but I said, ‘Don’t quit. Suffer now and live the rest of your life as a champion.’', 'Muhammad Ali'],
-  ['Success isn’t always about greatness. It’s about consistency.', 'Dwayne Johnson'],
-  ['Motivation is what gets you started. Habit is what keeps you going.', 'Jim Ryun'],
-  ['You have to expect things of yourself before you can do them.', 'Michael Jordan'],
-  ['Champions keep playing until they get it right.', 'Billie Jean King'],
-  ['It’s not whether you get knocked down, it’s whether you get up.', 'Vince Lombardi'],
-  ['Whether you think you can, or you think you can’t, you’re right.', 'Henry Ford'],
-  ['Do not pray for an easy life, pray for the strength to endure a difficult one.', 'Bruce Lee'],
-  ['Small daily improvements over time lead to stunning results.', 'Robin Sharma']
-];
 /* up-next dropdown: desktop shows a small pill over the day name; phones show one outlined field holding both */
 const pickBtn = (label, day, sub, o = {}) => `<button class="what what-pick${o.cls ? ' ' + o.cls : ''}" ${o.attrs || 'data-act="next-pick" aria-haspopup="dialog" aria-expanded="false"'} aria-label="${o.aria || 'Change what’s up next'}">
   <span class="wp-d" aria-hidden="true"><span class="wp-chip"><span class="wp-t">${label}</span>${o.deskIcon === false ? '' : `<i class="dd">${o.icon || ICON.down}</i>`}</span><b>${day}</b></span>
@@ -1066,7 +816,7 @@ function vToday() {
 }
 
 /* ---------- Home widgets ---------- */
-const DEFAULT_WIDGETS = ['intensity', 'consistency', 'recent'];
+const DEFAULT_WIDGETS = ['week', 'intensity', 'consistency', 'recent'];
 /* stored as "id:size" (size s, m or l); older plain ids get the widget's default size */
 const WSIZES = [['s', 'S', 'Small'], ['m', 'M', 'Medium'], ['l', 'L', 'Large']], WSPAN = { s: 2, m: 3, l: 6 };
 function homeEntries() {
@@ -1121,7 +871,6 @@ function chartDays(days) {
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Daily session intensity, last ${lab(days)}">${g}${f}</svg>
   <div class="axis"><span class="lbl">${lab(days)}</span><span class="lbl">${Math.round(days * 2 / 3)}d</span><span class="lbl">${Math.round(days / 3)}d</span><span class="lbl">today</span></div></div>`;
 }
-const chart30 = () => chartDays(30);
 function heatWeeks(weeks) {
   const cw = weekStart(Date.now()), start = shiftWeek(cw, -(weeks - 1)), di = dayIntensity(), tk = dayKey(Date.now()), now = Date.now(), rd = new Set(S.profile.restDays || []);
   let h = '';
@@ -1130,7 +879,6 @@ function heatWeeks(weeks) {
     if (k === tk) c += ' today'; h += `<i class="${c}" title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : rd.has(k) ? ' · rest day' : ''}"></i>`; } }
   return `<div class="heat${weeks > 30 ? ' dense' : ''}" aria-label="Training days, last ${weeks} weeks">${h}</div>`;
 }
-const heat = () => heatWeeks(18);
 const heatKey = `<div class="heat-f"><span class="lbl">less</span><span class="lbl"><i class="rd-key"></i>rest</span><span class="lbl">more intense</span></div>`;
 const restIn = days => { const t = Date.now() - days * 864e5; return (S.profile.restDays || []).filter(k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime() >= t; }).length; };
 function weekCounts() { const m = new Map(); for (const s of S.sessions.values()) if (s.items.length) { const k = weekStart(s.startedAt); m.set(k, (m.get(k) || 0) + 1); } return m; }
@@ -1169,6 +917,19 @@ const planDays = (nx, full) => `<div class="plan${full ? ' full' : ''}">${nx.sp.
 
 const wTile = (label, value, caption, open) => `<div class="card-h"><span class="lbl">${label}</span>${open ? `<span class="w-ex" aria-hidden="true">${ICON.expand}</span>` : ''}</div><div class="tile"><span class="tile-n">${value}</span><span class="tile-c">${caption}</span></div>`;
 const mkv = pairs => `<div class="mkv">${pairs.map(([k, v]) => `<div><b>${v}</b><span class="lbl">${k}</span></div>`).join('')}</div>`;
+const thisWeek = () => weekSummary(sorted(), weekStart(Date.now()));
+const gainText = g => `+${fmtW(g.by)} ${unit()} on ${esc(exOf(g.exId)?.name || 'a lift')}`;
+const volDelta = W => W.lastVol ? `${W.vol >= W.lastVol ? '+' : '−'}${Math.round(Math.abs(W.vol - W.lastVol) / W.lastVol * 100)}%` : '–';
+const bwDelta = ch => ch == null ? '–' : `${ch > 0 ? '+' : ch < 0 ? '−' : '±'}${fmtW(Math.abs(ch))} ${unit()}`;
+/* a line through the logged weights; the y-axis fits the range with a little headroom */
+function bwChart(days) {
+  const pts = bwSeries(S.profile.bwLog, days); if (pts.length < 2) return `<div class="empty bw-empty">${pts.length ? 'One entry so far. Log again on another day to see a trend.' : 'Log your weight to start a trend.'}</div>`;
+  const W = 300, H = 100, t0 = days ? Date.now() - days * 864e5 : pts[0].t, t1 = Date.now(), lo = Math.min(...pts.map(p => p.kg)), hi = Math.max(...pts.map(p => p.kg)), pad = Math.max(.5, (hi - lo) * .2);
+  const X = t => ((t - t0) / Math.max(1, t1 - t0) * (W - 8) + 4).toFixed(1), Y = kg => (H - 6 - (kg - lo + pad) / (hi - lo + 2 * pad) * (H - 12)).toFixed(1);
+  const line = pts.map(p => `${X(p.t)},${Y(p.kg)}`).join(' '), last = pts[pts.length - 1];
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Bodyweight trend"><polygon class="bw-area" points="${X(pts[0].t)},${H} ${line} ${X(last.t)},${H}"/><polyline class="bw-line" points="${line}" vector-effect="non-scaling-stroke"/></svg>
+  <div class="axis"><span class="lbl">${days ? days + 'd' : fmtDate(pts[0].t)}</span><span class="lbl">${fmtW(lo)}–${fmtW(hi)} ${unit()}</span><span class="lbl">today</span></div></div>`;
+}
 const WIDGETS = {
   intensity: {
     title: 'Intensity', desc: 'How hard each training day was', opts: [[30, '30d'], [90, '90d'], [365, '1y']],
@@ -1242,6 +1003,31 @@ const WIDGETS = {
       if (z === 's') { const x = t[0]; return wTile('Top lift', x ? `${fmtW(roundW(x.ex.oneRm > 0 ? x.ex.oneRm : x.e.best))}<small>${unit()}</small>` : '–', x ? esc(x.ex.name) : 'Nothing logged yet', open); }
       return wHead('Top lifts', `1RM · ${unit()}`, open) + (t.length ? `<div class="list">${t.slice(0, z === 'l' ? 7 : 4).map(liftRow).join('')}</div>` : nothing('Your best lifts show up after your first session.')); },
     full: () => { const t = topLifts(); return wSect('Every exercise you’ve logged', t.length ? `<div class="list">${t.map(liftRow).join('')}</div>` : nothing('Nothing logged yet.')); }
+  },
+  week: {
+    title: 'This week', desc: 'Sessions so far and the lifts that went up',
+    card: (open, z) => { const W = thisWeek(), g = W.gains[0], tgt = S.profile.target || 3;
+      if (z === 's') return wTile('This week', `${W.count}<small>/${tgt}</small>`, g ? gainText(g) : W.count ? plural(W.count, 'session') : 'Nothing logged yet', open);
+      const lines = W.gains.slice(0, z === 'l' ? 5 : 2).map(x => `<div class="wk-g"><span>${esc(exOf(x.exId)?.name || 'Exercise')}</span><b>+${fmtW(x.by)} ${unit()}</b></div>`).join('');
+      return wHead('This week', `${W.count}/${tgt} sessions`, open) + `<div class="wk-h"><b>${plural(W.count, 'session')}</b>${g ? ` · ${gainText(g)}` : ''}</div>`
+        + (lines ? `<div class="wk-gs">${lines}</div>` : `<p class="muted wk-none">${W.count ? 'Beat a recent top weight and it shows up here.' : 'Your first session this week starts the count.'}</p>`)
+        + (z === 'l' ? mkv([['volume', W.vol ? fmtVol(W.vol) : '–'], ['vs last week', volDelta(W)], ['lifts up', W.gains.length]]) : ''); },
+    full: () => { const W = thisWeek(), from = weekStart(Date.now()), list = sorted().filter(s => s.items.length && s.startedAt >= from);
+      return kvs([['Sessions', `${W.count}/${S.profile.target || 3}`], ['Volume', W.vol ? fmtVol(W.vol) : '–'], ['vs last week', volDelta(W)], ['Lifts up', W.gains.length]])
+        + wSect('Lifts that went up', W.gains.length ? `<div class="wk-gs">${W.gains.map(x => `<div class="wk-g"><span>${esc(exOf(x.exId)?.name || 'Exercise')}</span><span class="muted">${fmtW(x.from)} → ${fmtW(x.to)}</span><b>+${fmtW(x.by)} ${unit()}</b></div>`).join('')}</div>` : nothing('Compared with your best in the four weeks before. Nothing has gone up yet this week.'))
+        + wSect('Sessions this week', list.length ? `<div class="list">${list.map(rowSession).join('')}</div>` : nothing('Nothing logged yet this week.')); }
+  },
+  bw: {
+    title: 'Bodyweight', desc: 'Your weight over time', opts: [[90, '90d'], [30, '30d'], [365, '1y'], [0, 'All']],
+    card: (open, z) => { const ch = bwChange(S.profile.bwLog, 30), now = `${fmtW(bwNow())}<small>${unit()}</small>`;
+      if (z === 's') return wTile('Bodyweight', now, ch == null ? 'Log it in Settings or here' : `${bwDelta(ch)} · 30d`, open);
+      const base = wHead('Bodyweight · 90d', `${fmtW(bwNow())} ${unit()}`, open) + bwChart(90);
+      return z === 'l' ? base + mkv([['30 days', bwDelta(bwChange(S.profile.bwLog, 30))], ['90 days', bwDelta(bwChange(S.profile.bwLog, 90))], ['entries', (S.profile.bwLog || []).length]]) : base; },
+    full: d => { const pts = bwSeries(S.profile.bwLog, d), ks = pts.map(p => p.kg), log = [...(S.profile.bwLog || [])].reverse();
+      return `<form id="f-bw" class="bw-log" novalidate><label>Today’s weight<span class="unitin"><input class="field" name="bw" inputmode="decimal" placeholder="${fmtW(bwNow())}" aria-label="Today’s weight"><span class="lbl">${unit()}</span></span></label><button class="btn" type="submit">Log</button></form>`
+        + `<section class="card">${bwChart(d)}</section>`
+        + kvs([['Now', `${fmtW(bwNow())} ${unit()}`], ['Change', bwDelta(bwChange(S.profile.bwLog, d))], ['Lowest', ks.length ? `${fmtW(Math.min(...ks))} ${unit()}` : '–'], ['Highest', ks.length ? `${fmtW(Math.max(...ks))} ${unit()}` : '–']])
+        + wSect('Entries', log.length ? `<div class="bw-list">${log.slice(0, 30).map(e => `<div class="bw-e"><span>${esc(fmtDate(new Date(e.d + 'T12:00').getTime()))}</span><b>${fmtW(e.kg)} ${unit()}</b><button class="iconbtn sm" data-act="bw-del" data-d="${e.d}" aria-label="Delete ${esc(e.d)}">${ICON.x}</button></div>`).join('')}</div>` : nothing('No entries yet. Log your weight above.')); }
   },
   plan: {
     title: 'Your week', desc: 'The split you’re following', size: 'l',
@@ -1321,9 +1107,18 @@ function exCard(it, gmap) {
   return `<article class="ex rv" data-item="${it.id}">
   <div class="ex-h"><button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub" data-orm="${it.id}">${ormLine(cur() || { id: null }, it)}</div></button>
   <button class="iconbtn" data-act="item-menu" data-item="${it.id}" aria-label="Exercise options">${ICON.dots}</button></div>
+  ${suggLine(it, bw)}
   <div class="set-head lbl"><span>Set</span><span>${bw ? '+' + unit() : unit()}</span><span>Reps</span><span>Int</span><span></span></div>
   <div class="sets">${it.sets.map((st, i) => setRow(st, i, gmap)).join('')}</div>
-  <div class="ex-f"><button class="btn ghost sm" data-act="add-set" data-item="${it.id}">${roll('+ Set')}</button>${it.sets.length ? `<button class="btn line sm" data-act="add-drop" data-set="${it.sets[it.sets.length - 1].id}">${roll('+ Drop')}</button>` : ''}</div></article>`;
+  <div class="ex-f"><button class="btn ghost sm" data-act="add-set" data-item="${it.id}">${roll('+ Set')}</button>${it.sets.length ? `<button class="btn line sm" data-act="add-drop" data-set="${it.sets[it.sets.length - 1].id}">${roll('+ Drop')}</button>` : ''}${bw ? '' : `<button class="btn ghost sm ex-plates" data-act="plates" data-item="${it.id}">${roll('Plates')}</button>`}</div></article>`;
+}
+/* "Last 80×8 → try 82.5×8": shown while the session is live and the exercise has history */
+function suggLine(it, bw) {
+  const s = cur(); if (!s || s.endedAt) return '';
+  const g = suggestFor(s, it); if (!g) return '';
+  const fmt = x => bw && !x.w ? `${x.r} reps` : `${fmtW(x.w)}×${x.r}`;
+  const why = { load: 'add weight', reps: 'one more rep', repeat: 'match last time, one more rep', consolidate: 'own this weight first' }[g.why];
+  return `<div class="sugg"><span class="sugg-t"><span class="lbl">Last</span> ${fmt(g.last)} <span class="arr" aria-hidden="true">→</span> <span class="lbl">Try</span> <b>${fmt(g.next)}</b><small>${why}</small></span><button class="btn ghost sm" data-act="sugg-use" data-item="${it.id}">${roll('Use')}</button></div>`;
 }
 function setRow(st, i, gmap) {
   const g = gmap.get(st.id), p = S.A.set.get(st.id), sel = S.link && S.link.has(st.id);
@@ -1818,9 +1613,48 @@ function editDate() {
       queue('s:' + s.id, 0); closeSheet(); render(false); toast('Updated'); };
   });
 }
+/* fill the suggested target into the sets you haven't done yet (working sets only, so warm-ups stay as they were) */
+function useSuggestion(itemId) {
+  const s = cur(), it = s && s.items.find(x => x.id === itemId); if (!it) return;
+  const g = suggestFor(s, it); if (!g) return;
+  const open = it.sets.filter(st => !st.done && st.w == null), work = open.filter(st => st.pw == null || st.pw >= g.last.w - 1e-6);
+  for (const st of work.length ? work : open) { st.pw = g.next.w; st.pr = g.next.r; }
+  if (!open.length) it.sets.push({ id: sid(), w: null, r: null, pw: g.next.w, pr: g.next.r, done: false, g: null });
+  queue('s:' + s.id, 300); render(false); buzz(); toast(`Target set: ${exOf(it.exId)?.kind === 'bw' && !g.next.w ? g.next.r + ' reps' : fmtW(g.next.w) + ' ' + unit() + ' × ' + g.next.r}`);
+}
+/* plate calculator: per-side plates for a target weight, with the bar remembered per unit on this device */
+const PLATE_TONE = ['#D7263D', '#1F6FEB', '#E8B90E', '#2E9D50', '#F2F2F2', '#2A2A2A', '#B8B8B8'];
+function barbellSVG(side, plates) {
+  const H = 110, cx = 160, sleeve = 118, h = p => [1, .92, .8, .68, .52, .42, .34][plates.indexOf(p)] * H, w = p => [11, 10, 9, 8, 6, 5, 4][plates.indexOf(p)];
+  let x = cx + 34, l = '', r = '';
+  for (const p of side) { const pw = w(p), ph = h(p), y = (130 - ph) / 2, c = PLATE_TONE[plates.indexOf(p)];
+    r += `<rect x="${x}" y="${y}" width="${pw}" height="${ph}" rx="2" fill="${c}" class="pl"/>`; l += `<rect x="${2 * cx - x - pw}" y="${y}" width="${pw}" height="${ph}" rx="2" fill="${c}" class="pl"/>`; x += pw + 1.5; }
+  return `<svg class="barbell" viewBox="0 0 320 130" aria-hidden="true"><rect class="bar" x="${cx - 120}" y="61" width="240" height="8" rx="3"/><rect class="bar" x="${cx - sleeve}" y="57" width="${sleeve - 34}" height="16" rx="3"/><rect class="bar" x="${cx + 34}" y="57" width="${sleeve - 34}" height="16" rx="3"/><rect class="bar collar" x="${cx - 36}" y="52" width="4" height="26" rx="1"/><rect class="bar collar" x="${cx + 32}" y="52" width="4" height="26" rx="1"/>${l}${r}</svg>`;
+}
+function plateSheet(kg) {
+  const u = unit(), key = 'sg-bar-' + u; let bar = BARS[u][0]; try { const v = localStorage.getItem(key), b = +v; if (v !== null && v !== '' && BARS[u].includes(b)) bar = b; } catch {}
+  const start = kg > 0 ? Math.round(toU(kg) * 100) / 100 : '';
+  openSheet(`<div class="sh-h"><h3>Plate calculator</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="pl-in"><label>Target<span class="unitin"><input class="field" id="pl-w" inputmode="decimal" value="${start}" placeholder="0" aria-label="Target weight"><span class="lbl">${u}</span></span></label>
+  <div><span class="lbl">Bar</span><span class="seg" role="group" aria-label="Bar weight">${BARS[u].map(b => `<button class="${b === bar ? 'on' : ''}" data-bar="${b}">${b ? b + ' ' + u : 'None'}</button>`).join('')}</span></div></div>
+  <div id="pl-out" aria-live="polite"></div>`, root => {
+    const inp = root.querySelector('#pl-w'), out = root.querySelector('#pl-out');
+    const draw = () => {
+      const t = parseFloat(String(inp.value).replace(',', '.')), r = platesFor(t, bar, PLATES[u]);
+      if (!(t > 0)) { out.innerHTML = `<p class="muted pl-note">Enter a weight to see the plates.</p>`; return; }
+      if (r.under) { out.innerHTML = barbellSVG([], PLATES[u]) + `<p class="muted pl-note">That’s lighter than the ${bar} ${u} bar.</p>`; return; }
+      out.innerHTML = barbellSVG(r.side, PLATES[u]) + `<div class="pl-res"><div><span class="lbl">Each side</span><b>${r.side.length ? sideText(r.side) : 'Just the bar'}</b></div><div><span class="lbl">On the bar</span><b>${r.loaded} ${u}</b></div></div>`
+        + (r.left > 0 ? `<p class="muted pl-note">${r.left} ${u} can’t be loaded with standard plates, so this is the closest under it.</p>` : '');
+    };
+    inp.addEventListener('input', draw);
+    root.querySelectorAll('[data-bar]').forEach(b => b.onclick = () => { bar = +b.dataset.bar; try { localStorage.setItem(key, bar); } catch {} root.querySelectorAll('[data-bar]').forEach(x => x.classList.toggle('on', x === b)); buzz(); draw(); });
+    draw();
+  });
+}
 function setMenu(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
-  const items = [{ label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
+  const w = st.w ?? st.pw, ex = exOf(f.it.exId);
+  const items = [...(ex && ex.kind !== 'bw' ? [{ label: 'Plate calculator', hint: w > 0 ? `${fmtW(w)} ${unit()}` : '', fn: () => plateSheet(w) }] : []), { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
     { label: 'Duplicate set', fn: () => { f.it.sets.splice(f.i + 1, 0, { ...clone(st), id: sid(), done: false, g: null }); queue('s:' + s.id, 300); render(false); } }];
   if (st.g) items.push({ label: 'Unlink from group', fn: () => { st.g = null; cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
   items.push({ label: 'Delete set', warn: true, fn: () => { f.it.sets.splice(f.i, 1); cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
@@ -1952,28 +1786,28 @@ function exportData(fmt) {
 $('#imp').addEventListener('change', async e => {
   const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
   if (f.size > 20e6) return toast('That file is too large');
-  try {
-    const d = JSON.parse(await f.text());
-    const lib = Array.isArray(d.library) ? d.library : [], ss = Array.isArray(d.sessions) ? d.sessions : [];
-    if (!lib.length && !ss.length) return toast('No workout data found in that file');
-    const remap = new Map(); let addedL = 0, addedS = 0, delay = 0;
-    for (const x of lib) {
-      if (!x || !x.name) continue; const name = String(x.name).trim().slice(0, 60); if (!name) continue;
-      let e = S.library.find(y => y.name.toLowerCase() === name.toLowerCase());
-      if (!e) { e = { id: uuid(), name, muscle: String(x.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: x.kind === 'bw' ? 'bw' : 'w', archived: false, isDefault: false }; S.library.push(e); queue('x:' + e.id, delay += 120); addedL++; }
-      remap.set(String(x.id), e.id);
-    }
-    const starts = new Set([...S.sessions.values()].map(s => s.startedAt));
-    for (const raw of ss) {
-      const s = cleanSession(raw); if (!s || starts.has(s.startedAt)) continue;
-      s.id = uuid(); s.splitId = null; s.splitDay = null;
-      for (const it of s.items) it.exId = remap.get(String(it.exId)) || it.exId;
-      s.items = s.items.filter(it => exOf(it.exId)); if (!s.items.length) continue;
-      if (!s.endedAt) s.endedAt = s.startedAt + 3600000;
-      S.sessions.set(s.id, s); queue('s:' + s.id, delay += 120); addedS++;
-    }
-    render(false); toast(`Imported ${plural(addedS, 'session')} and ${plural(addedL, 'new exercise')}`);
-  } catch { toast('That file isn’t a valid Synergym export'); }
+  let d = null; try { d = parseImport(JSON.parse(await f.text()), S.profile.bw); } catch {}
+  if (!d) return toast('That file isn’t a valid Synergym export');
+  const now = [plural(S.sessions.size, 'session'), plural(S.library.length, 'exercise'), plural(S.splits.size, 'split')];
+  const incoming = [plural(d.sessions.length, 'session'), plural(d.library.length, 'exercise'), plural(d.splits.length, 'split')];
+  openSheet(`<div class="sh-h"><h3>Replace all your data?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="imp-warn"><b>This overwrites everything in your account.</b> Your current ${now.join(', ')} will be permanently deleted and replaced by the file. This can’t be undone.</div>
+  <p class="muted" style="margin-top:12px">The file${d.exportedAt ? ` from ${esc(fmtDate(d.exportedAt))}` : ''} has ${incoming.join(', ')}. Your username and login stay the same. Splits you had shared by link stop working.</p>
+  <div class="btns" style="flex-wrap:wrap"><button class="btn line" id="imp-backup" style="margin-right:auto">Export current data first</button><button class="btn ghost" data-act="close">Cancel</button><button class="btn danger" id="imp-go">Replace my data</button></div>`, r => {
+    r.querySelector('#imp-backup').onclick = () => { exportData('json'); toast('Saved a copy of your current data'); };
+    r.querySelector('#imp-go').onclick = async ev => {
+      const btn = ev.currentTarget; btn.disabled = true; btn.textContent = 'Replacing…';
+      flushAll(); for (const end = Date.now() + 8000; (OB.pending.size || OB.inflight.size) && Date.now() < end;) await sleep(150);
+      if (OB.pending.size || OB.inflight.size) { btn.disabled = false; btn.textContent = 'Replace my data'; return toast('Some changes are still saving. Connect and try again.'); }
+      const payload = { library: d.library.map(exToDb), sessions: d.sessions.map(sessToDb), splits: d.splits.map(splitToDb), profile: d.profile ? (({ onboarded, ...rest }) => rest)(profToDb(d.profile)) : null };
+      const { error } = await sb.rpc('import_replace', { p: payload });
+      if (error) { console.error(error); btn.disabled = false; btn.textContent = 'Replace my data'; return toast('Import failed. Nothing was changed.'); }
+      closeSheet();
+      try { await loadAll(); } catch (er) { console.error(er); }
+      if (S.profile.theme) applyTheme(S.profile.theme);
+      render(false); toast(`Imported ${incoming.join(', ')}`);
+    };
+  });
 });
 
 /* ================= account ================= */
@@ -2038,6 +1872,9 @@ const ACT = {
   'add-drop': el => addDrop(el.dataset.set),
   done: el => toggleDone(el.dataset.set),
   'set-menu': el => setMenu(el.dataset.set),
+  'sugg-use': el => useSuggestion(el.dataset.item),
+  plates: el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); const st = it && [...it.sets].reverse().find(x => (x.w ?? x.pw) > 0); plateSheet(st ? st.w ?? st.pw : (el.dataset.w ? +el.dataset.w : null)); },
+  'bw-del': el => { S.profile.bwLog = unlogBw(S.profile.bwLog, el.dataset.d); const l = S.profile.bwLog; if (l.length) S.profile.bw = l[l.length - 1].kg; queue('p', 300); render(false); },
   'item-menu': el => itemMenu(el.dataset.item),
   'sess-menu': sessMenu,
   'edit-date': editDate,
@@ -2119,7 +1956,7 @@ const ACT = {
   },
   'ob-finish': async el => {
     const o = S.ob, p = S.profile; el.disabled = true;
-    Object.assign(p, { unit: o.unit, bw: o.bw, exp: o.exp, goal: o.goal, target: o.days, onboarded: true });
+    Object.assign(p, { unit: o.unit, bw: o.bw, bwLog: logBw(p.bwLog, o.bw), exp: o.exp, goal: o.goal, target: o.days, onboarded: true });
     const { error } = await sb.from('profiles').update(profToDb(p)).eq('id', S.user.id);
     if (error) { p.onboarded = false; el.disabled = false; S.authMsg = { text: 'Couldn’t finish setup. Check your connection and try again.', err: true }; return render(false); }
     if (o.tpl && o.tpl !== 'none') splitFromTemplate(TEMPLATES.find(t => t.id === o.tpl));
@@ -2135,7 +1972,7 @@ const buzz = (ms = 8) => { if (!coarse.matches || reduced) return; try { navigat
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
   const fn = ACT[el.dataset.act]; if (!fn) return; e.preventDefault(); if (BUZZ.has(el.dataset.act)) buzz();
-  const oops = err => { console.error(err); toast('Something went wrong. Try that again.'); };
+  const oops = err => { console.error(err); reportError(err && err.message || String(err), err && err.stack); toast('Something went wrong. Try that again.'); };
   try { const r = fn(el, e); if (r && r.catch) r.catch(oops); } catch (err) { oops(err); }
 });
 document.addEventListener('input', e => {
@@ -2149,7 +1986,7 @@ document.addEventListener('input', e => {
     case 'notes': if (s) { s.notes = el.value.slice(0, 4000); queue('s:' + s.id, 1200); } break;
     case 'q': S.q = el.value; $('#hlist').innerHTML = historyList(); break;
     case 'exq': S.exq = el.value; $('#exlist').innerHTML = exList(); break;
-    case 'd-bw': { const v = parseFloat(el.value.replace(',', '.')), kg = unit() === 'lb' ? v / KG_LB : v; const ok = isFinite(kg) && kg >= 30 && kg <= 300; el.classList.toggle('bad', !ok && el.value.trim() !== ''); if (ok) { S.profile.bw = kg; queue('p', 900); } break; }
+    case 'd-bw': { const v = parseFloat(el.value.replace(',', '.')), kg = unit() === 'lb' ? v / KG_LB : v; const ok = isFinite(kg) && kg >= 30 && kg <= 300; el.classList.toggle('bad', !ok && el.value.trim() !== ''); if (ok) { S.profile.bw = kg; S.profile.bwLog = logBw(S.profile.bwLog, kg); queue('p', 900); } break; }
     case 'pw': { const v = el.value; let sc = 0; if (v.length >= 8) sc++; if (v.length >= 12) sc++; if (/[a-z]/.test(v) && /[A-Z]/.test(v)) sc++; if (/\d/.test(v)) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
       const m = $('#pwm'), t = $('#pwt'); if (m) { m.style.width = (sc * 20) + '%'; m.style.background = sc <= 1 ? 'var(--bad)' : sc <= 3 ? 'var(--accent)' : 'var(--good)'; }
       const need = [!/[A-Z]/.test(v) && 'a capital', !/[a-z]/.test(v) && 'a lowercase letter', !/\d/.test(v) && 'a number'].filter(Boolean);
@@ -2274,6 +2111,7 @@ async function startApp() {
   route(true);
 }
 function boot() {
+  setSplashHooks({ render, playEnter });
   document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
