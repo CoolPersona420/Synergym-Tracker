@@ -21,7 +21,7 @@ The version lives in `package.json` (`1.0.0-alpha`) and shows in Settings › Ab
   reorder days, and share by @username or by link. Home suggests the next day, or pick one from Up next.
   A day can be marked "same day as" the one before for training twice a day (Day 1 · 2nd session).
 - **Done for today:** after a finished session Home shows today as completed with the next day waiting;
-  starting again that day asks first, unless the split plans a second session.
+  starting again that day asks first, unless the split plans a second session. Two sessions a day at most.
 - **Home:** a greeting and quote, the next session, and widgets you choose and size: this week's summary,
   bodyweight trend, intensity, consistency, volume, muscle focus, records, top lifts and your week's plan.
   Each opens full screen with more detail.

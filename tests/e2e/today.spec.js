@@ -16,12 +16,12 @@ function sessionOn(splitId, splitDay, daysAgo = 0) {
   return { id: crypto.randomUUID(), name: 'Push', started_at: new Date(start).toISOString(), ended_at: new Date(end).toISOString(), split_id: splitId, split_day: splitDay,
     items: [{ id: 'i1', exId: bench.id, sets: [1, 2, 3].map(k => ({ id: 's' + k, w: 80, r: 8, done: true })) }] };
 }
-function setup({ twice = false, daysAgo = 0 } = {}) {
+function setup({ twice = false, daysAgo = 0, two = false } = {}) {
   const spId = crypto.randomUUID();
   const days = twice
     ? [day('Push', [ex(bench)]), day('Push', [ex(bench, 2)], { same: true }), day('Pull', [ex(row)]), day('Rest', [], { rest: true })]
     : [day('Push', [ex(bench)]), day('Pull', [ex(row)])];
-  return new FakeSupabase({ exercises: [bench, row], splits: [{ id: spId, name: twice ? 'Twice a day' : 'Push Pull', days }], sessions: [sessionOn(spId, 0, daysAgo)] });
+  return new FakeSupabase({ exercises: [bench, row], splits: [{ id: spId, name: twice ? 'Twice a day' : 'Push Pull', days }], sessions: [sessionOn(spId, 0, daysAgo), ...(two ? [{ ...sessionOn(spId, 1, daysAgo), id: crypto.randomUUID(), name: 'Pull' }] : [])] });
 }
 const startButton = page => page.locator('#nav .nav-train');
 
@@ -50,7 +50,7 @@ test('starting again the same day asks first; Not now logs nothing', async ({ pa
   /* confirming opens the day picker, with today's day marked as done */
   await startButton(page).click();
   await page.click('#sec-go');
-  await expect(page.locator('#sheet-body h3')).toHaveText('Another session today');
+  await expect(page.locator('#sheet-body h3')).toHaveText('Second session today');
   await expect(page.locator('.st-day.done')).toContainText('done today');
   await page.locator('.st-day', { hasText: 'Pull' }).click();
   await expect(page).toHaveURL(/\/session\//);
@@ -61,7 +61,7 @@ test('Second session on Home starts straight away, no question asked', async ({ 
   const fake = setup();
   await login(page, fake, 'A');
   await page.click('.hero-cta [data-act="second"]');
-  await expect(page.locator('#sheet-body h3')).toHaveText('Another session today');
+  await expect(page.locator('#sheet-body h3')).toHaveText('Second session today');
   await page.locator('#sheet-body [data-st-foot]', { hasText: 'Empty session' }).click();
   await expect(page).toHaveURL(/\/session\//);
   await expect.poll(() => fake.sessions.length).toBe(2);
@@ -74,7 +74,7 @@ test('a planned second session is up next on the same day and starts without ask
   await expect(cta.locator('.what-pick').first()).toContainText('Day 1 · 2nd session');
   await expect(cta.locator('.dt-done')).toContainText('1st session done');
   await startButton(page).click();
-  await expect(page.locator('#sheet-body h3')).toHaveText('Another session today');
+  await expect(page.locator('#sheet-body h3')).toHaveText('Second session today');
   const planned = page.locator('.st-day.next');
   await expect(planned).toContainText('Day 1 · 2nd session');
   await planned.click();
@@ -123,4 +123,35 @@ test('moving a second session to the top makes it its own day', async ({ page })
   await expect(cards.nth(0).locator('.day-n')).toHaveText('DAY 1');
   await expect(cards.nth(1).locator('.day-n')).toHaveText('DAY 2');
   await expect.poll(() => fake.splits[0].days.some(d => d.same)).toBe(false);
+});
+
+test('two sessions today: View sessions lists both, and a third can\'t start', async ({ page }) => {
+  const fake = setup({ two: true });
+  await login(page, fake, 'A');
+  const cta = page.locator('.hero-cta');
+  await expect(cta.locator('.done-today')).toContainText('2 sessions');
+  await expect(cta.locator('.done-today')).toContainText('6 sets');
+  await expect(cta.locator('.done-today b')).toHaveText(/^(Push \+ Pull|Pull \+ Push)$/);
+  await expect(cta.locator('[data-act="second"]')).toHaveCount(0);
+  await cta.locator('[data-act="today-sessions"]').click();
+  await expect(page.locator('#sheet-body h3')).toHaveText('Today’s sessions');
+  await expect(page.locator('#sheet-body .row')).toHaveCount(2);
+  await page.locator('#sheet-body .row').filter({ has: page.locator('.t', { hasText: /^Pull$/ }) }).click();
+  await expect(page).toHaveURL(/\/session\//);
+  await expect(page.locator('#sheet')).toBeHidden();
+  await page.goto('/');
+  await startButton(page).click();
+  await expect(page.locator('#sheet-body h3')).toHaveText('Done for today');
+  await expect(page.locator('#sheet-body')).toContainText('the most for one day');
+  await page.locator('#sheet-body .btns [data-act="close"]').click();
+  expect(fake.sessions).toHaveLength(2);
+});
+
+test('a split day can\'t be a third session of the same day', async ({ page }) => {
+  const fake = setup({ twice: true, daysAgo: 1 });
+  await login(page, fake, 'A');
+  await page.goto('/splits/' + fake.splits[0].id);
+  const cards = page.locator('.days > .day');
+  await expect(cards.nth(1).locator('.day-n')).toHaveText('DAY 1 · 2ND SESSION');
+  await expect(cards.nth(2).locator('[data-act="day-same"]')).toHaveCount(0);
 });

@@ -395,7 +395,9 @@ const bwNow = () => { const l = S.profile.bwLog; return l && l.length ? l[l.leng
 const isRestDay = d => d.rest || /^rest$/i.test(d.type.trim());
 /* twice a day: a split day marked "same" is a second session on the same calendar day as the day before it
    (only when both are training days). Labels count calendar days: Day 1, Day 1 · 2nd session, Day 2 … */
-const isSecond = (days, i) => i > 0 && !!days[i] && !!days[i].same && !isRestDay(days[i]) && !isRestDay(days[i - 1]);
+const isSecond = (days, i) => i > 0 && !!days[i] && !!days[i].same && !isRestDay(days[i]) && !isRestDay(days[i - 1]) && !isSecond(days, i - 1);
+/* the most sessions one day can hold */
+const DAY_MAX = 2;
 function dayNum(days, i) { let n = 0, k = 1; for (let j = 0; j <= i && j < days.length; j++) { if (isSecond(days, j)) k++; else { n++; k = 1; } } return [n, k]; }
 const ord = k => ['', '1st', '2nd', '3rd'][k] || k + 'th';
 function dayLabel(days, i) { if (!days || !days[i]) return `Day ${i + 1}`; const [n, k] = dayNum(days, i); return k > 1 ? `Day ${n} · ${ord(k)} session` : `Day ${n}`; }
@@ -867,8 +869,8 @@ function vToday() {
     /* trained today: show it as done; the split's next day waits for the next visit */
     const last = done[0], tot = done.reduce((t, x) => { const q = S.A.sess.get(x.id); return q ? { sets: t.sets + q.sets, vol: t.vol + q.vol } : t; }, { sets: 0, vol: 0 });
     lines = [pick([`Nice work, ${hi},`, `Well done, ${hi},`, `Good work, ${hi},`], 9), ...pick([['today’s work', '<em>is done</em>.'], ['session', '<em>complete</em>.'], ['that’s a wrap', '<em>for today</em>.']], 7)];
-    cta = `<div class="what done-today"><span class="dt-field"><span class="dt-t"><i>Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</i><b>${esc(sessName(last))}</b></span><span class="dt-c" aria-hidden="true">${ICON.check}</span></span><span>${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="open" data-id="${last.id}">View session</button><button class="btn line sm" data-act="second">${ICON.plus}${done.length > 1 ? 'Another session' : 'Second session'}</button></div>`;
+    cta = `<div class="what done-today"><span class="dt-field"><span class="dt-t"><i>Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</i><b>${done.slice().reverse().map(x => esc(sessName(x))).join(' + ')}</b></span><span class="dt-c" aria-hidden="true">${ICON.check}</span></span><span>${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${done.length > 1 ? `<button class="btn line sm" data-act="today-sessions">View sessions</button>` : `<button class="btn line sm" data-act="open" data-id="${last.id}">View session</button><button class="btn line sm" data-act="second">${ICON.plus}Second session</button>`}</div>`;
   } else if (isRestToday()) {
     lines = [greet(hi), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
     cta = nx ? `${pickBtn(`Rest day · up next${nx.picked ? ' · your pick' : ''}`, `${esc(nx.sp.days[nx.i].type || 'Training')}`, `${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)} · waits for tomorrow`)}`
@@ -1368,7 +1370,7 @@ function dayGroups(d) {
 const spLinkType = n => n >= 3 ? 'Giant set' : n === 2 ? 'Superset' : 'Drop set';
 function dayCard(d, i, ro, days = [d]) {
   const rest = isRestDay(d), groups = dayGroups(d), lk = !ro && S.spLink && S.spLink.day === i ? S.spLink : null;
-  const lab = dayLabel(days, i), two = isSecond(days, i), canTwo = !ro && !rest && i > 0 && !isRestDay(days[i - 1]);
+  const lab = dayLabel(days, i), two = isSecond(days, i), canTwo = !ro && !rest && i > 0 && !isRestDay(days[i - 1]) && !isSecond(days, i - 1);
   const head = ro
     ? `<div class="day-h"><span class="day-n">${lab.toUpperCase()}</span><span class="day-type" style="display:flex;align-items:center">${esc(d.type || (rest ? 'Rest' : 'Training'))}</span></div>`
     : `<div class="day-h"><span class="day-mv"><button class="iconbtn sm" data-act="day-move" data-day="${i}" data-d="-1"${i === 0 ? ' disabled' : ''} aria-label="Move ${lab} earlier">${ICON.up}</button><button class="iconbtn sm" data-act="day-move" data-day="${i}" data-d="1"${i === (S.splits.get(S.arg)?.days.length || 0) - 1 ? ' disabled' : ''} aria-label="Move ${lab} later">${ICON.down}</button></span><span class="day-n">${lab.toUpperCase()}</span><input class="day-type" data-f="dtype" data-day="${i}" value="${esc(d.type)}" maxlength="40" placeholder="Session type" aria-label="${lab} session type">${rest ? '' : `<button class="iconbtn" data-act="start-day" data-sp="${S.arg}" data-day="${i}" aria-label="Start ${lab} as a session" title="Start this day">${ICON.play}</button>`}</div>
@@ -1556,7 +1558,7 @@ const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class=
     <p><b>This week.</b> Sessions since Monday, volume (weight × reps) against last week, and the lifts whose heaviest set beats your best from the four weeks before.</p>
     <p><b>Bodyweight.</b> One entry per day, from Settings or the Bodyweight widget. The change is your latest entry minus the first one in the range you’re viewing.</p>
     <p><b>Splits.</b> Home suggests the next training day of the split you used last, skipping rest days. Pick a different day from the Up next menu and the split carries on from there. A day marked “Same day as” the day before is a second session: it comes up next only on the day you trained the first, otherwise the split moves on to the next day.</p>
-    <p><b>Done for today.</b> Once you finish a session with logged sets, Home shows today as completed and the next day waits for your next visit. Starting another session that day asks first, unless your split plans it as a second session.</p>
+    <p><b>Done for today.</b> Once you finish a session with logged sets, Home shows today as completed and the next day waits for your next visit. Starting another session that day asks first, unless your split plans it as a second session. A day holds at most two sessions.</p>
   </div><button class="btn lg wide" data-act="close" style="margin-top:16px">Done</button>`;
 
 /* ================= sheets ================= */
@@ -1672,8 +1674,25 @@ function newSession(extra = {}) {
 }
 function startSession(force = false) {
   const a = activeSession(); if (a) return go('session', a.id);
-  if (!force && askSecond(() => startSession(true))) return;
+  if (dayFull() || (!force && askSecond(() => startSession(true)))) return;
   newSession();
+}
+/* two sessions done today: that's the day's limit. Says so and returns true. */
+function dayFull() {
+  const done = doneToday(); if (done.length < DAY_MAX) return false;
+  openSheet(`<div class="sh-h"><h3>Done for today</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="list today-list">${done.slice().reverse().map(sessRowToday).join('')}</div>
+  <p class="muted" style="margin:12px 0 4px">You’ve logged ${DAY_MAX} sessions today, the most for one day. Recover well; your next session can start tomorrow.</p>
+  <div class="btns"><button class="btn" data-act="close">Got it</button></div>`);
+  return true;
+}
+/* today's sessions in a sheet; each opens the session */
+const sessRowToday = s => rowSession(s).replace('data-act="open"', 'data-act="open-today"');
+function todaySessions() {
+  const done = doneToday();
+  if (done.length === 1) return go('session', done[0].id);
+  openSheet(`<div class="sh-h"><h3>Today’s sessions</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="list today-list">${done.slice().reverse().map(sessRowToday).join('')}</div>`);
 }
 /* after a finished session today, starting another is a second session: say so and ask first.
    Returns true when it asked (the start then happens only if the user confirms). */
@@ -1682,7 +1701,7 @@ function askSecond(proceed) {
   const last = done[0], n = done.length + 1;
   openSheet(`<div class="sh-h"><h3>You’ve trained today</h3><button class="btn ghost sm" data-act="close">Close</button></div>
   <div class="sec-done"><span class="dt-check" aria-hidden="true">${ICON.check}</span><span><b>${esc(sessName(last))}</b><span class="muted">Finished at ${fmtTime(last.endedAt)}${done.length > 1 ? ` · ${plural(done.length, 'session')} today` : ''}</span></span></div>
-  <p class="muted" style="margin:12px 0 4px">Starting again logs a ${ord(n)} session for today. To plan training twice a day, mark a day in your split as “Same day as” the day before.</p>
+  <p class="muted" style="margin:12px 0 4px">Starting again logs a ${ord(n)} session for today, the last one the day can hold. To plan training twice a day, mark a day in your split as “Same day as” the day before.</p>
   <div class="btns"><button class="btn ghost" data-act="close">Not now</button><button class="btn" id="sec-go">Start a ${ord(n)} session</button></div>`, r => {
     r.querySelector('#sec-go').onclick = () => { closeSheet(); proceed(); };
   });
@@ -1712,10 +1731,11 @@ function dayPicker({ title, note, onPick, foot = [] }) {
 }
 function startMenu(force = false) {
   const a = activeSession(); if (a) return go('session', a.id);
+  if (dayFull()) return;
   const nx = nextSplitDay(), planned = nx && nx.second && plannedSecond(nx.sp.id, nx.i);
   if (!force && !planned && askSecond(() => startMenu(true))) return;
   const again = doneToday().length > 0;
-  dayPicker({ title: again ? 'Another session today' : 'Start a session', note: 'The session is filled in from that day. Change anything once it starts.',
+  dayPicker({ title: again ? 'Second session today' : 'Start a session', note: 'The session is filled in from that day. Change anything once it starts.',
     onPick: (sp, i) => startFromSplit(sp, i, true), foot: [{ label: 'Empty session', fn: () => startSession(true) }] });
 }
 function nextMenu() {
@@ -1733,6 +1753,7 @@ function ensureExercise(x) {
 function startFromSplit(spid, di, force = false) {
   const a = activeSession(); if (a) { toast('Finish your current session first'); return go('session', a.id); }
   const sp = S.splits.get(spid), d = sp && sp.days[di]; if (!d) return;
+  if (dayFull()) return;
   if (!force && !plannedSecond(spid, di) && askSecond(() => startFromSplit(spid, di, true))) return;
   const groups = dayGroups(d), gid = new Map();
   const items = d.exercises.map(x => {
@@ -1751,7 +1772,7 @@ function startFromSplit(spid, di, force = false) {
 function repeatSession(id, force = false) {
   const src = S.sessions.get(id); if (!src) return;
   const a = activeSession(); if (a) { toast('Finish your current session first'); return go('session', a.id); }
-  if (!force && askSecond(() => repeatSession(id, true))) return;
+  if (dayFull() || (!force && askSecond(() => repeatSession(id, true)))) return;
   const gm = new Map();
   newSession({ name: src.name, splitId: src.splitId, splitDay: src.splitDay,
     items: src.items.map(it => ({ id: sid(), exId: it.exId, sets: it.sets.map(st => { let g = null; if (st.g) { if (!gm.has(st.g)) gm.set(st.g, sid()); g = gm.get(st.g); } return { id: sid(), w: null, r: null, pw: st.w ?? st.pw ?? null, pr: st.r ?? st.pr ?? null, done: false, g }; }) })) });
@@ -2081,6 +2102,8 @@ const ACT = {
   start: el => startSession(!!el && el.dataset.force === '1'),
   'start-menu': () => startMenu(),
   second: () => startMenu(true),
+  'today-sessions': todaySessions,
+  'open-today': el => { closeSheet(); go('session', el.dataset.id); },
   'start-day': el => startFromSplit(el.dataset.sp, +el.dataset.day),
   resume: el => go('session', el.dataset.id || activeSession()?.id),
   open: el => go('session', el.dataset.id),
