@@ -1472,3 +1472,29 @@ html.app-mode body{overflow-x:clip}
 /* text boxes stay at 16px or larger everywhere (tests/e2e/fit.spec.js checks), so iOS never zooms into one */
 
 a.srow{color:inherit;text-decoration:none}
+
+/* done for today, and twice-a-day split days */
+.hero-cta .done-today{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;max-width:100%}
+.hero-cta .done-today b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hero-cta .done-today .dt-chip,.dt-chip{display:inline-flex;align-items:center;gap:7px;padding:4px 12px 4px 4px;border-radius:999px;background:color-mix(in srgb,var(--good) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--good) 40%,transparent);font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.dt-chip .ico,.dt-check .ico{width:12px;height:12px;stroke-width:3}
+.dt-chip .ico{box-sizing:content-box;padding:4px;border-radius:50%;background:var(--good);color:var(--bg)}
+#view.enter .dt-chip .ico{animation:dt-pop .7s var(--spring) .25s both}
+@keyframes dt-pop{from{transform:scale(0) rotate(-45deg)}}
+.dt-done .ico{color:var(--good);stroke-width:3}
+.sec-done{display:flex;align-items:center;gap:var(--s-1);padding:var(--s-1) var(--s0);border-radius:var(--r-md);background:var(--surface-2)}
+.sec-done > span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sec-done b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec-done .muted{font-size:.85rem}
+.dt-check{display:grid;place-items:center;flex:none;width:2rem;height:2rem;border-radius:50%;background:var(--good);color:var(--bg)}
+.st-day.done{border-style:dashed}
+.st-day.done .lbl{display:inline-flex;align-items:center;flex-wrap:wrap;gap:0 5px}
+.st-day.done .lbl .ico{display:inline-block;width:11px;height:11px;stroke-width:3;color:var(--good)}
+.pd.done:not(.next){box-shadow:inset 3px 0 0 var(--good)}
+.pd.second:not(.next){box-shadow:inset 3px 0 0 var(--accent)}
+.pd.done.second:not(.next){box-shadow:inset 3px 0 0 var(--good)}
+.daybar span.twin{border-top-left-radius:2px;border-bottom-left-radius:2px;margin-left:-2px}
+.day.second{border-left:3px solid var(--accent);border-top-left-radius:var(--r-sm);border-bottom-left-radius:var(--r-sm)}
+.day-2nd{display:flex;align-items:center;gap:6px;color:var(--accent);margin:-2px 0 0}
+.day-2nd .ico{width:13px;height:13px}
+.day-two[aria-pressed="true"]{box-shadow:inset 0 0 0 1px var(--accent)}

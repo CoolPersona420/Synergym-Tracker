@@ -14,7 +14,7 @@ export function cleanSession(o) {
 export function cleanDays(d) {
   if (!Array.isArray(d)) return [];
   return d.slice(0, 14).map(x => ({
-    id: safeId(x && x.id), type: String(x?.type || '').slice(0, 40), rest: !!x?.rest,
+    id: safeId(x && x.id), type: String(x?.type || '').slice(0, 40), rest: !!x?.rest, same: !!x?.same,
     exercises: Array.isArray(x?.exercises) ? x.exercises.slice(0, 30).map(e => ({
       id: safeId(e?.id), exId: e?.exId ? String(e.exId).slice(0, 40) : null, name: String(e?.name || 'Exercise').slice(0, 60),
       muscle: String(e?.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: e?.kind === 'bw' ? 'bw' : 'w',

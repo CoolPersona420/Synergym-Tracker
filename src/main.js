@@ -392,6 +392,16 @@ const snapW = kg => fromU(Math.round(toU(kg) / loadStep()) * loadStep());
 const suggestFor = (s, it) => { const ex = exOf(it.exId); return ex ? suggestNext(historyFor(it.exId, s.id), { bw: ex.kind === 'bw', step: fromU(loadStep()), round: snapW }) : null; };
 const bwNow = () => { const l = S.profile.bwLog; return l && l.length ? l[l.length - 1].kg : S.profile.bw; };
 const isRestDay = d => d.rest || /^rest$/i.test(d.type.trim());
+/* twice a day: a split day marked "same" is a second session on the same calendar day as the day before it
+   (only when both are training days). Labels count calendar days: Day 1, Day 1 · 2nd session, Day 2 … */
+const isSecond = (days, i) => i > 0 && !!days[i] && !!days[i].same && !isRestDay(days[i]) && !isRestDay(days[i - 1]);
+function dayNum(days, i) { let n = 0, k = 1; for (let j = 0; j <= i && j < days.length; j++) { if (isSecond(days, j)) k++; else { n++; k = 1; } } return [n, k]; }
+const ord = k => ['', '1st', '2nd', '3rd'][k] || k + 'th';
+function dayLabel(days, i) { if (!days || !days[i]) return `Day ${i + 1}`; const [n, k] = dayNum(days, i); return k > 1 ? `Day ${n} · ${ord(k)} session` : `Day ${n}`; }
+/* finished sessions started today with at least one logged set, newest first */
+const doneToday = () => { const t = dayKey(Date.now()); return sorted().filter(s => s.endedAt && dayKey(s.startedAt) === t && s.items.some(it => it.sets.some(st => +st.r > 0))); };
+/* a planned second session: the split day before it was trained today */
+const plannedSecond = (spid, i) => { const sp = S.splits.get(spid); return !!sp && isSecond(sp.days, i) && doneToday().some(s => s.splitId === spid && s.splitDay === i - 1); };
 function nextSplitDay() {
   if (!S.splits.size) return null;
   /* a day the user picked by hand wins until they start their next session */
@@ -403,7 +413,10 @@ function nextSplitDay() {
   const used = last && last.splitId === sp.id ? last.splitDay : -1;
   let i = ((used ?? -1) + 1) % sp.days.length;
   for (let k = 0; k < sp.days.length && isRestDay(sp.days[i]); k++) i = (i + 1) % sp.days.length;
-  return { sp, i };
+  /* a second session is up next only on the day its first session was trained; otherwise the split moves on */
+  if (isSecond(sp.days, i) && !(last && last.splitId === sp.id && last.splitDay === i - 1 && dayKey(last.startedAt) === dayKey(Date.now())))
+    for (let k = 0; k < sp.days.length && (isSecond(sp.days, i) || isRestDay(sp.days[i])); k++) i = (i + 1) % sp.days.length;
+  return { sp, i, second: isSecond(sp.days, i) };
 }
 
 /* ================= router ================= */
@@ -837,22 +850,34 @@ function greet(hi) {
 /* ---------- Home ---------- */
 function vToday() {
   const now = new Date(), a = activeSession(), list = sorted();
-  const nx = !a && nextSplitDay(), hi = esc(((S.profile.name || '').trim().split(/\s+/)[0] || S.profile.username || '').slice(0, 24));
+  const nx = !a && nextSplitDay(), done = a ? [] : doneToday(), hi = esc(((S.profile.name || '').trim().split(/\s+/)[0] || S.profile.username || '').slice(0, 24));
   let lines, cta;
   if (a) {
     const sa = S.A.sess.get(a.id);
     lines = [greet(hi), ...pick([['your session', '<em>is live</em>.'], ['the bar is', '<em>waiting</em>.'], ['finish what', '<em>you started</em>.']], 2)];
     cta = `${pickBtn(`In progress · ${plural(sa.sets, 'set')} logged`, esc(sessName(a)), '', { cls: 'live', attrs: `data-act="resume" data-id="${a.id}"`, aria: 'Resume session', icon: ICON.play, deskIcon: false })}<button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
+  } else if (nx && nx.second) {
+    /* the split plans a second session today and the first is done */
+    const d = nx.sp.days[nx.i], first = done.find(s => s.splitId === nx.sp.id && s.splitDay === nx.i - 1);
+    lines = [greet(hi), ...pick([['one down,', '<em>one to go</em>.'], ['round two', '<em>is on deck</em>.'], ['session two', '<em>is up next</em>.']], 8)];
+    cta = `${pickBtn(`${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}`, esc(d.type || 'Training'), '')}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${first ? `<button class="btn line sm dt-done" data-act="open" data-id="${first.id}">${ICON.check}${ord(dayNum(nx.sp.days, nx.i - 1)[1])} session done</button>` : ''}<button class="btn line sm" data-act="start" data-force="1">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start ${dayLabel(nx.sp.days, nx.i)}"><span class="fab-l" aria-hidden="true">Start ${ord(dayNum(nx.sp.days, nx.i)[1])} session</span>${ICON.plus}</button></div>`;
+  } else if (done.length) {
+    /* trained today: show it as done; the split's next day waits for the next visit */
+    const last = done[0], tot = done.reduce((t, x) => { const q = S.A.sess.get(x.id); return q ? { sets: t.sets + q.sets, vol: t.vol + q.vol } : t; }, { sets: 0, vol: 0 });
+    lines = [pick([`Nice work, ${hi},`, `Well done, ${hi},`, `Good work, ${hi},`], 9), ...pick([['today’s work', '<em>is done</em>.'], ['session', '<em>complete</em>.'], ['that’s a wrap', '<em>for today</em>.']], 7)];
+    cta = `<div class="what done-today"><span class="dt-chip">${ICON.check}Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</span><b>${esc(sessName(last))}</b><span>${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="open" data-id="${last.id}">View session</button><button class="btn line sm" data-act="second">${ICON.plus}${done.length > 1 ? 'Another session' : 'Second session'}</button></div>`;
   } else if (isRestToday()) {
     lines = [greet(hi), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
-    cta = nx ? `${pickBtn(`Rest day · up next${nx.picked ? ' · your pick' : ''}`, `${esc(nx.sp.days[nx.i].type || 'Training')}`, `${esc(nx.sp.name)} · day ${nx.i + 1} · waits for tomorrow`)}`
+    cta = nx ? `${pickBtn(`Rest day · up next${nx.picked ? ' · your pick' : ''}`, `${esc(nx.sp.days[nx.i].type || 'Training')}`, `${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)} · waits for tomorrow`)}`
       : `<div class="what"><span>Rest day</span><b>Recovery counts</b><span>Logged for today</span></div>`;
     cta += `
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-undo">Undo rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Train anyway"><span class="fab-l" aria-hidden="true">Train anyway</span>${ICON.plus}</button></div>`;
   } else if (nx) {
     const d = nx.sp.days[nx.i], ty = d.type ? esc(d.type) : 'training day';
     lines = [greet(hi), ty, pick(['<em>is up next</em>.', '<em>is on deck</em>.', '<em>is calling</em>.'], 3)];
-    cta = `${pickBtn(`${esc(nx.sp.name)} · day ${nx.i + 1}${nx.picked ? ' · your pick' : ''}`, `${esc(d.type || 'Training')}`, `${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}`)}
+    cta = `${pickBtn(`${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}${nx.picked ? ' · your pick' : ''}`, `${esc(d.type || 'Training')}`, `${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}`)}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   } else {
     lines = [greet(hi), ...(list.length
@@ -972,7 +997,8 @@ function prEvents(days) { const t = days ? Date.now() - days * 864e5 : 0, out = 
 const prRow = p => `<button class="row" data-act="open" data-id="${p.sid}"><span class="tri"></span><span class="row-m"><span class="t">${esc(exOf(p.exId)?.name || 'Exercise')}</span><span class="sub">${fmtDate(p.t)} · new best estimate</span></span><span class="row-r"><span class="d">${fmtW(roundW(p.v))}</span><span class="ichip hot">${unit()}</span></span></button>`;
 const topLifts = () => [...S.A.ex].map(([id, e]) => ({ ex: exOf(id), e })).filter(x => x.ex && !x.ex.archived).sort((a, b) => b.e.n - a.e.n || b.e.best - a.e.best);
 const liftRow = ({ ex, e }) => `<button class="row" data-act="open-ex" data-id="${ex.id}"><span class="tri"></span><span class="row-m"><span class="t">${esc(ex.name)}</span><span class="sub">${plural(e.n, 'session')} · ${ex.oneRm > 0 ? 'saved 1RM' : 'est. 1RM'}</span></span><span class="row-r"><span class="d">${fmtW(roundW(ex.oneRm > 0 ? ex.oneRm : e.best))}</span><span class="ichip">${unit()}</span></span></button>`;
-const planDays = (nx, full) => `<div class="plan${full ? ' full' : ''}">${nx.sp.days.map((d, i) => `<div class="pd${i === nx.i ? ' next' : ''}${isRestDay(d) ? ' rest' : ''}"><span class="lbl">Day ${i + 1}${i === nx.i ? ' · next' : ''}</span><b>${esc(isRestDay(d) ? 'Rest' : d.type || 'Training')}</b>${full && !isRestDay(d) ? `<span class="sub">${d.exercises.map(x => esc(x.name)).join(' · ') || 'No exercises yet'}</span>` : ''}</div>`).join('')}</div>`;
+const planDays = (nx, full) => { const dn = new Set(doneToday().filter(s => s.splitId === nx.sp.id).map(s => s.splitDay));
+  return `<div class="plan${full ? ' full' : ''}">${nx.sp.days.map((d, i) => `<div class="pd${i === nx.i ? ' next' : ''}${isRestDay(d) ? ' rest' : ''}${dn.has(i) ? ' done' : ''}${isSecond(nx.sp.days, i) ? ' second' : ''}"><span class="lbl">${dayLabel(nx.sp.days, i)}${i === nx.i ? ' · next' : dn.has(i) ? ' · done' : ''}</span><b>${esc(isRestDay(d) ? 'Rest' : d.type || 'Training')}</b>${full && !isRestDay(d) ? `<span class="sub">${d.exercises.map(x => esc(x.name)).join(' · ') || 'No exercises yet'}</span>` : ''}</div>`).join('')}</div>`; };
 
 const wTile = (label, value, caption, open) => `<div class="card-h"><span class="lbl">${label}</span>${open ? `<span class="w-ex" aria-hidden="true">${ICON.expand}</span>` : ''}</div><div class="tile"><span class="tile-n">${value}</span><span class="tile-c">${caption}</span></div>`;
 const mkv = pairs => `<div class="mkv">${pairs.map(([k, v]) => `<div><b>${v}</b><span class="lbl">${k}</span></div>`).join('')}</div>`;
@@ -1093,9 +1119,9 @@ const WIDGETS = {
     card: (open, z) => { const nx = nextSplitDay();
       if (!nx) return (z === 's' ? wTile('Next up', '–', 'No split yet', false) : wHead('Your week', '', false) + `<div class="empty">No split yet. <button class="linkbtn" data-act="nav" data-v="splits">Plan one in Splits</button></div>`);
       const d = nx.sp.days[nx.i];
-      if (z === 's') return wTile('Next up', esc(d.type || 'Training'), `${esc(nx.sp.name)} · day ${nx.i + 1}`, open);
+      if (z === 's') return wTile('Next up', esc(d.type || 'Training'), `${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}`, open);
       return wHead('Your week', esc(nx.sp.name), open) + planDays(nx, z === 'l'); },
-    full: () => { const nx = nextSplitDay(); if (!nx) return nothing('No split yet. Plan one in the Splits tab.'); return planDays(nx, true) + `<div class="wf-actions"><button class="btn line" data-act="open-split" data-id="${nx.sp.id}">${roll('Open split')}</button><button class="btn" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}">${roll('Start day ' + (nx.i + 1))}</button></div>`; }
+    full: () => { const nx = nextSplitDay(); if (!nx) return nothing('No split yet. Plan one in the Splits tab.'); return planDays(nx, true) + `<div class="wf-actions"><button class="btn line" data-act="open-split" data-id="${nx.sp.id}">${roll('Open split')}</button><button class="btn" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}">${roll('Start ' + dayLabel(nx.sp.days, nx.i))}</button></div>`; }
   }
 };
 
@@ -1127,7 +1153,7 @@ function rowSession(s) {
   const a = S.A.sess.get(s.id) || { ex: 0, sets: 0, vol: 0, prs: [], int: 0 };
   const sp = s.splitId && S.splits.get(s.splitId);
   return `<button class="row" data-act="open" data-id="${s.id}"><span class="tri"></span>
-  <span class="row-m"><span class="t">${esc(sessName(s))}</span><span class="sub">${fmtDate(s.startedAt)}${sp ? ` · ${esc(sp.name)} day ${(s.splitDay ?? 0) + 1}` : ''} · ${a.sets} sets · ${fmtVol(a.vol)}${a.prs.length ? ` · <em class="pr">${a.prs.length} PR</em>` : ''}</span></span>
+  <span class="row-m"><span class="t">${esc(sessName(s))}</span><span class="sub">${fmtDate(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${a.sets} sets · ${fmtVol(a.vol)}${a.prs.length ? ` · <em class="pr">${a.prs.length} PR</em>` : ''}</span></span>
   <span class="row-r"><span class="d">${Math.round(a.int)}</span><span class="ichip${s.endedAt ? (a.int >= 75 ? ' hot' : '') : ' hot'}">${s.endedAt ? tierShort(a.int) : 'LIVE'}</span></span></button>`;
 }
 
@@ -1139,7 +1165,7 @@ function vSession() {
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button>
     <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80">
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
-  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} day ${(s.splitDay ?? 0) + 1}` : ''} · ${live ? 'live' : 'completed'}</div>
+  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : 'completed'}</div>
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
     <div class="bignum" id="sint" style="margin-top:10px">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
@@ -1299,7 +1325,7 @@ function trend(x) {
 
 /* ---------- Splits ---------- */
 function dayBar(days, next = -1) {
-  return `<div class="daybar">${days.map((d, i) => `<span class="${isRestDay(d) ? '' : 'on'}${i === next ? ' next' : ''}" title="Day ${i + 1}: ${esc(d.type || 'Untitled')}">${esc(isRestDay(d) ? 'rest' : (d.type || 'day ' + (i + 1)))}</span>`).join('')}</div>`;
+  return `<div class="daybar">${days.map((d, i) => `<span class="${isRestDay(d) ? '' : 'on'}${i === next ? ' next' : ''}${isSecond(days, i) ? ' twin' : ''}" title="${dayLabel(days, i)}: ${esc(d.type || 'Untitled')}">${esc(isRestDay(d) ? 'rest' : (d.type || dayLabel(days, i).toLowerCase()))}</span>`).join('')}</div>`;
 }
 function vSplits() {
   const mine = [...S.splits.values()].sort((a, b) => b.updatedAt - a.updatedAt), nx = nextSplitDay();
@@ -1329,7 +1355,7 @@ function vSplit() {
   <div class="toolbar rv" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:12px"><span class="lbl">Days</span><span class="stepper" style="background:var(--surface)"><button data-act="days-step" data-d="-1" aria-label="Remove last day">−</button><span>${sp.days.length}</span><button data-act="days-step" data-d="1" aria-label="Add a day">+</button></span></div>
   <span class="lbl">${tr} training · ${sp.days.length - tr} rest${rec && rec.length ? ` · shared with ${rec.length}` : ''}${sp.shareToken ? ' · link on' : ''}</span></div>
   ${dayBar(sp.days)}
-  <div class="days">${sp.days.map((d, i) => dayCard(d, i, false)).join('')}</div>`;
+  <div class="days">${sp.days.map((d, i) => dayCard(d, i, false, sp.days)).join('')}</div>`;
 }
 /* split days: exercises can be linked like session sets (superset, giant set, or one exercise's sets as a drop set) */
 function dayGroups(d) {
@@ -1339,11 +1365,12 @@ function dayGroups(d) {
   return out;
 }
 const spLinkType = n => n >= 3 ? 'Giant set' : n === 2 ? 'Superset' : 'Drop set';
-function dayCard(d, i, ro) {
+function dayCard(d, i, ro, days = [d]) {
   const rest = isRestDay(d), groups = dayGroups(d), lk = !ro && S.spLink && S.spLink.day === i ? S.spLink : null;
+  const lab = dayLabel(days, i), two = isSecond(days, i), canTwo = !ro && !rest && i > 0 && !isRestDay(days[i - 1]);
   const head = ro
-    ? `<div class="day-h"><span class="day-n">DAY ${i + 1}</span><span class="day-type" style="display:flex;align-items:center">${esc(d.type || (rest ? 'Rest' : 'Training'))}</span></div>`
-    : `<div class="day-h"><span class="day-mv"><button class="iconbtn sm" data-act="day-move" data-day="${i}" data-d="-1"${i === 0 ? ' disabled' : ''} aria-label="Move day ${i + 1} earlier">${ICON.up}</button><button class="iconbtn sm" data-act="day-move" data-day="${i}" data-d="1"${i === (S.splits.get(S.arg)?.days.length || 0) - 1 ? ' disabled' : ''} aria-label="Move day ${i + 1} later">${ICON.down}</button></span><span class="day-n">DAY ${i + 1}</span><input class="day-type" data-f="dtype" data-day="${i}" value="${esc(d.type)}" maxlength="40" placeholder="Session type" aria-label="Day ${i + 1} session type">${rest ? '' : `<button class="iconbtn" data-act="start-day" data-sp="${S.arg}" data-day="${i}" aria-label="Start day ${i + 1} as a session" title="Start this day">${ICON.play}</button>`}</div>
+    ? `<div class="day-h"><span class="day-n">${lab.toUpperCase()}</span><span class="day-type" style="display:flex;align-items:center">${esc(d.type || (rest ? 'Rest' : 'Training'))}</span></div>`
+    : `<div class="day-h"><span class="day-mv"><button class="iconbtn sm" data-act="day-move" data-day="${i}" data-d="-1"${i === 0 ? ' disabled' : ''} aria-label="Move ${lab} earlier">${ICON.up}</button><button class="iconbtn sm" data-act="day-move" data-day="${i}" data-d="1"${i === (S.splits.get(S.arg)?.days.length || 0) - 1 ? ' disabled' : ''} aria-label="Move ${lab} later">${ICON.down}</button></span><span class="day-n">${lab.toUpperCase()}</span><input class="day-type" data-f="dtype" data-day="${i}" value="${esc(d.type)}" maxlength="40" placeholder="Session type" aria-label="${lab} session type">${rest ? '' : `<button class="iconbtn" data-act="start-day" data-sp="${S.arg}" data-day="${i}" aria-label="Start ${lab} as a session" title="Start this day">${ICON.play}</button>`}</div>
       <div class="types">${DAY_TYPES.map(t => `<button class="chip${d.type === t ? ' on' : ''}" data-act="dtype-pick" data-day="${i}" data-t="${esc(t)}">${t}</button>`).join('')}</div>`;
   if (rest) return `<div class="day rest${ro ? ' ro' : ''} rv" data-did="${d.id}">${head}<p class="muted" style="font-size:13px">Rest day. Recovery is part of the plan.</p>${ro ? '' : `<div class="day-f"><button class="btn line sm" data-act="day-train" data-day="${i}">${roll('Make it a training day')}</button></div>`}</div>`;
   const rows = d.exercises.map((x, j) => {
@@ -1358,8 +1385,8 @@ function dayCard(d, i, ro) {
   const glist = [...groups.values()].map(g => `<div class="grp"><span class="gtag">${g.ab}·${g.letter}</span><span><b style="font-weight:500">${g.type}</b> <span class="muted">· ${esc(g.js.map(j => d.exercises[j].name).join(' + '))}</span></span>${ro ? '' : `<button class="gx lbl" data-act="sp-unlink" data-day="${i}" data-g="${g.g}">${roll('Unlink')}</button>`}</div>`).join('');
   const foot = ro ? '' : lk
     ? `<div class="sp-linkbar"><button class="iconbtn" data-act="sp-link-cancel" aria-label="Cancel linking">${ICON.x}</button><div class="tlink"><b>${lk.sel.size ? spLinkType(lk.sel.size) : 'Select exercises to link'}</b><span class="muted">${lk.sel.size ? (lk.sel.size === 1 ? 'all its sets run back to back' : `set 1 of each, then set 2…`) : 'tap 2+ for a superset, or 1 for a drop set'}</span></div><button class="btn sm" data-act="sp-link-do"${lk.sel.size ? '' : ' disabled'}>Link</button></div>`
-    : `<div class="day-f"><button class="btn ghost sm" data-act="dex-add" data-day="${i}">${roll('+ Exercise')}</button>${d.exercises.length ? `<button class="btn ghost sm" data-act="sp-link" data-day="${i}">${ICON.link}${roll('Link sets')}</button>` : ''}<button class="btn line sm" data-act="day-rest" data-day="${i}">${roll('Make it a rest day')}</button></div>`;
-  return `<div class="day${ro ? ' ro' : ''}${lk ? ' linking' : ''} rv" data-did="${d.id}">${head}
+    : `<div class="day-f"><button class="btn ghost sm" data-act="dex-add" data-day="${i}">${roll('+ Exercise')}</button>${d.exercises.length ? `<button class="btn ghost sm" data-act="sp-link" data-day="${i}">${ICON.link}${roll('Link sets')}</button>` : ''}<button class="btn line sm" data-act="day-rest" data-day="${i}">${roll('Make it a rest day')}</button>${canTwo ? `<button class="btn ${two ? 'line' : 'ghost'} sm day-two" data-act="day-same" data-day="${i}" aria-pressed="${two}">${two ? roll('Make it its own day') : roll(`Same day as ${dayLabel(days, i - 1).replace(/ · .*$/, '')}`)}</button>` : ''}</div>`;
+  return `<div class="day${ro ? ' ro' : ''}${lk ? ' linking' : ''}${two ? ' second' : ''} rv" data-did="${d.id}">${head}${two ? `<p class="day-2nd lbl">${ICON.link}Same day as ${esc(days[i - 1].type || dayLabel(days, i - 1))} · train twice</p>` : ''}
     ${d.exercises.length ? `<div class="dex-h lbl"><span>Exercise</span><span>Sets</span><span>Reps</span><span></span></div>${rows}` : `<p class="muted" style="font-size:13px">No exercises yet.</p>`}
     ${glist ? `<div class="groups">${glist}</div>` : ''}${foot}</div>`;
 }
@@ -1375,7 +1402,7 @@ function splitReadOnly(sp, sub) {
   return `<h1 class="h1 rv" style="margin:14px 0 4px">${esc(sp.name)}</h1><p class="from rv">${esc(sub)}</p>
   ${sp.description ? `<p class="rv" style="margin-top:12px;max-width:65ch;color:var(--ink-2);white-space:pre-wrap">${esc(sp.description)}</p>` : ''}
   <div class="toolbar rv"><span class="lbl">${plural(sp.days.length, 'day')} · ${tr} training · ${sp.days.length - tr} rest</span></div>
-  ${dayBar(sp.days)}<div class="days">${sp.days.map((d, i) => dayCard(d, i, true)).join('')}</div>`;
+  ${dayBar(sp.days)}<div class="days">${sp.days.map((d, i) => dayCard(d, i, true, sp.days)).join('')}</div>`;
 }
 function vPublic() {
   const p = S.pub && S.pub.token === S.arg ? S.pub : null;
@@ -1527,7 +1554,8 @@ const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class=
     <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target. Rest days you mark on Home show on the heat map.</p>
     <p><b>This week.</b> Sessions since Monday, volume (weight × reps) against last week, and the lifts whose heaviest set beats your best from the four weeks before.</p>
     <p><b>Bodyweight.</b> One entry per day, from Settings or the Bodyweight widget. The change is your latest entry minus the first one in the range you’re viewing.</p>
-    <p><b>Splits.</b> Home suggests the next training day of the split you used last, skipping rest days. Pick a different day from the Up next menu and the split carries on from there.</p>
+    <p><b>Splits.</b> Home suggests the next training day of the split you used last, skipping rest days. Pick a different day from the Up next menu and the split carries on from there. A day marked “Same day as” the day before is a second session: it comes up next only on the day you trained the first, otherwise the split moves on to the next day.</p>
+    <p><b>Done for today.</b> Once you finish a session with logged sets, Home shows today as completed and the next day waits for your next visit. Starting another session that day asks first, unless your split plans it as a second session.</p>
   </div><button class="btn lg wide" data-act="close" style="margin-top:16px">Done</button>`;
 
 /* ================= sheets ================= */
@@ -1603,7 +1631,7 @@ function removeExercise(id) {
 /* exercise picker (session / split) */
 function openPicker(mode, extra = {}) {
   S.pk = { mode, m: '', q: '', added: 0, ...extra };
-  openSheet(`<div class="sh-h"><h3>${mode === 'session' ? 'Add exercise' : `Add to day ${extra.day + 1}`}</h3><button class="btn ghost sm" data-act="close">${mode === 'split' ? 'Done' : 'Close'}</button></div>
+  openSheet(`<div class="sh-h"><h3>${mode === 'session' ? 'Add exercise' : `Add to ${dayLabel(S.splits.get(extra.split)?.days, extra.day)}`}</h3><button class="btn ghost sm" data-act="close">${mode === 'split' ? 'Done' : 'Close'}</button></div>
   <input class="search" id="pkq" placeholder="Search your exercises" autocomplete="off" maxlength="60">
   <div class="hscroll" id="pkm" style="margin-top:12px"></div><div id="pkl" class="pk-list"></div>`, r => {
     r.querySelector('#pkq').addEventListener('input', e => { S.pk.q = e.target.value; pickerList(); });
@@ -1632,7 +1660,7 @@ function picked(ex) {
     const sp = S.splits.get(S.pk.split), d = sp && sp.days[S.pk.day]; if (!d) return closeSheet();
     if (d.exercises.length >= 30) return toast('A day holds up to 30 exercises');
     d.exercises.push({ id: sid(), exId: ex.id, name: ex.name, muscle: ex.muscle, kind: ex.kind, sets: 3, reps: '8-12' });
-    queue('sp:' + sp.id); render(false); S.pk.added++; toast(`${ex.name} added to day ${S.pk.day + 1}`);
+    queue('sp:' + sp.id); render(false); S.pk.added++; toast(`${ex.name} added to ${dayLabel(sp.days, S.pk.day)}`);
   }
 }
 
@@ -1641,18 +1669,35 @@ function newSession(extra = {}) {
   const s = { id: uuid(), name: null, startedAt: Date.now(), endedAt: null, notes: '', items: [], splitId: null, splitDay: null, ...extra };
   S.sessions.set(s.id, s); queue('s:' + s.id, 0); go('session', s.id);
 }
-function startSession() { const a = activeSession(); if (a) return go('session', a.id); newSession(); }
+function startSession(force = false) {
+  const a = activeSession(); if (a) return go('session', a.id);
+  if (!force && askSecond(() => startSession(true))) return;
+  newSession();
+}
+/* after a finished session today, starting another is a second session: say so and ask first.
+   Returns true when it asked (the start then happens only if the user confirms). */
+function askSecond(proceed) {
+  const done = doneToday(); if (!done.length) return false;
+  const last = done[0], n = done.length + 1;
+  openSheet(`<div class="sh-h"><h3>You’ve trained today</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="sec-done"><span class="dt-check" aria-hidden="true">${ICON.check}</span><span><b>${esc(sessName(last))}</b><span class="muted">Finished at ${fmtTime(last.endedAt)}${done.length > 1 ? ` · ${plural(done.length, 'session')} today` : ''}</span></span></div>
+  <p class="muted" style="margin:12px 0 4px">Starting again logs a ${ord(n)} session for today. To plan training twice a day, mark a day in your split as “Same day as” the day before.</p>
+  <div class="btns"><button class="btn ghost" data-act="close">Not now</button><button class="btn" id="sec-go">Start a ${ord(n)} session</button></div>`, r => {
+    r.querySelector('#sec-go').onclick = () => { closeSheet(); proceed(); };
+  });
+  return true;
+}
 function dayPicker({ title, note, onPick, foot = [] }) {
   const splits = [...S.splits.values()].filter(sp => sp.days.some(d => !isRestDay(d))).sort((x, y) => y.updatedAt - x.updatedAt);
   const nx = nextSplitDay(); let sel = nx ? nx.sp.id : splits[0]?.id;
-  const body = $('#sheet-body');
+  const doneIds = new Set(doneToday().map(s => s.splitId + ':' + s.splitDay)), body = $('#sheet-body');
   const draw = () => {
     const prev = fluidCapture(body), sp = S.splits.get(sel);
     body.innerHTML = `<div class="sh-h"><h3>${esc(title)}</h3><button class="btn ghost sm" data-act="close">Close</button></div>
     ${sp ? `${splits.length > 1 ? `<span class="lbl">Split</span><div class="hscroll st-splits">${splits.map(x => `<button class="chip${x.id === sel ? ' on' : ''}" data-st-sp="${x.id}">${esc(x.name)}</button>`).join('')}</div>` : `<span class="lbl">${esc(sp.name)}</span>`}
       <span class="lbl st-q">Which day?</span>
-      <div class="st-days">${sp.days.map((d, i) => { if (isRestDay(d)) return ''; const isNext = nx && nx.sp.id === sp.id && nx.i === i, g = dayGroups(d).size;
-        return `<button class="st-day${isNext ? ' next' : ''}" data-st-day="${i}"><span class="lbl">Day ${i + 1}${isNext ? ' · up next' : ''}</span><b>${esc(d.type || 'Training')}</b><span class="sub">${d.exercises.length ? esc(d.exercises.slice(0, 4).map(x => x.name).join(' · ')) + (d.exercises.length > 4 ? ` +${d.exercises.length - 4}` : '') : 'No exercises yet'}${g ? ` · ${plural(g, 'linked group')}` : ''}</span></button>`; }).join('')}</div>
+      <div class="st-days">${sp.days.map((d, i) => { if (isRestDay(d)) return ''; const isNext = nx && nx.sp.id === sp.id && nx.i === i, g = dayGroups(d).size, dn = doneIds.has(sp.id + ':' + i);
+        return `<button class="st-day${isNext ? ' next' : ''}${dn ? ' done' : ''}" data-st-day="${i}"><span class="lbl">${dayLabel(sp.days, i)}${dn ? ` · ${ICON.check}done today` : isNext ? ' · up next' : ''}</span><b>${esc(d.type || 'Training')}</b><span class="sub">${d.exercises.length ? esc(d.exercises.slice(0, 4).map(x => x.name).join(' · ')) + (d.exercises.length > 4 ? ` +${d.exercises.length - 4}` : '') : 'No exercises yet'}${g ? ` · ${plural(g, 'linked group')}` : ''}</span></button>`; }).join('')}</div>
       ${note ? `<p class="muted st-note">${note}</p>` : ''}`
     : `<p class="muted" style="margin-bottom:var(--s0)">Plan a split and its days show up here, ready to start with sets and reps filled in.</p>`}
     ${foot.length || !sp ? `<div class="btns st-foot">${foot.map((f, k) => `<button class="btn ${f.cls || 'line'}" data-st-foot="${k}">${esc(f.label)}</button>`).join('')}${sp ? '' : '<button class="btn" id="st-plan">Plan a split</button>'}</div>` : ''}`;
@@ -1664,14 +1709,18 @@ function dayPicker({ title, note, onPick, foot = [] }) {
   };
   openSheet('', null); draw();
 }
-function startMenu() {
+function startMenu(force = false) {
   const a = activeSession(); if (a) return go('session', a.id);
-  dayPicker({ title: 'Start a session', note: 'The session is filled in from that day. Change anything once it starts.', onPick: startFromSplit, foot: [{ label: 'Empty session', fn: startSession }] });
+  const nx = nextSplitDay(), planned = nx && nx.second && plannedSecond(nx.sp.id, nx.i);
+  if (!force && !planned && askSecond(() => startMenu(true))) return;
+  const again = doneToday().length > 0;
+  dayPicker({ title: again ? 'Another session today' : 'Start a session', note: 'The session is filled in from that day. Change anything once it starts.',
+    onPick: (sp, i) => startFromSplit(sp, i, true), foot: [{ label: 'Empty session', fn: () => startSession(true) }] });
 }
 function nextMenu() {
   const nx = nextSplitDay();
   dayPicker({ title: 'Up next', note: 'Home and the + button use this day until you start your next session, then the split carries on from it.',
-    onPick: (sp, i) => { S.profile.nextDay = { sp, i, at: Date.now() }; queue('p', 200); render(false); toast(`Up next: ${S.splits.get(sp)?.days[i]?.type || 'Day ' + (i + 1)}`); },
+    onPick: (sp, i) => { S.profile.nextDay = { sp, i, at: Date.now() }; queue('p', 200); render(false); toast(`Up next: ${S.splits.get(sp)?.days[i]?.type || dayLabel(S.splits.get(sp)?.days, i)}`); },
     foot: nx && nx.picked ? [{ label: 'Back to the split’s order', fn: () => { S.profile.nextDay = null; queue('p', 200); render(false); toast('Following your split’s order'); } }] : [] });
 }
 function ensureExercise(x) {
@@ -1680,9 +1729,10 @@ function ensureExercise(x) {
   if (!e) { e = { id: uuid(), name: x.name, muscle: x.muscle, kind: x.kind, archived: false, isDefault: false }; S.library.push(e); queue('x:' + e.id, 0); }
   return e;
 }
-function startFromSplit(spid, di) {
+function startFromSplit(spid, di, force = false) {
   const a = activeSession(); if (a) { toast('Finish your current session first'); return go('session', a.id); }
   const sp = S.splits.get(spid), d = sp && sp.days[di]; if (!d) return;
+  if (!force && !plannedSecond(spid, di) && askSecond(() => startFromSplit(spid, di, true))) return;
   const groups = dayGroups(d), gid = new Map();
   const items = d.exercises.map(x => {
     const e = ensureExercise(x), last = lastSetsFor(e.id), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g);
@@ -1695,11 +1745,12 @@ function startFromSplit(spid, di) {
   });
   const tmp = { items }; cleanGroups(tmp);
   newSession({ name: d.type || null, items, splitId: spid, splitDay: di });
-  toast(`Day ${di + 1} loaded. Last weights show as hints.`);
+  toast(`${dayLabel(sp.days, di)} loaded. Last weights show as hints.`);
 }
-function repeatSession(id) {
+function repeatSession(id, force = false) {
   const src = S.sessions.get(id); if (!src) return;
   const a = activeSession(); if (a) { toast('Finish your current session first'); return go('session', a.id); }
+  if (!force && askSecond(() => repeatSession(id, true))) return;
   const gm = new Map();
   newSession({ name: src.name, splitId: src.splitId, splitDay: src.splitDay,
     items: src.items.map(it => ({ id: sid(), exId: it.exId, sets: it.sets.map(st => { let g = null; if (st.g) { if (!gm.has(st.g)) gm.set(st.g, sid()); g = gm.get(st.g); } return { id: sid(), w: null, r: null, pw: st.w ?? st.pw ?? null, pr: st.r ?? st.pr ?? null, done: false, g }; }) })) });
@@ -1748,6 +1799,7 @@ function finish() {
   if (!any) return confirmSheet('Nothing logged', 'This session has no sets with reps. Delete it instead?', 'Delete session', () => delSession(s.id), 'Keep logging');
   for (const it of s.items) { for (const st of it.sets) { if (st.done && st.r == null && st.pr != null) st.r = st.pr; if (st.done && st.w == null && st.pw != null) st.w = st.pw; } it.sets = it.sets.filter(st => +st.r > 0); }
   s.items = s.items.filter(it => it.sets.length); cleanGroups(s); s.endedAt = Date.now(); S.rest = null; S.link = null;
+  if (isRestToday()) { S.profile.restDays = (S.profile.restDays || []).filter(k => k !== dayKey(Date.now())); queue('p', 300); }
   queue('s:' + s.id, 0); compute(); const a = S.A.sess.get(s.id);
   render(true); toast(`Saved · intensity ${Math.round(a.int)}${a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : ''}`);
 }
@@ -1835,7 +1887,11 @@ function newSplit() {
   setTimeout(() => { const n = $('.sp-name'); if (n) { n.focus(); n.select(); } }, 400);
 }
 const curSplit = () => S.splits.get(S.arg);
-function touchSplit(sp, delay = 800) { sp.updatedAt = Date.now(); queue('sp:' + sp.id, delay); }
+function touchSplit(sp, delay = 800) {
+  /* "same day as the day before" only holds between two training days; drop it when a move or a rest day breaks the pair */
+  sp.days.forEach((d, i) => { if (d.same && !isSecond(sp.days, i)) d.same = false; });
+  sp.updatedAt = Date.now(); queue('sp:' + sp.id, delay);
+}
 /* reorder split days; sessions logged from this split keep pointing at the same day */
 function moveDay(i, dir) {
   const sp = curSplit(), j = i + dir; if (!sp || j < 0 || j >= sp.days.length) return;
@@ -2021,13 +2077,15 @@ const ACT = {
   'sync-cancel': () => { S.syncFlow = false; S.authMsg = null; try { sb.auth.stopAutoRefresh(); } catch {} render(true); },
   'leave-local': () => confirmSheet('Use an account instead?', 'This removes the offline profile on this phone. You can create an account or log in next.', 'Continue', () => leaveLocal()),
   'delete-local': () => deleteLocalSheet(),
-  start: startSession,
-  'start-menu': startMenu,
+  start: el => startSession(!!el && el.dataset.force === '1'),
+  'start-menu': () => startMenu(),
+  second: () => startMenu(true),
   'start-day': el => startFromSplit(el.dataset.sp, +el.dataset.day),
   resume: el => go('session', el.dataset.id || activeSession()?.id),
   open: el => go('session', el.dataset.id),
   back,
   repeat: el => repeatSession(el.dataset.id),
+  'day-same': el => { const sp = curSplit(), i = +el.dataset.day, d = sp && sp.days[i]; if (!d || i === 0) return; d.same = !d.same; touchSplit(sp, 300); render(false); toast(d.same ? `Now the ${dayLabel(sp.days, i).replace(/^Day \d+ · /, '')} of ${dayLabel(sp.days, i - 1).replace(/ · .*$/, '')}` : 'Now its own day'); },
   'add-ex': () => { if (!S.link) openPicker('session'); },
   'new-ex': () => newExercise({ name: S.exq.trim() }),
   'edit-ex': el => editExercise(el.dataset.id),
@@ -2072,7 +2130,7 @@ const ACT = {
   'days-step': el => { const sp = curSplit(); if (!sp) return; const d = +el.dataset.d;
     if (d > 0) { if (sp.days.length >= 14) return toast('A split can have up to 14 days'); sp.days.push({ id: sid(), type: '', rest: false, exercises: [] }); touchSplit(sp, 300); render(false); }
     else { if (sp.days.length <= 1) return; const last = sp.days[sp.days.length - 1]; const rm = () => { sp.days.pop(); touchSplit(sp, 300); render(false); };
-      if (last.exercises.length) confirmSheet(`Remove day ${sp.days.length}?`, `Its ${plural(last.exercises.length, 'exercise')} will be removed from the plan.`, 'Remove day', rm); else rm(); } },
+      if (last.exercises.length) confirmSheet(`Remove ${dayLabel(sp.days, sp.days.length - 1)}?`, `Its ${plural(last.exercises.length, 'exercise')} will be removed from the plan.`, 'Remove day', rm); else rm(); } },
   'dtype-pick': el => { const sp = curSplit(), d = sp && sp.days[+el.dataset.day]; if (!d) return; d.type = el.dataset.t; d.rest = el.dataset.t === 'Rest'; touchSplit(sp, 300); render(false); },
   'day-rest': el => { const sp = curSplit(), d = sp && sp.days[+el.dataset.day]; if (!d) return; d.rest = true; if (!d.type || DAY_TYPES.includes(d.type)) d.type = 'Rest'; touchSplit(sp, 300); render(false); },
   'day-train': el => { const sp = curSplit(), d = sp && sp.days[+el.dataset.day]; if (!d) return; d.rest = false; if (/^rest$/i.test(d.type)) d.type = ''; touchSplit(sp, 300); render(false); },
