@@ -1146,3 +1146,26 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   .what-pick.live .dd .ico{width:13px;height:13px;margin-left:2px}
 }
 @media (max-width:47.99rem){.hero-cta{align-items:stretch}.hero-cta > div{align-self:flex-start}}
+
+/* ---------- splash: eyes open, then the wolf swallows the screen ---------- */
+#splash{background:transparent}
+#splash .spl-bg{position:absolute;inset:0;width:100%;height:100%;display:block}
+#splash .spl-fill{fill:var(--bg)}
+#splash .spl-in{position:relative}
+#splash .spl-wolf .w-eyes,#splash .spl-wolf .w-glow{transform-box:fill-box;transform-origin:50% 50%;transform:scaleY(.07);transition:transform .6s var(--spring)}
+#splash .spl-wolf .w-glow{fill:#ff3b2a;opacity:0;transition:transform .6s var(--spring),opacity .5s var(--ease)}
+#splash.wake .spl-wolf .w-eyes,#splash.wake .spl-wolf .w-glow{transform:scaleY(1)}
+#splash.wake .spl-wolf .w-glow{opacity:.85}
+#splash.consume .spl-mask{overflow:visible}
+#splash.consume .spl-wolf{animation:none;will-change:transform}
+#splash .spl-word,#splash .spl-bar{transition:opacity .35s var(--ease),transform .6s var(--ease)}
+#splash.wake .spl-bar{opacity:0}
+#splash.consume .spl-word{opacity:0;transform:translateY(14px)}
+/* while waiting the closed eyes breathe a faint ember */
+#splash:not(.wake) .spl-wolf .w-glow{animation:spl-ember 2.4s ease-in-out .9s infinite}
+@keyframes spl-ember{50%{opacity:.35}}
+/* the splash sits a shade off the page colour, and the wolf-shaped window gets a soft rim while it grows */
+#splash .spl-fill{fill:color-mix(in srgb,var(--bg) 90%,var(--ink))}
+#splash .spl-rim{fill:none;stroke:var(--ink);stroke-linejoin:miter;opacity:0;transition:opacity .25s}
+#splash .spl-rim.a{stroke-opacity:.14}#splash .spl-rim.b{stroke-opacity:.38}
+#splash.consume .spl-rim{opacity:1}

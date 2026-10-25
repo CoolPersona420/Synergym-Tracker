@@ -645,22 +645,58 @@ function playEnter(v) {
 
 /* splash: the mascot on page load and after logging in, then the panel lifts away */
 const SPL = { el: null, t0: 0, leaving: false };
+const WOLF_BODY = (WOLF.match(/class="w-body" d="([^"]+)"/) || [])[1] || '';
+const WOLF_EYES = (WOLF.match(/class="w-eyes" d="([^"]+)"/) || [])[1] || '';
 function splashIn() {
   if (SPL.el) return;
   const el = document.createElement('div');
   el.id = 'splash'; el.setAttribute('aria-hidden', 'true');
-  el.innerHTML = `<div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t" viewBox="44 40 312 330">${WOLF}</svg></span><span class="spl-mask"><span class="wordmark">SYNERGYM</span></span><span class="spl-bar"><i></i></span></div>`;
+  /* the background is an SVG with a wolf-shaped hole (scaled to nothing until the reveal); the drawn wolf sits on top */
+  const glow = `<path class="w-glow" d="${WOLF_EYES}" filter="url(#spl-glow)"/>`;
+  el.innerHTML = `<svg class="spl-bg"><defs><mask id="spl-hole" maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%"><rect x="0" y="0" width="100%" height="100%" fill="#fff"/><g id="spl-hole-g" transform="scale(0)"><path d="${WOLF_BODY}" fill="#000" stroke="#000" stroke-width="16" stroke-linejoin="miter"/></g></mask></defs><rect class="spl-fill" x="0" y="0" width="100%" height="100%" mask="url(#spl-hole)"/><g mask="url(#spl-hole)"><g id="spl-rim-g" transform="scale(0)"><path class="spl-rim a" d="${WOLF_BODY}"/><path class="spl-rim b" d="${WOLF_BODY}"/></g></g></svg>
+  <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs><filter id="spl-glow" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="7"/></filter></defs>${WOLF.replace('<path class="w-eyes"', glow + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">SYNERGYM</span></span><span class="spl-bar"><i></i></span></div>`;
   document.body.appendChild(el);
   SPL.el = el; SPL.t0 = performance.now(); SPL.leaving = false;
   setTimeout(() => { if (SPL.el === el && !SPL.leaving) splashOut(); }, 10000);
 }
+/* reveal: the eyes open, then the wolf's silhouette becomes a window that grows until it swallows the screen */
 function splashOut() {
   if (SPL.leaving) return; SPL.leaving = true;
-  const el = SPL.el, wait = Math.max(0, (reduced ? 500 : 1250) - (performance.now() - SPL.t0));
+  const el = SPL.el, wait = Math.max(0, (reduced ? 500 : 1100) - (performance.now() - SPL.t0));
+  const finish = () => { el.remove(); if (SPL.el === el) { SPL.el = null; SPL.leaving = false; } };
   setTimeout(() => {
-    el.classList.add('out'); playEnter($('#view'));
-    setTimeout(() => { el.remove(); if (SPL.el === el) { SPL.el = null; SPL.leaving = false; } }, 1000);
+    if (reduced || LITE || !el.querySelector('#spl-hole-g')) { el.classList.add('out'); playEnter($('#view')); setTimeout(finish, 1000); return; }
+    el.classList.add('wake');
+    setTimeout(() => { playEnter($('#view')); splashConsume(el, finish); }, 640);
   }, wait);
+}
+function splashConsume(el, done) {
+  const wolf = el.querySelector('.spl-wolf'), g = el.querySelector('#spl-hole-g'), r = wolf.getBoundingClientRect();
+  if (!r.width) return done();
+  el.classList.add('consume');
+  /* map the wolf's viewBox onto the screen (xMidYMid meet), and zoom about a point deep inside its head */
+  const s0 = Math.min(r.width / 312, r.height / 330), ox = r.left + (r.width - 312 * s0) / 2 - 44 * s0, oy = r.top + (r.height - 330 * s0) / 2 - 40 * s0;
+  const ZX = 200, ZY = 220, zx = ox + ZX * s0, zy = oy + ZY * s0;
+  /* big enough that the head (about 116 x 136 units around the zoom point) covers every corner */
+  const s1 = Math.max(Math.max(zx, innerWidth - zx) / 58, Math.max(zy, innerHeight - zy) / 68) * 1.15;
+  wolf.style.transformOrigin = `${zx - r.left}px ${zy - r.top}px`;
+  const body = [...wolf.querySelectorAll('.w-body,.w-nose')], eyes = wolf.querySelector('.w-eyes'), glowEl = wolf.querySelector('.w-glow');
+  const D = 1100, t0 = performance.now(), ease = t => t < .5 ? 8 * t ** 4 : 1 - Math.pow(-2 * t + 2, 4) / 2;
+  const at = s => `translate(${zx} ${zy}) scale(${s}) translate(${-ZX} ${-ZY})`;
+  /* a soft rim just outside the window's edge: two strokes, clipped by the same mask so only the outside shows */
+  const rim = el.querySelector('#spl-rim-g'), rimA = el.querySelector('.spl-rim.a'), rimB = el.querySelector('.spl-rim.b');
+  const setRim = s => { if (!rim) return; rim.setAttribute('transform', at(s)); rimA.setAttribute('stroke-width', 16 + 28 / s); rimB.setAttribute('stroke-width', 16 + 8 / s); };
+  g.setAttribute('transform', at(s0)); setRim(s0);
+  const frame = now => {
+    const p = Math.min(1, (now - t0) / D), s = s0 * Math.pow(s1 / s0, ease(p));
+    g.setAttribute('transform', at(s)); setRim(s);
+    wolf.style.transform = `scale(${s / s0})`;
+    const bo = Math.max(0, 1 - p / .3), eo = Math.max(0, 1 - Math.max(0, p - .22) / .32);
+    for (const b of body) b.style.opacity = bo;
+    if (eyes) eyes.style.opacity = eo; if (glowEl) glowEl.style.opacity = eo * .85;
+    if (p < 1) requestAnimationFrame(frame); else done();
+  };
+  requestAnimationFrame(frame);
 }
 function wireCarousel() {
   const d = $('#dash'), dots = $$('#dash-dots button'); if (!d || !dots.length) return;
