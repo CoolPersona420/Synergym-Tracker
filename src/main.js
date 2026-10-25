@@ -867,7 +867,7 @@ function vToday() {
     /* trained today: show it as done; the split's next day waits for the next visit */
     const last = done[0], tot = done.reduce((t, x) => { const q = S.A.sess.get(x.id); return q ? { sets: t.sets + q.sets, vol: t.vol + q.vol } : t; }, { sets: 0, vol: 0 });
     lines = [pick([`Nice work, ${hi},`, `Well done, ${hi},`, `Good work, ${hi},`], 9), ...pick([['today’s work', '<em>is done</em>.'], ['session', '<em>complete</em>.'], ['that’s a wrap', '<em>for today</em>.']], 7)];
-    cta = `<div class="what done-today"><span class="dt-chip">${ICON.check}Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</span><b>${esc(sessName(last))}</b><span>${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></div>
+    cta = `<div class="what done-today"><span class="dt-field"><span class="dt-t"><i>Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</i><b>${esc(sessName(last))}</b></span><span class="dt-c" aria-hidden="true">${ICON.check}</span></span><span>${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="open" data-id="${last.id}">View session</button><button class="btn line sm" data-act="second">${ICON.plus}${done.length > 1 ? 'Another session' : 'Second session'}</button></div>`;
   } else if (isRestToday()) {
     lines = [greet(hi), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];

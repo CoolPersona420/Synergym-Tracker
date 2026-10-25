@@ -1477,12 +1477,16 @@ html.app-mode body{overflow-x:clip}
 a.srow{color:inherit;text-decoration:none}
 
 /* done for today, and twice-a-day split days */
-.hero-cta .done-today{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;max-width:100%}
-.hero-cta .done-today b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hero-cta .done-today .dt-chip,.dt-chip{display:inline-flex;align-items:center;gap:7px;padding:4px 12px 4px 4px;border-radius:999px;background:color-mix(in srgb,var(--good) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--good) 40%,transparent);font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
-.dt-chip .ico,.dt-check .ico{width:12px;height:12px;stroke-width:3}
-.dt-chip .ico{box-sizing:content-box;padding:4px;border-radius:50%;background:var(--good);color:var(--bg)}
-#view.enter .dt-chip .ico{animation:dt-pop .7s var(--spring) .25s both}
+.hero-cta .done-today{display:flex;flex-direction:column;align-items:flex-start;gap:var(--s-1);min-width:0;max-width:100%}
+/* one field holds the status and the session, like the Up next field it replaces */
+.dt-field{display:flex;align-items:center;justify-content:space-between;gap:var(--s-1);width:min(26rem,100%);padding:.75rem .75rem .75rem 1.1rem;border-radius:1.4rem;background:color-mix(in srgb,var(--good) 7%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--good) 45%,transparent)}
+.dt-t{display:flex;flex-direction:column;gap:5px;min-width:0}
+.hero-cta .done-today .dt-t i{font-style:normal;font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--good);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-cta .done-today .dt-t b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1;color:var(--ink)}
+.hero-cta .done-today .dt-c{display:grid;place-items:center;flex:none;width:2.3rem;height:2.3rem;border-radius:50%;background:var(--good);color:var(--bg)}
+.dt-c .ico{width:15px;height:15px;stroke-width:3}
+.dt-check .ico{width:12px;height:12px;stroke-width:3}
+#view.enter .dt-c{animation:dt-pop .7s var(--spring) .25s both}
 @keyframes dt-pop{from{transform:scale(0) rotate(-45deg)}}
 .dt-done .ico{color:var(--good);stroke-width:3}
 .sec-done{display:flex;align-items:center;gap:var(--s-1);padding:var(--s-1) var(--s0);border-radius:var(--r-md);background:var(--surface-2)}
@@ -1501,3 +1505,4 @@ a.srow{color:inherit;text-decoration:none}
 .day-2nd{display:flex;align-items:center;gap:6px;color:var(--accent);margin:-2px 0 0}
 .day-2nd .ico{width:13px;height:13px}
 .day-two[aria-pressed="true"]{box-shadow:inset 0 0 0 1px var(--accent)}
+@media (max-width:47.99rem){.hero-cta .done-today{align-self:stretch;width:100%}.dt-field{width:100%}}
