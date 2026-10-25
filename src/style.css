@@ -1155,20 +1155,33 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 #splash .spl-wolf .w-eyes,#splash .spl-wolf .w-glow{transform-box:fill-box;transform-origin:50% 50%;transform:scaleY(.07);transition:transform .6s var(--spring)}
 #splash .spl-wolf .w-glow{fill:#ff3b2a;opacity:0;transition:transform .6s var(--spring),opacity .5s var(--ease)}
 #splash.wake .spl-wolf .w-eyes,#splash.wake .spl-wolf .w-glow{transform:scaleY(1)}
-#splash.wake .spl-wolf .w-glow{opacity:.85}
-#splash.consume .spl-mask{overflow:visible}
-#splash.consume .spl-wolf{animation:none;will-change:transform}
-#splash .spl-word,#splash .spl-bar{transition:opacity .35s var(--ease),transform .6s var(--ease)}
-#splash.wake .spl-bar{opacity:0}
-#splash.consume .spl-word{opacity:0;transform:translateY(14px)}
+#splash.wake .spl-wolf .w-glow{opacity:.85;animation:spl-flare .8s var(--ease) both}
+#splash.wake .spl-wolf .w-eyes,#splash.wake .spl-wolf .w-glow{transition-duration:.38s;transition-timing-function:cubic-bezier(.2,1.7,.4,1)}
+#splash.wake .spl-wolf{animation:spl-growl .36s linear .1s both}
+#splash .spl-word,#splash .spl-bar{transition:opacity .3s var(--ease),transform .5s var(--ease)}
+#splash.wake .spl-bar,#splash.wake .spl-word{opacity:0;transform:translateY(14px)}
+#splash.consume .spl-in{visibility:hidden}
 /* while waiting the closed eyes breathe a faint ember */
 #splash:not(.wake) .spl-wolf .w-glow{animation:spl-ember 2.4s ease-in-out .9s infinite}
 @keyframes spl-ember{50%{opacity:.35}}
-/* the splash sits a shade off the page colour, and the wolf-shaped window gets a soft rim while it grows */
-#splash .spl-fill{fill:color-mix(in srgb,var(--bg) 90%,var(--ink))}
-#splash .spl-rim{fill:none;stroke:var(--ink);stroke-linejoin:miter;opacity:0;transition:opacity .25s}
-#splash .spl-rim.a{stroke-opacity:.14}#splash .spl-rim.b{stroke-opacity:.38}
-#splash.consume .spl-rim{opacity:1}
+@keyframes spl-flare{0%{opacity:0}25%{opacity:1}100%{opacity:.85}}
+@keyframes spl-growl{0%,100%{transform:none}20%{transform:translate(-1.5px,1px)}40%{transform:translate(1.5px,-1px)}60%{transform:translate(-1px,-1px)}80%{transform:translate(1px,1px)}}
+/* the moment the eyes open: a red flare and two shockwaves from between them */
+#splash .spl-flash,#splash .spl-ring{position:absolute;pointer-events:none;opacity:0}
+#splash .spl-flash{inset:0;background:radial-gradient(circle at var(--rx,50%) var(--ry,45%),rgba(232,38,26,.3),transparent 42%)}
+#splash .spl-ring{left:var(--rx,50%);top:var(--ry,45%);width:3rem;height:3rem;margin:-1.5rem 0 0 -1.5rem;border-radius:50%;border:2px solid #E8261A}
+#splash.wake .spl-flash{animation:spl-flash 1.1s var(--ease) both}
+#splash.wake .spl-ring{animation:spl-ring 1s cubic-bezier(.16,1,.3,1) both}
+#splash.wake .spl-ring.b{animation-delay:.14s;border-width:1px}
+@keyframes spl-flash{20%{opacity:1}}
+@keyframes spl-ring{0%{opacity:.8;transform:scale(.2)}100%{opacity:0;transform:scale(14)}}
+/* the lunge happens in one full-screen SVG: the wolf, a shade that darkens it, and the eye that tears open */
+#splash .spl-cam{display:none}
+#splash.consume .spl-cam{display:inline}
+#splash .spl-cam .w-glow{fill:#ff3b2a;opacity:.85}
+#splash .spl-shade{fill:#09090a;stroke:#09090a;opacity:0}
+#splash .spl-hot path{fill:none;stroke:#ff6b4a;stroke-linejoin:miter}
+#splash .spl-hot .a{stroke-opacity:.3}#splash .spl-hot .b{stroke-opacity:.9}
 
 /* ---------- login & register: the same fluid motion as the rest of the site ---------- */
 /* entrance: the mascot pops in, then heading, tabs and form rise one after another */
