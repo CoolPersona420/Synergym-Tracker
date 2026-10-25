@@ -169,7 +169,7 @@ function cleanDays(d) {
 }
 
 /* ================= db mapping ================= */
-const profFromDb = r => ({ nextDay: r.next_day && typeof r.next_day === 'object' && r.next_day.sp ? { sp: String(r.next_day.sp).slice(0, 40), i: Math.max(0, parseInt(r.next_day.i) || 0), at: +r.next_day.at || 0 } : null, restDays: Array.isArray(r.rest_days) ? r.rest_days.filter(d => typeof d === 'string' && /^\d{4}-\d{1,2}-\d{1,2}$/.test(d)).slice(-400) : [], widgets: Array.isArray(r.widgets) ? r.widgets.filter(id => typeof id === 'string').slice(0, 20) : null, muscles: Array.isArray(r.muscles) ? r.muscles.filter(m => typeof m === 'string' && m.trim()).map(m => m.trim().slice(0, 30)).slice(0, 40) : null, theme: r.theme || null, username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75 });
+const profFromDb = r => ({ nextDay: r.next_day && typeof r.next_day === 'object' && r.next_day.sp ? { sp: String(r.next_day.sp).slice(0, 40), i: Math.max(0, parseInt(r.next_day.i) || 0), at: +r.next_day.at || 0 } : null, restDays: Array.isArray(r.rest_days) ? r.rest_days.filter(d => typeof d === 'string' && /^\d{4}-\d{1,2}-\d{1,2}$/.test(d)).slice(-400) : [], widgets: Array.isArray(r.widgets) ? r.widgets.filter(id => typeof id === 'string').slice(0, 20) : null, muscles: Array.isArray(r.muscles) ? r.muscles.filter(m => typeof m === 'string' && m.trim()).map(m => m.trim().slice(0, 30)).slice(0, 40) : null, theme: r.theme || null, username: r.username || null, name: r.display_name || '', exp: r.experience || null, goal: r.goal || null, onboarded: !!r.onboarded, unit: r.unit === 'lb' ? 'lb' : 'kg', target: r.weekly_target || 3, rest: r.rest_seconds || 90, restOn: r.rest_enabled !== false, sound: r.rest_sound !== false, bw: +r.bodyweight || 75, activeSession: r.active_session || null });
 const profToDb = p => ({ next_day: p.nextDay || null, rest_days: Array.isArray(p.restDays) && p.restDays.length ? p.restDays.slice(-400) : null, widgets: Array.isArray(p.widgets) ? p.widgets.slice(0, 20) : null, muscles: Array.isArray(p.muscles) && p.muscles.length ? p.muscles : null, theme: p.theme || null, display_name: (p.name || '').slice(0, 40) || null, experience: p.exp || null, goal: p.goal || null, onboarded: !!p.onboarded, unit: p.unit, weekly_target: p.target, rest_seconds: p.rest, rest_enabled: p.restOn, rest_sound: p.sound, bodyweight: Math.round(p.bw * 100) / 100 });
 const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: r.kind === 'bw' ? 'bw' : 'w', archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null });
 const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null });
@@ -966,7 +966,7 @@ document.addEventListener('submit', async e => {
       const bad = pwIssue(password); if (bad) return done(bad, true);
       const { error } = await sb.auth.updateUser({ password });
       if (error) return done(authErr(error), true);
-      S.recover = false; S.authMsg = null; toast('Password updated'); go('today', null, { replace: true });
+      S.recover = false; S.authMsg = null; claimDevice(); toast('Password updated'); go('today', null, { replace: true });
     } else if (f.id === 'f-ob2') {
       const name = String(fd.get('name') || '').trim().slice(0, 40);
       S.ob.name = name; S.ob.username = String(fd.get('username') || '');
@@ -2201,6 +2201,41 @@ const standalone = () => matchMedia('(display-mode: standalone)').matches || nav
 let installEvt = null;
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
 
+/* one device at a time: the newest sign-in owns the account. It records its session id on the profile and
+   revokes every other session; any other device notices within a minute (or when it comes back to the
+   foreground), saves what it still has queued, and signs itself out */
+const DEV = { sid: null, t: 0, busy: false };
+const jwtSid = s => { try { return JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).session_id || null; } catch { return null; } };
+async function claimDevice() {
+  if (!sb || !S.user || !DEV.sid) return;
+  const { error } = await sb.from('profiles').update({ active_session: DEV.sid }).eq('id', S.user.id);
+  if (error) return console.error('Device claim failed', error);
+  S.profile.activeSession = DEV.sid;
+  sb.auth.signOut({ scope: 'others' }).catch(() => {});
+}
+async function checkDevice(known) {
+  if (!sb || !S.user || !S.loaded || !DEV.sid || DEV.busy || S.recover) return;
+  let a = known;
+  if (a === undefined) {
+    if (Date.now() - DEV.t < 20000) return; DEV.t = Date.now();
+    const { data, error } = await sb.from('profiles').select('active_session').eq('id', S.user.id).maybeSingle();
+    if (error || !data) return; a = data.active_session;
+  }
+  if (!a) return claimDevice();
+  if (a !== DEV.sid) leaveDevice();
+}
+async function leaveDevice() {
+  DEV.busy = true;
+  flushAll();
+  for (const end = Date.now() + 3000; (OB.pending.size || OB.inflight.size) && Date.now() < end;) await sleep(100);
+  S.kickMsg = 'You were logged out here because your account was opened on another device.';
+  await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+  DEV.busy = false;
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkDevice(); });
+addEventListener('focus', () => checkDevice());
+setInterval(() => { if (document.visibilityState === 'visible') checkDevice(); }, 60000);
+
 /* new version check: when the app comes back to the foreground, compare the deployed bundle with the running one.
    Pull-to-refresh is off, so without this a phone tab could keep running an old build. */
 let updT = 0;
@@ -2230,6 +2265,7 @@ async function startApp() {
   try { await loadAll(); }
   catch (e) { console.error(e); S.loadError = navigator.onLine ? (e.message || 'The server didn’t respond.') : 'You’re offline. Connect and try again.'; return render(true); }
   S.loaded = true; flushAll();
+  if (S.claim) { S.claim = false; claimDevice(); } else checkDevice(S.profile.activeSession);
   if (S.profile.theme) applyTheme(S.profile.theme);
   const p = S.profile;
   S.ob = { step: p.username ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null };
@@ -2246,12 +2282,13 @@ function boot() {
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') { S.recover = true; S.authMsg = null; render(false); }
     const u = session?.user || null;
+    if (session) DEV.sid = jwtSid(session);
     setTimeout(() => {
       /* the splash plays for a sign-in from the login page, not when a reload restores the session */
       const first = !S.authReady; S.authReady = true;
-      if (u && (!S.user || S.user.id !== u.id)) { if (event === 'SIGNED_IN' && !first) splashIn(); resetState(); S.user = u; startApp(); }
+      if (u && (!S.user || S.user.id !== u.id)) { const fresh = event === 'SIGNED_IN' && !first; if (fresh) splashIn(); resetState(); S.user = u; S.claim = fresh; startApp(); }
       else if (u) { S.user = u; }
-      else if (!u && S.user) { resetState(); S.recover = false; S.authMode = 'signin'; S.authMsg = null; go('today', null, { replace: true }); }
+      else if (!u && S.user) { resetState(); S.recover = false; S.authMode = 'signin'; S.authMsg = S.kickMsg ? { text: S.kickMsg, err: false } : null; S.kickMsg = null; go('today', null, { replace: true }); }
       else render(first);
     }, 0);
   });
