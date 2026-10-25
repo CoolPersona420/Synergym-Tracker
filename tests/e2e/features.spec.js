@@ -132,3 +132,15 @@ test('Settings › About shows the version from package.json, marked as alpha', 
   if (version.includes('alpha')) { await expect(row.locator('.badge')).toHaveText('alpha'); await expect(page.locator('.sg', { hasText: 'Source code on GitHub' })).toContainText('early alpha'); }
   await expect(row).toContainText('Build ');
 });
+
+test('widget sizes are offered on wider screens only', async ({ page }, info) => {
+  const fake = new FakeSupabase(benchHistory());
+  await login(page, fake, 'A');
+  await page.click('[data-act="edit-home"]');
+  await page.waitForSelector('.wrow');
+  const phone = info.project.name === 'phone';
+  await expect(page.locator('.wrow .wsz')).toHaveCount(phone ? 0 : 4);
+  await page.keyboard.press('Escape');
+  await page.goto('/w/week');
+  await expect(page.locator('.wf-size')).toHaveCount(phone ? 0 : 1);
+});
