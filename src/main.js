@@ -589,7 +589,7 @@ function render(enter) {
     if (!sb) { html = vNoConfig(); bare = true; }
     else if (S.recover) { html = vRecover(); bare = true; }
     else if (S.view === 'public') { html = vPublic(); app = !!(S.user && S.loaded && S.profile.onboarded); }
-    else if (!S.authReady || (S.user && !S.loaded && !S.loadError)) html = `<div class="boot">${lockup()}</div>`;
+    else if (!S.authReady || (S.user && !S.loaded && !S.loadError)) html = '<div class="boot"></div>';
     else if (!S.user) { html = vAuth(); bare = true; }
     else if (S.loadError) { html = vLoadError(); bare = true; }
     else if (!S.profile.onboarded) { html = vWizard(); bare = true; }
@@ -649,7 +649,7 @@ function playEnter(v) {
   late.forEach(el => rvObs.observe(el));
 }
 
-/* splash: the mascot on page load and after logging in, then the wolf lunges and the app appears through its eye */
+/* splash: the mascot after logging in (not on a reload), then the wolf lunges and the app appears through its eye */
 const SPL = { el: null, t0: 0, leaving: false };
 const wolfPath = c => (WOLF.match(new RegExp(`class="${c}" d="([^"]+)"`)) || [])[1] || '';
 const WOLF_BODY = wolfPath('w-body'), WOLF_EYES = wolfPath('w-eyes'), WOLF_NOSE = wolfPath('w-nose');
@@ -663,8 +663,8 @@ function splashIn() {
   /* the stage is a full-screen copy of the wolf for the lunge; a clip-path cuts the eye-shaped hole that reveals the app */
   const glow = id => `<path class="w-glow" d="${WOLF_EYES}" filter="url(#${id})"/>`;
   const blur = id => `<filter id="${id}" x="-60%" y="-120%" width="220%" height="340%"><feGaussianBlur stdDeviation="7"/></filter>`;
-  el.innerHTML = `<div class="spl-stage"><svg class="spl-bg"><defs>${blur('spl-glow-c')}</defs><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/></g><g class="spl-hot"><path class="a" d="${EYE_D}"/><path class="b" d="${EYE_D}"/></g></svg></div><span class="spl-flash"></span><span class="spl-ring"></span><span class="spl-ring b"></span>
-  <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">SYNERGYM</span></span><span class="spl-bar"><i></i></span></div>`;
+  el.innerHTML = `<div class="spl-stage"><svg class="spl-bg"><defs>${blur('spl-glow-c')}</defs><g class="spl-cam wolf-t"><path class="w-body" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="spl-shade" d="${WOLF_BODY}" stroke-width="16" stroke-linejoin="miter"/><path class="w-nose" d="${WOLF_NOSE}"/>${glow('spl-glow-c')}<path class="w-eyes" d="${WOLF_EYES}"/></g><g class="spl-hot"><path class="a" d="${EYE_D}"/><path class="b" d="${EYE_D}"/></g></svg></div><span class="spl-flash"></span>
+  <div class="spl-in"><span class="spl-mask"><svg class="wolf wolf-t spl-wolf" viewBox="44 40 312 330"><defs>${blur('spl-glow')}</defs>${WOLF.replace('<path class="w-eyes"', glow('spl-glow') + '<path class="w-eyes"')}</svg></span><span class="spl-mask spl-word"><span class="wordmark">SYNERGYM</span></span></div><span class="spl-streak"></span><span class="spl-lb t"></span><span class="spl-lb b"></span>`;
   document.body.appendChild(el);
   SPL.el = el; SPL.t0 = performance.now(); SPL.leaving = false;
   setTimeout(() => { if (SPL.el === el && !SPL.leaving) splashOut(); }, 10000);
@@ -681,7 +681,7 @@ function splashFit(el) {
    (cores, memory) are randomised by privacy browsers such as Brave */
 function splashOut() {
   if (SPL.leaving) return; SPL.leaving = true;
-  const el = SPL.el, wait = Math.max(0, (reduced ? 500 : 1100) - (performance.now() - SPL.t0));
+  const el = SPL.el, wait = Math.max(0, (reduced ? 400 : 650) - (performance.now() - SPL.t0));
   const finish = () => { el.remove(); if (SPL.el === el) { SPL.el = null; SPL.leaving = false; } };
   setTimeout(() => {
     const c = navigator.connection, plain = reduced || !!(c && c.saveData);
@@ -689,7 +689,7 @@ function splashOut() {
     if (!f) { el.classList.add('out'); playEnter($('#view')); setTimeout(finish, 1000); return; }
     el.style.setProperty('--rx', `${f.ox + 200 * f.s}px`); el.style.setProperty('--ry', `${f.oy + 204 * f.s}px`);
     el.classList.add('wake');
-    setTimeout(() => splashConsume(el, finish), 650);
+    setTimeout(() => splashConsume(el, finish), 420);
   }, wait);
 }
 /* the lunge, in four beats:
@@ -705,7 +705,7 @@ function splashConsume(el, done) {
   const s0 = f.s, ix0 = f.ox + EYE_IX * s0, iy0 = f.oy + EYE_IY * s0;
   /* sc: crouched; sb: the body just covers the screen; s1: the opened eye covers the screen */
   const sc = s0 * .86, sb = Math.max(sc * 2, R / EYE_BODY * 1.08), s1 = R / EYE_R * 1.06;
-  const C = 280, L = 560, B = 220, T = 700, D = C + L + B + T;
+  const C = 170, L = 400, B = 130, T = 560, D = C + L + B + T;
   const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
   const io = t => t < .5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
   const px = (x, y) => `${x.toFixed(1)}px ${y.toFixed(1)}px`;
@@ -719,10 +719,11 @@ function splashConsume(el, done) {
       const u = (t - C) / L;
       s = sc * Math.pow(sb / sc, u ** 2.4); m = smooth(u / .8); dark = smooth((u - .35) / .5);
     } else if (t < C + L + B) {
-      const v = (t - C - L) / B, a = 9 * (1 - v) ** 2;
-      s = sb * (1 + .05 * v); jx = Math.sin(v * 38) * a; jy = Math.cos(v * 29) * a * .6;
+      const v = (t - C - L) / B, a = 7 * (1 - v) ** 2;
+      s = sb * (1 + .05 * v); jx = Math.sin(v * 26) * a; jy = Math.cos(v * 20) * a * .6;
     } else {
       const v = (t - C - L - B) / T, e = io(v);
+      if (!el.classList.contains('tear')) el.classList.add('tear');
       s = sb * 1.05 * Math.pow(s1 / (sb * 1.05), e); open = smooth(v / .45); w = 14 * (1 - smooth((v - .75) / .25));
     }
     /* the eye drifts to the middle of the screen as the wolf closes in */
@@ -2207,18 +2208,18 @@ function boot() {
   document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
-  splashIn();
   route(true);
   if (!sb) return;
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') { S.recover = true; S.authMsg = null; render(false); }
     const u = session?.user || null;
     setTimeout(() => {
-      S.authReady = true;
-      if (u && (!S.user || S.user.id !== u.id)) { splashIn(); resetState(); S.user = u; startApp(); }
+      /* the splash plays for a sign-in from the login page, not when a reload restores the session */
+      const first = !S.authReady; S.authReady = true;
+      if (u && (!S.user || S.user.id !== u.id)) { if (event === 'SIGNED_IN' && !first) splashIn(); resetState(); S.user = u; startApp(); }
       else if (u) { S.user = u; }
       else if (!u && S.user) { resetState(); S.recover = false; S.authMode = 'signin'; S.authMsg = null; go('today', null, { replace: true }); }
-      else render(false);
+      else render(first);
     }, 0);
   });
 }
