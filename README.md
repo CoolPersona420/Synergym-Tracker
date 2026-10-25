@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 1.0.2, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.0.3, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`1.0.2-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.0.3-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 

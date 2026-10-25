@@ -1,4 +1,4 @@
-/* 1.0.2: live PRs, History filters, the six-split limit, and today's summary. */
+/* Live PRs, History filters, the six-split limit, and today's summary. */
 import crypto from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { FakeSupabase, login, benchHistory } from './fake-supabase.js';
