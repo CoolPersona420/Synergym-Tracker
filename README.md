@@ -32,6 +32,7 @@ The version lives in `package.json` (`0.0.5-alpha`) and shows in Settings › Ab
   Up to six splits; deleting one keeps its sessions and their split name in History.
 - **Done for today:** after a finished session Home shows today as completed with the next day waiting;
   starting again that day asks first, unless the split plans a second session. Two sessions a day at most.
+- **Rest days:** mark today as a rest day on Home; no session can be started until it's undone.
 - **Home:** a greeting and quote, the next session, and widgets you choose and size: this week's summary,
   bodyweight trend, intensity, consistency, volume, muscle focus, records, top lifts and your week's plan.
   Each opens full screen with more detail.

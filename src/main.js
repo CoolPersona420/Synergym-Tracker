@@ -882,11 +882,11 @@ function vToday() {
     cta = `<div class="what done-today"><span class="dt-field"><span class="dt-t"><i>Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</i><b>${done.slice().reverse().map(x => esc(sessName(x))).join(' + ')}</b></span><span class="dt-c" aria-hidden="true">${ICON.check}</span></span><span>${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${done.length > 1 ? `<button class="btn line sm" data-act="today-sessions">View sessions</button>` : `<button class="btn line sm" data-act="open" data-id="${last.id}">View session</button><button class="btn line sm" data-act="second">${ICON.plus}Second session</button>`}</div>`;
   } else if (isRestToday()) {
-    lines = [greet(hi), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
+    lines = [pick([`Hey ${hi},`, `Easy does it, ${hi},`, `Rest well, ${hi},`], 10), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
     cta = nx ? `${pickBtn(`Rest day · up next${nx.picked ? ' · your pick' : ''}`, `${esc(nx.sp.days[nx.i].type || 'Training')}`, `${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)} · waits for tomorrow`)}`
       : `<div class="what"><span>Rest day</span><b>Recovery counts</b><span>Logged for today</span></div>`;
     cta += `
-      <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-undo">Undo rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Train anyway"><span class="fab-l" aria-hidden="true">Train anyway</span>${ICON.plus}</button></div>`;
+      <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-undo">${ICON.moon}Undo rest day</button></div>`;
   } else if (nx) {
     const d = nx.sp.days[nx.i], ty = d.type ? esc(d.type) : 'training day';
     lines = [greet(hi), ty, pick(['<em>is up next</em>.', '<em>is on deck</em>.', '<em>is calling</em>.'], 3)];
@@ -949,10 +949,10 @@ function nextBlock(nx, done, a) {
     const g = e && suggestNext(historyFor(e.id, null), { bw: e.kind === 'bw', step: fromU(loadStep()), round: snapW });
     return `<div class="ts-ex"><span><b>${esc(e ? e.name : x.name)}</b><small>${x.sets} × ${esc(x.reps)}</small></span><span class="ts-t">${g ? `<span class="lbl">try</span> ${fmt(g.next, e.kind === 'bw')}` : '<span class="lbl">first time</span>'}</span></div>`;
   }).join('');
-  const canStart = !a && !full && (!done.length || nx.second);
+  const rest = isRestToday(), canStart = !a && !full && !rest && (!done.length || nx.second);
   return `<span class="lbl ts-sub">${when}</span><div class="ts-day"><b>${esc(d.type || 'Training')}</b><span class="muted">${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}${nx.picked ? ' · your pick' : ''}</span></div>
   ${rows ? `<div class="ts-exs">${rows}</div>` : `<p class="muted">No exercises planned for this day yet.</p>`}
-  <div class="btns"><button class="btn line" data-act="ts-go" data-to="split" data-id="${nx.sp.id}">Open split</button>${canStart ? `<button class="btn" data-act="ts-go" data-to="start" data-sp="${nx.sp.id}" data-day="${nx.i}">Start ${dayLabel(nx.sp.days, nx.i)}</button>` : ''}</div>`;
+  <div class="btns"><button class="btn line" data-act="ts-go" data-to="split" data-id="${nx.sp.id}">Open split</button>${rest && !a && !done.length ? `<button class="btn line" data-act="ts-go" data-to="unrest">Undo rest day</button>` : ''}${canStart ? `<button class="btn" data-act="ts-go" data-to="start" data-sp="${nx.sp.id}" data-day="${nx.i}">Start ${dayLabel(nx.sp.days, nx.i)}</button>` : ''}</div>`;
 }
 /* the panel itself; pulling it down only starts from the top of Home */
 let TP = null;
@@ -1724,7 +1724,7 @@ const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class=
     <p><b>Records (PRs).</b> A weight PR is heavier than anything you’ve lifted on that exercise. A rep PR is more reps than you’ve ever done at that weight or heavier. Heavier and more reps than your record set is both. Each set is judged as you type it, against everything before it, earlier sets that day included; an exercise’s first session sets the baseline. For bodyweight moves the weight is the added load.</p>
     <p><b>Next-set suggestions.</b> Based on your top set last time. If it went at least as well as the time before, add 2.5 kg (5 lb) and keep the reps. If it slipped, or your later sets fell short at that weight, keep the weight and aim for a rep more. Bodyweight moves add a rep.</p>
     <p><b>Linked sets.</b> Link two or more sets and Synergym names the structure: two exercises make a superset, three or more a giant set. On one exercise, falling weight is a drop set, the same weight a rest-pause set, anything else a pyramid. Rest starts after the last set of a group.</p>
-    <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target. Rest days you mark on Home show on the heat map.</p>
+    <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target. Rest days you mark on Home show on the heat map; on a rest day no session can be started until you undo it.</p>
     <p><b>This week.</b> Sessions since Monday, volume (weight × reps) against last week, and the lifts whose heaviest set beats your best from the four weeks before.</p>
     <p><b>Bodyweight.</b> One entry per day, from Settings or the Bodyweight widget. The change is your latest entry minus the first one in the range you’re viewing.</p>
     <p><b>Splits.</b> Home suggests the next training day of the split you used last, skipping rest days. Pick a different day from the Up next menu and the split carries on from there. A day marked “Same day as” the day before is a second session: it comes up next only on the day you trained the first, otherwise the split moves on to the next day.</p>
@@ -1845,8 +1845,19 @@ function newSession(extra = {}) {
 }
 function startSession(force = false) {
   const a = activeSession(); if (a) return go('session', a.id);
-  if (dayFull() || (!force && askSecond(() => startSession(true)))) return;
+  if (restBlock(() => startSession(force)) || dayFull() || (!force && askSecond(() => startSession(true)))) return;
   newSession();
+}
+/* today is marked as a rest day: no session until it's undone. Says so, offers to undo it and carry on, returns true */
+function restBlock(proceed) {
+  if (!isRestToday()) return false;
+  openSheet(`<div class="sh-h"><h3>Today is a rest day</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  <div class="sec-done"><span class="dt-check rest" aria-hidden="true">${ICON.moon}</span><span><b>Rest day logged</b><span class="muted">Recovery is part of the plan.</span></span></div>
+  <p class="muted" style="margin:12px 0 4px">To log a session today, undo the rest day first.</p>
+  <div class="btns"><button class="btn ghost" data-act="close">Keep resting</button><button class="btn" id="rest-go">Undo rest day</button></div>`, r => {
+    r.querySelector('#rest-go').onclick = () => { closeSheet(); setRestToday(false); proceed(); };
+  });
+  return true;
 }
 /* two sessions done today: that's the day's limit. Says so and returns true. */
 function dayFull() {
@@ -1902,7 +1913,7 @@ function dayPicker({ title, note, onPick, foot = [] }) {
 }
 function startMenu(force = false) {
   const a = activeSession(); if (a) return go('session', a.id);
-  if (dayFull()) return;
+  if (restBlock(() => startMenu(force)) || dayFull()) return;
   const nx = nextSplitDay(), planned = nx && nx.second && plannedSecond(nx.sp.id, nx.i);
   if (!force && !planned && askSecond(() => startMenu(true))) return;
   const again = doneToday().length > 0;
@@ -1924,7 +1935,7 @@ function ensureExercise(x) {
 function startFromSplit(spid, di, force = false) {
   const a = activeSession(); if (a) { toast('Finish your current session first'); return go('session', a.id); }
   const sp = S.splits.get(spid), d = sp && sp.days[di]; if (!d) return;
-  if (dayFull()) return;
+  if (restBlock(() => startFromSplit(spid, di, force)) || dayFull()) return;
   if (!force && !plannedSecond(spid, di) && askSecond(() => startFromSplit(spid, di, true))) return;
   const groups = dayGroups(d), gid = new Map();
   const items = d.exercises.map(x => {
@@ -1943,7 +1954,7 @@ function startFromSplit(spid, di, force = false) {
 function repeatSession(id, force = false) {
   const src = S.sessions.get(id); if (!src) return;
   const a = activeSession(); if (a) { toast('Finish your current session first'); return go('session', a.id); }
-  if (dayFull() || (!force && askSecond(() => repeatSession(id, true)))) return;
+  if (restBlock(() => repeatSession(id, force)) || dayFull() || (!force && askSecond(() => repeatSession(id, true)))) return;
   const gm = new Map();
   newSession({ name: src.name, splitId: src.splitId, splitDay: src.splitDay,
     items: src.items.map(it => ({ id: sid(), exId: it.exId, sets: it.sets.map(st => { let g = null; if (st.g) { if (!gm.has(st.g)) gm.set(st.g, sid()); g = gm.get(st.g); } return { id: sid(), w: null, r: null, pw: st.w ?? st.pw ?? null, pr: st.r ?? st.pr ?? null, done: false, g }; }) })) });
@@ -2301,7 +2312,7 @@ const ACT = {
   'top-close': () => TP.close(),
   'ts-go': el => { const to = el.dataset.to; closeSheet(); TP.close();
     if (to === 'resume') go('session', el.dataset.id); else if (to === 'split') go('split', el.dataset.id); else if (to === 'splits') go('splits');
-    else if (to === 'start') startFromSplit(el.dataset.sp, +el.dataset.day); },
+    else if (to === 'start') startFromSplit(el.dataset.sp, +el.dataset.day); else if (to === 'unrest') setRestToday(false); },
   'hf-open': () => { if (!S.hf.open) { S.hf.open = true; hfRefresh(); } },
   'hf-toggle': () => { S.hf.open = !S.hf.open; hfRefresh(); },
   'hf-pick': el => hfSheet(el.dataset.k),

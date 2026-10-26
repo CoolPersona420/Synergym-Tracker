@@ -155,3 +155,39 @@ test('a split day can\'t be a third session of the same day', async ({ page }) =
   await expect(cards.nth(1).locator('.day-n')).toHaveText('DAY 1 · 2ND SESSION');
   await expect(cards.nth(2).locator('[data-act="day-same"]')).toHaveCount(0);
 });
+
+test('on a rest day no session can be started until the rest day is undone', async ({ page }) => {
+  const fake = setup({ daysAgo: 1 });
+  await login(page, fake, 'A');
+  await page.locator('.hero-cta [data-act="rest-today"]').click();
+  await expect.poll(() => fake.profiles[0].rest_days?.length || 0).toBe(1);
+  /* Home offers only Undo */
+  await expect(page.locator('.hero-cta [data-act="rest-undo"]')).toBeVisible();
+  await expect(page.locator('.hero-cta [data-act="start-menu"], .hero-cta [data-act="start-day"], .hero-cta [data-act="start"]')).toHaveCount(0);
+  /* the + button asks; Keep resting changes nothing */
+  await startButton(page).click();
+  await expect(page.locator('#sheet-body h3')).toHaveText('Today is a rest day');
+  await page.locator('#sheet-body .btns [data-act="close"]').click();
+  await expect(page.locator('#sheet')).toBeHidden();
+  expect(fake.sessions).toHaveLength(1);
+  /* so does starting a day from the split */
+  await page.goto('/splits/' + fake.splits[0].id);
+  await page.locator('[data-act="start-day"]').first().click();
+  await expect(page.locator('#sheet-body h3')).toHaveText('Today is a rest day');
+  await page.locator('#sheet-body .btns [data-act="close"]').click();
+  /* and the today panel has no Start, only Undo */
+  await page.goto('/');
+  await page.locator('.ts-open').click();
+  await expect(page.locator('#tsheet [data-to="start"]')).toHaveCount(0);
+  await expect(page.locator('#tsheet [data-to="unrest"]')).toBeVisible();
+  await page.locator('#tsheet [data-act="top-close"]').first().click({ force: true });
+  await expect(page.locator('#tsheet')).toBeHidden();
+  /* Undo rest day carries on to starting */
+  await startButton(page).click();
+  await page.click('#rest-go');
+  await expect.poll(() => fake.profiles[0].rest_days?.length || 0).toBe(0);
+  await expect(page.locator('#sheet-body h3')).toHaveText('Start a session');
+  await page.locator('#sheet-body [data-st-foot]', { hasText: 'Empty session' }).click();
+  await expect(page).toHaveURL(/\/session\//);
+  await expect.poll(() => fake.sessions.length).toBe(2);
+});
