@@ -144,3 +144,12 @@ test('widget sizes are offered on wider screens only', async ({ page }, info) =>
   await page.goto('/w/week');
   await expect(page.locator('.wf-size')).toHaveCount(phone ? 0 : 1);
 });
+
+test('in the Ocean theme the phone dock is solid, not see-through', async ({ page }, info) => {
+  test.skip(info.project.name !== 'phone', 'phone only');
+  await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'ocean' } }), 'A');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'ocean');
+  const bg = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('#nav')); return { color: c.backgroundColor, image: c.backgroundImage }; });
+  expect(bg.color).toBe('rgb(5, 41, 76)');
+  expect(bg.image).toContain('linear-gradient');
+});

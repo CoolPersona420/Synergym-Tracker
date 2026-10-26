@@ -1428,7 +1428,8 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
     background:color-mix(in srgb,var(--surface) 80%,transparent);
     box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent);
     visibility:visible;transition:transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
-  html.lite .nav{background:var(--surface)}
+  /* Ocean's surfaces are see-through, and lite devices have no blur: paint the dock solid, its surface over the page colour */
+  :root[data-theme="ocean"] .nav,html.lite .nav{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
   body.in-session .nav{display:flex;transform:translateY(calc(100% + 24px + env(safe-area-inset-bottom,0px)));opacity:0;pointer-events:none;visibility:hidden;transition:transform .45s var(--ease),opacity .3s,visibility 0s .45s}
 }
 @media (max-width:47.99rem){
