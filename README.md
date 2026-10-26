@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.0.4, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.0.5, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.0.4-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.0.5-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -18,8 +18,10 @@ The version lives in `package.json` (`0.0.4-alpha`) and shows in Settings › Ab
   type them, and each exercise page shows its heaviest set, most reps and best reps by weight.
 - **History filters:** filter by date (presets or any range), split (deleted ones too), exercise, muscle
   group and PR kind, combined with search.
-- **Today's summary:** pull Home down on a phone (or tap the date) for today's sessions, sets, volume and
-  PRs, the week so far, and the split's next day with what to lift and what to aim for.
+- **Today's plan / summary:** swipe Home down on a phone (or tap the date) and a panel comes down from the
+  top, following the finger; swipe it up to close. It's today's plan until the day's training is done, then
+  today's summary: sessions, sets, volume and PRs, the week so far, and the split's next day with what to
+  lift and what to aim for.
 - **Next-set suggestions:** each exercise shows last time's top set and what to try today.
 - **Plate calculator:** the plates for each side of the bar for any weight, with your bar remembered.
 - **Intensity and records:** every set and session gets an intensity score against your best; each

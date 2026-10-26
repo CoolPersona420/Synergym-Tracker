@@ -18,20 +18,23 @@ async function drag(page, y0, y1) {
   return () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
 
+/* on Home a pull from the top brings down the today panel instead (records-history-splits.spec.js) */
 test('pulling past the top stretches the page with resistance, then it springs back', async ({ page }, info) => {
   phoneOnly(info);
   await login(page, new FakeSupabase(benchHistory()), 'A');
+  await page.goto('/guide');
+  await page.waitForSelector('.guide-sec');
   await settled(page);
-  const before = await topOf(page, '#view .hero');
+  const el = '#view .guide-sec', before = await topOf(page, el);
   const lift = await drag(page, 300, 480);
-  const pulled = await topOf(page, '#view .hero') - before;
+  const pulled = await topOf(page, el) - before;
   expect(pulled).toBeGreaterThan(30);
   expect(pulled).toBeLessThan(180);
   /* the dock stays where it is */
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('#nav')).translate)).toBe('none');
   await lift();
-  await expect.poll(() => topOf(page, '#view .hero'), { timeout: 3000 }).toBeCloseTo(before, 0);
-  expect(await page.evaluate(() => document.querySelector('#view .hero').style.translate)).toBe('');
+  await expect.poll(() => topOf(page, el), { timeout: 3000 }).toBeCloseTo(before, 0);
+  await expect(page.locator('#tsheet')).toBeHidden();
 });
 
 test('pulling past the bottom lifts the page, then it springs back', async ({ page }, info) => {

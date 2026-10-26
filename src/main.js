@@ -16,6 +16,7 @@ import { TEMPLATES, recommendTemplate } from './data/templates.js';
 import { QUOTES } from './data/quotes.js';
 import { guideSections, tourSlides } from './ui/guide.js';
 import { rubberBand } from './ui/rubber.js';
+import { topPanel } from './ui/toppanel.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
@@ -911,8 +912,15 @@ function vToday() {
   <div class="home-edit rv"><button class="btn ghost sm" data-act="edit-home">${ICON.pen}${roll('Edit home')}</button></div>`;
 }
 
-/* ---------- Today's summary: pull down on Home (phones), or tap the date ---------- */
-function todaySheet() {
+/* ---------- Today: a panel from the top. Pull Home down on a phone, or tap the date ----------
+   It's today's plan until the day's training is done, then today's summary. */
+function dayDone() {
+  if (activeSession()) return false;
+  const n = doneToday().length, nx = nextSplitDay();
+  return n >= DAY_MAX || (n > 0 && !(nx && nx.second));
+}
+const todayHint = () => dayDone() ? 'Swipe to see today’s summary' : 'Swipe to see today’s plan';
+function todayContent() {
   const now = Date.now(), done = doneToday().slice().reverse(), a = activeSession(), nx = nextSplitDay();
   const tot = done.reduce((t, x) => { const q = S.A.sess.get(x.id); return q ? { sets: t.sets + q.sets, vol: t.vol + q.vol, min: t.min + Math.max(0, Math.round((x.endedAt - x.startedAt) / 6e4)) } : t; }, { sets: 0, vol: 0, min: 0 });
   const ids = new Set(done.map(x => x.id)), prs = bestPerSession(S.A.rec.events.filter(e => ids.has(e.sid)));
@@ -925,10 +933,9 @@ function todaySheet() {
     ${prs.length ? `<span class="lbl ts-sub">PRs today</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(exOf(p.exId)?.name || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}`;
   else if (!a) today += isRestToday() ? `<p class="ts-note">${ICON.moon}Rest day. Recovery counts.</p>` : `<p class="ts-note">Nothing logged yet today.</p>`;
   const wkBar = `<div class="ts-week"><span class="lbl">This week</span><b>${wk} of ${tgt}</b><span class="ts-bar"><i style="width:${Math.min(100, wk / tgt * 100).toFixed(0)}%"></i></span></div>`;
-  openSheet(`<div class="sh-h"><h3>Today</h3><button class="btn ghost sm" data-act="close">Close</button></div>
-  <span class="lbl">${DAYS[new Date(now).getDay()]} · ${fmtDate(now)}</span>
+  return { html: `<div class="sh-h"><div><span class="lbl">${DAYS[new Date(now).getDay()]} · ${fmtDate(now)}</span><h3 id="tsh-title">${dayDone() ? 'Today’s summary' : 'Today’s plan'}</h3></div><button class="btn ghost sm tsh-x" data-act="top-close">Close</button></div>
   <section class="ts-sec">${today}</section>${wkBar}
-  <section class="ts-sec ts-next">${nextBlock(nx, done, a)}</section>`);
+  <section class="ts-sec ts-next">${nextBlock(nx, done, a)}</section>` };
 }
 /* the split's next day: when it comes, what to lift, and what to aim for */
 function nextBlock(nx, done, a) {
@@ -947,28 +954,13 @@ function nextBlock(nx, done, a) {
   ${rows ? `<div class="ts-exs">${rows}</div>` : `<p class="muted">No exercises planned for this day yet.</p>`}
   <div class="btns"><button class="btn line" data-act="ts-go" data-to="split" data-id="${nx.sp.id}">Open split</button>${canStart ? `<button class="btn" data-act="ts-go" data-to="start" data-sp="${nx.sp.id}" data-day="${nx.i}">Start ${dayLabel(nx.sp.days, nx.i)}</button>` : ''}</div>`;
 }
-/* phones: pulling Home down from the top past a point opens the summary when let go */
-function pullForToday() {
-  if (!coarse.matches) return;
-  const hint = document.createElement('div'); hint.id = 'pull-hint'; hint.setAttribute('aria-hidden', 'true'); document.body.appendChild(hint);
-  const NEED = 110; let y0 = null, x0 = 0, axis = 0, armed = false;
-  const reset = () => { y0 = null; axis = 0; armed = false; hint.className = ''; hint.style.opacity = ''; };
-  addEventListener('touchstart', e => {
-    reset();
-    if (S.view !== 'today' || !S.loaded || e.touches.length !== 1 || !$('#sheet').hidden || scrollY > 0 || e.target.closest('.sheet,input,textarea')) return;
-    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX;
-  }, { passive: true });
-  addEventListener('touchmove', e => {
-    if (y0 == null || e.touches.length !== 1) return;
-    const t = e.touches[0], dy = t.clientY - y0, dx = t.clientX - x0;
-    if (!axis) { if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return; axis = dy > Math.abs(dx) ? 1 : -1; }
-    if (axis < 0) { reset(); return; }
-    const on = dy >= NEED;
-    if (on !== armed || !hint.textContent) { armed = on; hint.textContent = on ? 'Release for today' : 'Pull for today'; hint.classList.toggle('armed', on); if (on) buzz(10); }
-    hint.classList.add('show'); hint.style.opacity = Math.min(1, Math.max(0, (dy - 20) / (NEED - 20))).toFixed(2);
-  }, { passive: true });
-  addEventListener('touchend', () => { const go = y0 != null && armed; reset(); if (go) todaySheet(); }, { passive: true });
-  addEventListener('touchcancel', reset, { passive: true });
+/* the panel itself; pulling it down only starts from the top of Home */
+let TP = null;
+function todayPanel() {
+  TP = topPanel({
+    content: todayContent, hintText: todayHint, reduced, buzz,
+    canPull: e => coarse.matches && S.view === 'today' && S.loaded && $('#sheet').hidden && scrollY <= 0 && !e.target.closest('.sheet,input,textarea')
+  });
 }
 
 /* ---------- Home widgets ---------- */
@@ -1760,6 +1752,7 @@ function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.rem
 })();
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#sheet').hidden) return closeSheet();
+  if (e.key === 'Escape' && TP && TP.isOpen()) return TP.close();
   if (e.key === 'Escape' && S.view === 'widget') return back();
   const el = e.target; if ((e.key === 'Enter' || e.key === ' ') && el.getAttribute && el.getAttribute('role') === 'button' && el.dataset.act) { e.preventDefault(); el.click(); }
 });
@@ -2304,8 +2297,9 @@ const ACT = {
   start: el => startSession(!!el && el.dataset.force === '1'),
   'start-menu': () => startMenu(),
   second: () => startMenu(true),
-  'today-sum': () => todaySheet(),
-  'ts-go': el => { const to = el.dataset.to; closeSheet();
+  'today-sum': () => TP.open(),
+  'top-close': () => TP.close(),
+  'ts-go': el => { const to = el.dataset.to; closeSheet(); TP.close();
     if (to === 'resume') go('session', el.dataset.id); else if (to === 'split') go('split', el.dataset.id); else if (to === 'splits') go('splits');
     else if (to === 'start') startFromSplit(el.dataset.sp, +el.dataset.day); },
   'hf-open': () => { if (!S.hf.open) { S.hf.open = true; hfRefresh(); } },
@@ -2313,7 +2307,7 @@ const ACT = {
   'hf-pick': el => hfSheet(el.dataset.k),
   'hf-clear': () => { S.hf = { ...HF0(), open: true }; hfRefresh(); },
   'today-sessions': todaySessions,
-  'open-today': el => { closeSheet(); go('session', el.dataset.id); },
+  'open-today': el => { closeSheet(); TP && TP.close(); go('session', el.dataset.id); },
   'start-day': el => startFromSplit(el.dataset.sp, +el.dataset.day),
   resume: el => go('session', el.dataset.id || activeSession()?.id),
   open: el => go('session', el.dataset.id),
@@ -2807,8 +2801,9 @@ function boot() {
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
   lockAppZoom();
   /* pulling past the top or bottom stretches the page and springs back, as on iOS */
-  if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced });
-  pullForToday();
+  /* the today panel listens first, so a pull it takes isn't also stretched by the rubber band */
+  todayPanel();
+  if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced, held: () => TP.dragging() });
   const mode = readMode();
   /* phones get a quick splash each time the app opens */
   if (coarse.matches && !reduced) quickIn();

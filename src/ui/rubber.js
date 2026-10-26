@@ -9,7 +9,8 @@ const FIXED = '.transport,.savebar,.ob-nav';
 /* resistance as in UIScrollView, and the stiffness of the (critically damped) spring back, in rad/s */
 const C = 0.55, W = 14;
 
-export function rubberBand(view, { ios = false, reduced = false } = {}) {
+/* held(): another gesture (the today panel) has this touch, so leave it alone */
+export function rubberBand(view, { ios = false, reduced = false, held = () => false } = {}) {
   if (ios) { document.documentElement.classList.add('ios'); return; }
   const se = document.scrollingElement || document.documentElement;
   const band = d => (1 - 1 / (d * C / innerHeight + 1)) * innerHeight;
@@ -48,6 +49,7 @@ export function rubberBand(view, { ios = false, reduced = false } = {}) {
 
   addEventListener('touchmove', e => {
     if (!touch) return;
+    if (held()) { if (x) { x = 0; paint(); } touch = null; return; }
     if (e.touches.length !== 1) { if (x) spring(); touch = null; return; }
     const p = e.touches[0], y = p.clientY;
     if (!touch.axis) {

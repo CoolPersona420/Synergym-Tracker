@@ -142,14 +142,27 @@ test('importing a file with more than six splits is refused before anything chan
   expect(fake.log).not.toContain('A import_replace');
 });
 
-test('today’s summary: tap the date; shows today, the week and the next split day with targets', async ({ page }) => {
+const panel = page => page.locator('#tsheet');
+/* one finger on the screen, moved in steps; returns a function that lifts it */
+async function swipe(page, x, y0, y1, steps = 10) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0 }] });
+  for (let k = 1; k <= steps; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y0 + (y1 - y0) * k / steps }] });
+  return () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
+test('today’s plan: tap the date; it comes down from the top with today, the week and the next split day', async ({ page }) => {
   const fake = new FakeSupabase(benchHistory());
   const ex = fake.exercises[0];
   fake.splits.push({ id: crypto.randomUUID(), user_id: fake.uid, name: 'Upper', description: '', days: [{ id: 'u1', type: 'Push', rest: false, exercises: [{ id: 'x1', exId: ex.id, name: 'Bench Press', muscle: 'Chest', kind: 'w', sets: 3, reps: '8' }] }], share_token: null, copied_from: null, updated_at: new Date().toISOString() });
   await login(page, fake, 'A');
   await page.locator('.ts-open').click();
-  await expect(page.locator('#sheet-body h3')).toHaveText('Today');
-  await expect(page.locator('#sheet-body')).toContainText('Nothing logged yet today.');
+  await expect(panel(page)).toHaveClass(/is-open/);
+  await expect(page.locator('#tsh-title')).toHaveText('Today’s plan');
+  /* it sits at the top of the screen */
+  const top = await page.evaluate(() => document.querySelector('.tsh-body').getBoundingClientRect().top);
+  expect(top).toBeLessThan(120);
+  await expect(panel(page)).toContainText('Nothing logged yet today.');
   await expect(page.locator('.ts-week')).toContainText('This week');
   const next = page.locator('.ts-next');
   await expect(next).toContainText('Up next');
@@ -157,27 +170,71 @@ test('today’s summary: tap the date; shows today, the week and the next split 
   await expect(next.locator('.ts-ex')).toContainText('82.5×8');
   await next.locator('[data-to="start"]').click();
   await expect(page).toHaveURL(/\/session\//);
-  await expect(page.locator('#sheet')).toBeHidden();
+  await expect(panel(page)).toBeHidden();
 });
 
-test('on a phone, pulling Home down past the hint opens today’s summary', async ({ page }, info) => {
+test('once the day’s training is done it is today’s summary; Escape closes it', async ({ page }, info) => {
+  const fake = new FakeSupabase(benchHistory());
+  const now = Date.now(), midnight = new Date().setHours(0, 0, 0, 0), start = now - Math.min(3600e3, (now - midnight) / 2);
+  fake.sessions.push({ id: crypto.randomUUID(), user_id: fake.uid, name: 'Push', notes: '', split_id: null, split_day: null, started_at: new Date(start).toISOString(), ended_at: new Date(start + (now - start) / 2).toISOString(),
+    items: [{ id: 'i9', exId: fake.exercises[0].id, sets: [{ id: 'z1', w: 85, r: 5, done: true }] }] });
+  await login(page, fake, 'A');
+  await page.locator('.ts-open').click();
+  await expect(page.locator('#tsh-title')).toHaveText('Today’s summary');
+  await expect(panel(page)).toContainText('PRs today');
+  if (info.project.name === 'desktop') {
+    await page.keyboard.press('Escape');
+    await expect(panel(page)).toBeHidden();
+  }
+});
+
+test('on a phone: pull Home down and the panel follows the finger; let go and it opens; swipe up and it closes', async ({ page }, info) => {
   phoneOnly(info);
   await login(page, new FakeSupabase(benchHistory()), 'A');
   await page.waitForTimeout(1500);
-  const cdp = await page.context().newCDPSession(page);
-  const at = y => [{ x: 200, y }];
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(260) });
-  for (let k = 1; k <= 10; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(260 + 16 * k) });
-  await expect(page.locator('#pull-hint')).toHaveText('Release for today');
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await expect(page.locator('#sheet-body h3')).toHaveText('Today');
-  /* a short pull does nothing */
-  await page.locator('#sheet-body [data-act="close"]').first().click();
-  await expect(page.locator('#sheet')).toBeHidden();
-  await page.waitForTimeout(600);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(260) });
-  for (let k = 1; k <= 4; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(260 + 15 * k) });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await page.waitForTimeout(400);
-  await expect(page.locator('#sheet')).toBeHidden();
+  const lift = await swipe(page, 200, 240, 420, 12);
+  /* mid-pull: the panel's edge is under the finger, the pill says what's coming, the page isn't stretched */
+  const edge = await page.evaluate(() => document.querySelector('.tsh-panel').getBoundingClientRect().bottom);
+  expect(edge).toBeGreaterThan(120); expect(edge).toBeLessThan(260);
+  await expect(page.locator('#pull-hint .ph-t')).toHaveText('Swipe to see today’s plan');
+  await expect(page.locator('#pull-hint')).toHaveClass(/armed/);
+  expect(await page.evaluate(() => document.querySelector('#view .hero').style.translate)).toBe('');
+  await lift();
+  await expect(panel(page)).toHaveClass(/is-open/);
+  await expect(page.locator('#tsh-title')).toHaveText('Today’s plan');
+  /* swipe up on it */
+  const box = await page.locator('.tsh-grab').boundingBox();
+  const up = await swipe(page, 200, box.y + 4, box.y - 300, 10);
+  await up();
+  await expect(panel(page)).toBeHidden();
+  await expect(page.locator('body')).not.toHaveClass(/top-open/);
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  /* a short pull springs back */
+  await page.waitForTimeout(300);
+  const short = await swipe(page, 200, 240, 280, 4);
+  await short();
+  await expect(panel(page)).toBeHidden();
+  /* a small swipe up on the open panel springs it back open */
+  await page.locator('.ts-open').click();
+  await expect(panel(page)).toHaveClass(/is-open/);
+  const b2 = await page.locator('.tsh-grab').boundingBox();
+  const nudge = await swipe(page, 200, b2.y + 4, b2.y - 30, 4);
+  await page.waitForTimeout(200);
+  await nudge();
+  await page.waitForTimeout(700);
+  await expect(panel(page)).toHaveClass(/is-open/);
+});
+
+test('on a phone, when the day is done the pill says summary', async ({ page }, info) => {
+  phoneOnly(info);
+  const fake = new FakeSupabase(benchHistory());
+  const now = Date.now(), start = now - 1800e3;
+  fake.sessions.push({ id: crypto.randomUUID(), user_id: fake.uid, name: 'Push', notes: '', split_id: null, split_day: null, started_at: new Date(start).toISOString(), ended_at: new Date(start + 900e3).toISOString(),
+    items: [{ id: 'i9', exId: fake.exercises[0].id, sets: [{ id: 'z1', w: 80, r: 5, done: true }] }] });
+  test.skip(new Date(start).getDate() !== new Date(now).getDate(), 'too close to midnight');
+  await login(page, fake, 'A');
+  await page.waitForTimeout(1500);
+  const lift = await swipe(page, 200, 240, 300, 6);
+  await expect(page.locator('#pull-hint .ph-t')).toHaveText('Swipe to see today’s summary');
+  await lift();
 });
