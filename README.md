@@ -49,6 +49,9 @@ The version lives in `package.json` (`0.0.5-alpha`) and shows in Settings › Ab
 - **Your data:** export everything as JSON or every set as CSV; import replaces all data after a warning.
 - **Help:** a user guide for phone and desktop (Settings › User guide) and "How the numbers work".
 
+What's planned next (coaching progression, more set types, warm-ups, muscle balance, and more) is in
+[ROADMAP.md](ROADMAP.md).
+
 ## How it's built
 
 - **Frontend:** plain JavaScript and Vite, deployed on Vercel (with one serverless function for reminders).
