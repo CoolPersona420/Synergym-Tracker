@@ -49,8 +49,8 @@ The version lives in `package.json` (`0.0.5-alpha`) and shows in Settings › Ab
 - **Your data:** export everything as JSON or every set as CSV; import replaces all data after a warning.
 - **Help:** a user guide for phone and desktop (Settings › User guide) and "How the numbers work".
 
-What's planned next (coaching progression, more set types, warm-ups, muscle balance, and more) is in
-[ROADMAP.md](ROADMAP.md).
+What's planned from here to the Beta is in [ROADMAP.md](ROADMAP.md), in phases. Phase 1 covers coaching
+progression, more set types, warm-ups, muscle balance and more.
 
 ## How it's built
 

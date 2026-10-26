@@ -1,49 +1,81 @@
-# Roadmap
+# Synergym roadmap: Alpha to Beta
 
-Planned enhancements, kept here as a record until they're built. Each one moves to the README's
-"What it does" list (and out of this file) when it ships.
+**Roadmap version 1.0** · 26 October 2026 · app at 0.0.5-alpha
 
-The goal behind all of them: help people keep progressing, not just keep a log. They should cost no extra
-taps for anyone who doesn't use them. The core loop (open, log a set, done) stays fast.
+This roadmap covers the rest of the Alpha, up to the start of the Beta. It's split into phases. Phase 1 is
+set out below; later phases are added as they're planned. The Beta starts once every phase on this roadmap
+has shipped.
 
-**Status key:** Planned · In progress · Shipped (removed from this file)
+It's also the record of what was planned and when it shipped: items stay here after they ship, marked with
+the app version they shipped in.
+
+The goal behind every item: help people keep progressing, not just keep a log. Nothing here should cost an
+extra tap for anyone who doesn't use it. The core loop (open, log a set, done) stays fast.
+
+## Overview
+
+| Phase | Theme | Items | Status |
+|---|---|---|---|
+| [Phase 1](#phase-1-coaching-and-better-logging) | Coaching progression, logging any workout, balance and recovery, guidance | 10 | Planned |
+| Phase 2 | To be planned | – | Not started |
+| Beta | Starts when every phase above has shipped | – | – |
+
+## How this roadmap is versioned
+
+- **The roadmap's own version** (above) goes up when its plan changes:
+  - minor (1.0 → 1.1): a phase is added, or items are added, removed or reordered;
+  - major (1.x → 2.0): the plan is restructured, or the road to Beta changes.
+  Every change gets a line in the [revision history](#revision-history).
+- **Status changes** (an item moving from Planned to In progress to Shipped) don't change the roadmap's
+  version.
+- **Items** have fixed ids: phase, then group, then item. For example, 1.2.3 is Phase 1, group 2, item 3.
+  An id is never reused, even if its item is dropped.
+- **Status key:** Planned · In progress · Shipped in vX.Y.Z · Dropped (with the reason)
+
+## Phase 1: Coaching and better logging
+
+**Status:** Planned · **Roadmap version added:** 1.0
 
 **Before building a lot:** put the app in front of 5–10 real lifters and use the privacy-friendly usage
-stats (see the README's "Errors and usage stats") to see what people use. That should decide the order as
-much as this list does.
+stats (see the README's "Errors and usage stats") to see what people actually use. That should decide the
+order as much as this list does.
 
-## 1. Coaching progression (highest impact)
+### 1.1 Coaching progression (highest impact)
 
-Recommended to build these three together: they turn the app from a logbook into something that tells you
-what to do next.
+Best built together: these three turn the app from a logbook into something that tells you what to do
+next.
 
-| # | Enhancement | Why it helps | What already exists | Status |
+| Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
-| 1.1 | **Effort per set (RIR / RPE).** One optional tap after a set: "how many more reps could you have done?" (0–4). | Next-set suggestions only see weight × reps, so they can't tell an easy 8 from a grinding 8 and sometimes push too fast or hold back. | Next-set suggestions (`src/lib/progress.js`), set rows in the session view. | Planned |
-| 1.2 | **Rep-range progression from the split.** With a range like 8–12: keep the weight until every set reaches 12, then add weight and drop back to 8 (double progression). | The most proven method for most lifters. | Split days already store reps as a range (e.g. `"8-12"`); suggestions engine. | Planned |
-| 1.3 | **Stall and deload alerts.** When a lift hasn't improved in 3 sessions, or session intensity keeps falling, say so and suggest a lighter week or a variation. | Catches plateaus and fatigue before they cost weeks. | Records engine (`src/lib/records.js`), set and session intensity. | Planned |
+| 1.1.1 | **Effort per set (RIR / RPE).** One optional tap after a set: "how many more reps could you have done?" (0–4). | Next-set suggestions only see weight × reps, so they can't tell an easy 8 from a grinding 8 and sometimes push too fast or hold back. | Next-set suggestions (`src/lib/progress.js`), set rows in the session view. | Planned |
+| 1.1.2 | **Rep-range progression from the split.** With a range like 8–12: keep the weight until every set reaches 12, then add weight and drop back to 8 (double progression). | The most proven method for most lifters. | Split days already store reps as a range (e.g. `"8-12"`); suggestions engine. | Planned |
+| 1.1.3 | **Stall and deload alerts.** When a lift hasn't improved in 3 sessions, or session intensity keeps falling, say so and suggest a lighter week or a variation. | Catches plateaus and fatigue before they cost weeks. | Records engine (`src/lib/records.js`), set and session intensity. | Planned |
 
-## 2. Log any workout
+### 1.2 Log any workout
 
-| # | Enhancement | Why it helps | What already exists | Status |
+| Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
-| 2.1 | **More set types:** timed holds (planks), cardio (time and distance), assisted lifts (weight taken off), and left/right sides for one-arm or one-leg work. | Today everything must be weight × reps, so some workouts can't be logged accurately. | Bodyweight exercises (added load). | Planned |
-| 2.2 | **Warm-up sets.** Generate them from the working weight (bar, about 50%, 70%, 85%) with the plates shown. | Used every session; saves the mental math. | Plate calculator (`src/lib/plates.js`). | Planned |
-| 2.3 | **Rest time per exercise.** For example, 3 min for squats and 60 s for curls. | One rest timer for everything is wrong for most sessions. | Rest timer (one setting in Settings › Training). | Planned |
+| 1.2.1 | **More set types:** timed holds (planks), cardio (time and distance), assisted lifts (weight taken off), and left/right sides for one-arm or one-leg work. | Today everything must be weight × reps, so some workouts can't be logged accurately. | Bodyweight exercises (added load). | Planned |
+| 1.2.2 | **Warm-up sets.** Generate them from the working weight (bar, about 50%, 70%, 85%) with the plates shown. | Used every session; saves the mental math. | Plate calculator (`src/lib/plates.js`). | Planned |
+| 1.2.3 | **Rest time per exercise.** For example, 3 min for squats and 60 s for curls. | One rest timer for everything is wrong for most sessions. | Rest timer (one setting in Settings › Training). | Planned |
 
-## 3. Balance and recovery
+### 1.3 Balance and recovery
 
-| # | Enhancement | Why it helps | What already exists | Status |
+| Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
-| 3.1 | **Weekly sets per muscle against a target** (about 10–20 hard sets), flagging muscles you're under-training and imbalances such as too much pushing versus pulling. | Balanced progress, fewer injuries from imbalance. | Muscle focus widget (sets per muscle over 7, 30 or 90 days). | Planned |
-| 3.2 | **Check-in before a session:** sleep, soreness and energy on a 1–5 scale. On a bad day the suggestions ease off automatically. | Fits training to the day instead of forcing it. | Next-set suggestions. | Planned |
+| 1.3.1 | **Weekly sets per muscle against a target** (about 10–20 hard sets), flagging muscles you're under-training and imbalances such as too much pushing versus pulling. | Balanced progress, fewer injuries from imbalance. | Muscle focus widget (sets per muscle over 7, 30 or 90 days). | Planned |
+| 1.3.2 | **Check-in before a session:** sleep, soreness and energy on a 1–5 scale. On a bad day the suggestions ease off automatically. | Fits training to the day instead of forcing it. | Next-set suggestions. | Planned |
 
-## 4. Guidance
+### 1.4 Guidance
 
-| # | Enhancement | Why it helps | What already exists | Status |
+| Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
-| 4.1 | **Notes that stay with each exercise** (seat height, grip, cues), shown the next time you do it. | Setup details stop getting lost between sessions. | Session notes (per session only). | Planned |
-| 4.2 | **Swap an exercise** for another that works the same muscle, for when equipment is taken. | Keeps the plan on track in a busy gym. | Exercise library with muscle groups. | Planned |
+| 1.4.1 | **Notes that stay with each exercise** (seat height, grip, cues), shown the next time you do it. | Setup details stop getting lost between sessions. | Session notes (per session only). | Planned |
+| 1.4.2 | **Swap an exercise** for another that works the same muscle, for when equipment is taken. | Keeps the plan on track in a busy gym. | Exercise library with muscle groups. | Planned |
+
+## Phase 2
+
+To be planned. Add it here as a new section, list it in the overview, and raise the roadmap's version.
 
 ## Notes for whoever builds these
 
@@ -54,5 +86,11 @@ what to do next.
   `supabase/schema.sql` and run the migration before deploying the app.
 - Export and import (`src/lib/importer.js`) and offline sync (`src/lib/sync.js`) must carry any new
   fields.
-- Update the in-app guide (`src/ui/guide.js`), "How the numbers work", and the README when a feature
-  ships.
+- When an item ships: set its status to "Shipped in vX.Y.Z", add it to the README's "What it does", and
+  update the in-app guide (`src/ui/guide.js`) and "How the numbers work".
+
+## Revision history
+
+| Roadmap version | Date | App version | Change |
+|---|---|---|---|
+| 1.0 | 26 October 2026 | 0.0.5-alpha | First roadmap: Phase 1 (10 items) planned; Beta starts after the last phase. |
