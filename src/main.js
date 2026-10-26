@@ -653,11 +653,13 @@ function renderNav() {
   const nav = $('#nav'); let fab = nav.querySelector(':scope > .nav-train');
   if (!fab) { nav.innerHTML = ''; fab = document.createElement('button'); fab.className = 'nav-train'; nav.appendChild(fab); }
   for (const c of [...nav.children]) if (c !== fab) c.remove();
-  const mode = a ? 'live:' + a.id : 'idle';
+  /* on a rest day it shows a moon and stars; tapping it still asks to undo the rest day before anything starts */
+  const rest = !a && S.loaded && isRestToday(), mode = a ? 'live:' + a.id : rest ? 'rest' : 'idle';
   if (fab.dataset.mode !== mode) {
-    fab.dataset.mode = mode; fab.classList.toggle('live', !!a);
-    fab.dataset.act = a ? 'resume' : 'start-menu'; fab.dataset.id = a ? a.id : ''; fab.setAttribute('aria-label', a ? 'Resume session' : 'Start session');
-    fab.innerHTML = `<span class="ring">${a ? ICON.play : ICON.plus}</span><span class="nl">${a ? roll('Resume session') : roll('Start session')}</span>`;
+    fab.dataset.mode = mode; fab.classList.toggle('live', !!a); fab.classList.toggle('rest', rest);
+    fab.dataset.act = a ? 'resume' : 'start-menu'; fab.dataset.id = a ? a.id : '';
+    fab.setAttribute('aria-label', a ? 'Resume session' : rest ? 'Rest day: undo it to start a session' : 'Start session');
+    fab.innerHTML = `<span class="ring">${a ? ICON.play : rest ? ICON.rest : ICON.plus}</span><span class="nl">${roll(a ? 'Resume session' : rest ? 'Rest day' : 'Start session')}</span>`;
   }
   fab.insertAdjacentHTML('beforebegin', `<div class="nav-brand">${brand()}</div>${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}`);
   fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}<button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>`);

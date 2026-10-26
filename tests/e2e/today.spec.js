@@ -161,6 +161,10 @@ test('on a rest day no session can be started until the rest day is undone', asy
   await login(page, fake, 'A');
   await page.locator('.hero-cta [data-act="rest-today"]').click();
   await expect.poll(() => fake.profiles[0].rest_days?.length || 0).toBe(1);
+  /* the start button turns into a moon and stars */
+  await expect(startButton(page)).toHaveClass(/\brest\b/);
+  await expect(startButton(page)).toHaveAttribute('aria-label', /Rest day/);
+  await expect(startButton(page).locator('.nl')).toContainText('Rest day');
   /* Home offers only Undo */
   await expect(page.locator('.hero-cta [data-act="rest-undo"]')).toBeVisible();
   await expect(page.locator('.hero-cta [data-act="start-menu"], .hero-cta [data-act="start-day"], .hero-cta [data-act="start"]')).toHaveCount(0);
@@ -186,6 +190,7 @@ test('on a rest day no session can be started until the rest day is undone', asy
   await startButton(page).click();
   await page.click('#rest-go');
   await expect.poll(() => fake.profiles[0].rest_days?.length || 0).toBe(0);
+  await expect(startButton(page)).not.toHaveClass(/\brest\b/);
   await expect(page.locator('#sheet-body h3')).toHaveText('Start a session');
   await page.locator('#sheet-body [data-st-foot]', { hasText: 'Empty session' }).click();
   await expect(page).toHaveURL(/\/session\//);
