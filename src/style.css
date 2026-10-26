@@ -120,8 +120,12 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%;background:var(--bg)}
+/* the page background is a layer fixed to the screen, behind everything. On body it stopped short of the safe
+   areas (the strip by the iPhone home bar) and of what a scroll bounce reveals, which then showed the plain
+   colour; in Ocean, the only theme with a gradient, that was a dark band. iOS doesn't fix backgrounds, hence a layer. */
+html::after{content:"";position:fixed;left:0;right:0;top:-10vh;bottom:-10vh;z-index:-1;pointer-events:none;background:var(--bg);background-image:var(--page)}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-body{margin:0;min-height:100vh;background:var(--page);background-attachment:fixed;color:var(--ink);font-family:var(--font-ui);font-size:var(--t0);line-height:1.55;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+body{margin:0;min-height:100vh;background:transparent;color:var(--ink);font-family:var(--font-ui);font-size:var(--t0);line-height:1.55;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
 img{max-width:100%}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:inherit}

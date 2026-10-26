@@ -153,3 +153,21 @@ test('in the Ocean theme the phone dock is solid, not see-through', async ({ pag
   expect(bg.color).toBe('rgb(5, 41, 76)');
   expect(bg.image).toContain('linear-gradient');
 });
+
+test('every theme paints its page background on one fixed layer, so the safe areas and scroll bounce match it', async ({ page }) => {
+  await login(page, new FakeSupabase(benchHistory()), 'A');
+  const themes = ['light', 'dark', 'solarized-light', 'solarized-dark', 'gruvbox-light', 'gruvbox-dark', 'nord', 'dracula', 'ocean', 'sage', 'volt'];
+  for (const t of themes) {
+    const r = await page.evaluate(t => {
+      document.documentElement.setAttribute('data-theme', t);
+      const html = getComputedStyle(document.documentElement), layer = getComputedStyle(document.documentElement, '::after'), body = getComputedStyle(document.body);
+      return { bodyColor: body.backgroundColor, bodyImage: body.backgroundImage, pos: layer.position, z: layer.zIndex, color: layer.backgroundColor, image: layer.backgroundImage, canvas: html.backgroundColor };
+    }, t);
+    expect(r.bodyColor, t).toBe('rgba(0, 0, 0, 0)');
+    expect(r.bodyImage, t).toBe('none');
+    expect(r.pos, t).toBe('fixed');
+    expect(r.z, t).toBe('-1');
+    expect(r.color, t).toBe(r.canvas);
+    if (t === 'ocean') expect(r.image, t).toContain('linear-gradient'); else expect(r.image, t).toBe('none');
+  }
+});
