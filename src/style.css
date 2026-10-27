@@ -1608,7 +1608,6 @@ a.srow{color:inherit;text-decoration:none}
 .tsh-grab i{display:block;width:2.6rem;height:5px;border-radius:999px;background:var(--line)}
 .tsh-grab span{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;opacity:0;transition:opacity .4s var(--ease) .2s}
 #tsheet.is-open .tsh-grab span{opacity:.8}
-@media (pointer:coarse){.tsh-x{display:none}}
 @media (pointer:fine){.tsh-grab span{display:none}}
 
 /* ---------- coach ---------- */
@@ -1678,3 +1677,15 @@ a.srow{color:inherit;text-decoration:none}
 .co-exg .co-bar{margin-bottom:8px}
 /* phones reach the Coach from its Home card and the today panel; the dock keeps its five places */
 @media (max-width:59.99rem){.nav-coach{display:none!important}}
+
+/* ---------- iPhone app: swipe back from the left edge (src/ui/edgeback.js) ---------- */
+/* a soft shadow on the page's left edge as it slides, and a pill naming where it goes */
+#eb-edge{position:fixed;top:0;bottom:0;left:0;width:28px;z-index:25;pointer-events:none;opacity:0;background:linear-gradient(to left,rgba(0,0,0,.16),transparent)}
+#eb-hint{position:fixed;left:12px;top:50%;z-index:26;pointer-events:none;display:flex;align-items:center;gap:2px;padding:7px 14px 7px 8px;border-radius:999px;
+  background:var(--surface);color:var(--ink);box-shadow:var(--shadow),inset 0 0 0 1px var(--line);font-weight:700;font-size:.85rem;opacity:0;transform:translate(-10px,-50%) scale(.9)}
+#eb-hint .ico{width:18px;height:18px}
+/* after a swipe the page is already gone: the one underneath comes in from the left, as on iPhone */
+html[data-nav="swipe"]::view-transition-old(root){animation:none;opacity:0}
+html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cubic-bezier(.2,.8,.2,1) both}
+@keyframes vt-swipe-in{from{transform:translateX(-28%);filter:brightness(.85)}}
+@media (prefers-reduced-motion:reduce){html[data-nav="swipe"]::view-transition-new(root){animation:none}}

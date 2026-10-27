@@ -16,6 +16,7 @@ import { TEMPLATES, recommendTemplate } from './data/templates.js';
 import { QUOTES } from './data/quotes.js';
 import { guideSections, tourSlides } from './ui/guide.js';
 import { rubberBand } from './ui/rubber.js';
+import { edgeBack } from './ui/edgeback.js';
 import { topPanel } from './ui/toppanel.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
@@ -490,15 +491,23 @@ function parsePath() {
 const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', coach: '/coach', public: '/s/' + a, widget: '/w/' + a })[v] || '/';
 function go(v, a = null, { replace = false } = {}) {
   const path = pathOf(v, a);
-  if (replace) history.replaceState({ d: depth }, '', path); else { depth++; history.pushState({ d: depth }, '', path); }
+  if (replace) history.replaceState({ d: depth }, '', path); else { depth++; history.pushState({ d: depth, from: S.view }, '', path); }
   route(true);
 }
 function back() {
   if (depth > 0) return history.back();
-  const up = { exercise: 'exercises', split: 'splits', shared: 'splits', guide: 'prefs' }[S.view] || 'today';
-  navDir = 'back'; go(up, null, { replace: true });
+  navDir = swipeNav ? 'swipe' : 'back'; swipeNav = false; go(upOf(S.view), null, { replace: true });
 }
-addEventListener('popstate', e => { const d = e.state?.d || 0; navDir = d < depth ? 'back' : 'fwd'; depth = d; route(true); });
+/* where Back goes when there's no history to go back through (a page opened straight from a link) */
+const upOf = v => ({ exercise: 'exercises', split: 'splits', shared: 'splits', guide: 'prefs' })[v] || 'today';
+/* set by the iPhone back swipe: the page has already slid away, so the next one comes in its own way */
+let swipeNav = false;
+addEventListener('popstate', e => { const d = e.state?.d || 0; navDir = swipeNav ? 'swipe' : d < depth ? 'back' : 'fwd'; swipeNav = false; depth = d; route(true); });
+/* the iPhone back swipe works on pages reached from another one; the dock's own pages are where you go back to */
+const SWIPE_BACK = new Set(['exercise', 'split', 'shared', 'session', 'guide', 'coach', 'widget']);
+const canSwipeBack = () => !!(S.user && S.loaded && S.profile.onboarded && SWIPE_BACK.has(S.view) && !S.link && $('#sheet').hidden);
+const VIEW_NAME = { today: 'Home', history: 'History', exercises: 'Exercises', exercise: 'Exercise', splits: 'Splits', split: 'Split', shared: 'Split', session: 'Session', prefs: 'Settings', guide: 'Guide', coach: 'Coach', widget: 'Home' };
+const backLabel = () => VIEW_NAME[depth > 0 && history.state?.from ? history.state.from : upOf(S.view)] || 'Back';
 /* page change: a curtain wipe through the View Transitions API where the browser has it
    (old page lifts away, new page is revealed from below; reversed when going back). */
 let navDir = 'fwd';
@@ -514,7 +523,7 @@ function route(enter = true) {
   /* a widget card grows into its full view, and shrinks back on close */
   let morph = null;
   if (v === 'widget' && from === 'today') { dir = 'widget'; morph = document.querySelector(`#view [data-w="${CSS.escape(arg || '')}"]`); }
-  else if (from === 'widget' && v === 'today') { dir = 'widget'; S.morphW = fromArg; }
+  else if (from === 'widget' && v === 'today' && dir !== 'swipe') { dir = 'widget'; S.morphW = fromArg; }
   if (v !== 'today' && v !== 'widget') S.homeRestore = null;
   if (enter && changed && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
     document.documentElement.dataset.nav = dir;
@@ -1910,7 +1919,7 @@ async function reminderTest() {
   } catch { toast('Couldn’t reach the server'); }
 }
 
-const HOW = `<h2 style="margin-bottom:12px">How the numbers work</h2><div class="how">
+const HOW = `<div class="sh-h"><h3>How the numbers work</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
     <p><b>One-rep max.</b> Each exercise shows your saved one-rep max, or the best estimate from your sets. When a completed set beats it, Synergym asks whether to save the new one.</p>
@@ -3014,6 +3023,8 @@ function boot() {
   /* the today panel listens first, so a pull it takes isn't also stretched by the rubber band */
   todayPanel();
   if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced, held: () => TP.dragging() });
+  /* the app installed on an iPhone has no browser back: swipe in from the left edge instead */
+  if (coarse.matches && isIOS() && navigator.standalone === true) edgeBack({ view: $('#view'), reduced, canBack: canSwipeBack, label: backLabel, onBack: () => { swipeNav = true; back(); }, held: () => TP.isOpen() || TP.dragging() });
   const mode = readMode();
   /* phones get a quick splash each time the app opens */
   if (coarse.matches && !reduced) quickIn();
