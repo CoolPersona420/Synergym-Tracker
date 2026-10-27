@@ -1608,3 +1608,62 @@ a.srow{color:inherit;text-decoration:none}
 #tsheet.is-open .tsh-grab span{opacity:.8}
 @media (pointer:coarse){.tsh-x{display:none}}
 @media (pointer:fine){.tsh-grab span{display:none}}
+
+/* waiting for approval */
+.gate-wait{display:flex;gap:8px;margin:var(--s0) 0 var(--s1)}
+.gate-wait i{width:10px;height:10px;border-radius:50%;background:var(--accent);animation:gate-dot 1.4s var(--ease) infinite}
+.gate-wait i:nth-child(2){animation-delay:.2s}.gate-wait i:nth-child(3){animation-delay:.4s}
+@keyframes gate-dot{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.gate-wait i{animation:none;opacity:.6}}
+
+/* ---------- admin console ---------- */
+.adm{padding-top:var(--s0)}
+.adm-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s0);margin-bottom:var(--s0)}
+.adm-head .h1{margin-top:4px}
+.adm-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 calc(var(--gl) * -1) var(--s1);padding:0 var(--gl) 2px;border-bottom:1px solid var(--line)}
+.adm-tabs button{flex:none;display:inline-flex;align-items:center;gap:6px;padding:.7rem .9rem;font-weight:600;font-size:.92rem;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .2s,border-color .2s}
+.adm-tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+.adm-count{display:inline-grid;place-items:center;min-width:1.25rem;height:1.25rem;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:.72rem;font-weight:700}
+.adm-callout{display:flex;align-items:center;justify-content:space-between;gap:var(--s0);width:100%;margin-bottom:var(--s0);padding:var(--s0);border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent);text-align:left}
+.adm-callout span{font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.adm-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(13.5rem,1fr));gap:var(--s-1)}
+.adm-kpi{display:flex;flex-direction:column;gap:6px;min-width:0;padding:var(--s0);border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line)}
+.adm-kpi b{font-family:var(--font-display);font-size:var(--t3);line-height:.95;letter-spacing:.005em}
+.adm-kpi .muted{font-size:.82rem}
+.adm-kpi.warn b{color:var(--bad)}
+.adm-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:var(--s-1);margin-top:var(--s-1)}
+.adm-chart svg{display:block;width:100%;height:5rem;margin-top:var(--s-1)}
+.adm-chart rect{fill:var(--ink);opacity:.75}
+.adm-chart rect.now{fill:var(--accent);opacity:1}
+.adm-note{margin-top:var(--s0);font-size:.9rem}
+.adm-note .linkbtn{display:inline;padding:0;font-size:inherit}
+.adm-tools{display:flex;flex-direction:column;gap:var(--s-1);margin-bottom:var(--s0)}
+.adm-tools.adm-row{flex-direction:row;align-items:center;justify-content:space-between}
+.adm-bulk{display:flex;gap:var(--s-1);justify-content:flex-end;flex-wrap:wrap}
+.adm-cn{opacity:.65;margin-left:2px}
+.adm-users .row{grid-template-columns:minmax(0,1fr) auto;cursor:pointer}
+.adm-users .row-m .sub{white-space:normal}
+.adm-users .row-r{display:flex;flex-direction:row;align-items:center;gap:8px}
+.adm-st{display:inline-block;padding:3px 9px;border-radius:999px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;background:var(--surface-2);color:var(--ink-2);vertical-align:2px}
+.adm-st.pending{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--ink)}
+.adm-st.active{background:color-mix(in srgb,var(--good) 20%,transparent);color:var(--ink)}
+.adm-st.deactivated{background:color-mix(in srgb,var(--bad) 22%,transparent);color:var(--ink)}
+.adm-more{display:flex;justify-content:center;margin-top:var(--s0)}
+.adm-err .t{font-family:var(--font-mono);font-size:.85rem;font-weight:500;white-space:normal;word-break:break-word}
+.adm-err,.adm-log{grid-template-columns:minmax(0,1fr)}
+.adm-log .sub,.adm-err .sub{white-space:normal}
+.adm-help{padding:var(--s0);color:var(--ink-2);font-size:.92rem;line-height:1.5}
+.adm-id{display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--muted);margin:-6px 0 var(--s0)}
+.adm-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.adm-facts > div{display:flex;flex-direction:column;gap:3px;padding:.6rem .75rem;border-radius:var(--r-sm);background:var(--surface-2);min-width:0}
+.adm-facts b{font-weight:600;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adm-facts small{color:var(--muted);font-weight:400;font-size:.75rem}
+.adm-acts{display:flex;flex-wrap:wrap;gap:var(--s-1);margin-top:var(--s0)}
+.adm-acts .muted{flex-basis:100%;font-size:.85rem}
+.adm-sm{margin-top:-2px}
+.adm-confirm{display:flex;flex-direction:column;gap:8px;margin-top:var(--s0);font-size:.92rem}
+.adm-confirm b{word-break:break-all}
+@media (max-width:30rem){.adm-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.adm-kpi b{font-size:var(--t2)}}
+/* phones reach the console from Settings; the dock keeps its five places */
+@media (max-width:59.99rem){.nav-adm{display:none!important}}
+.adm-body .sg + .sg{margin-top:var(--s1)}
