@@ -625,7 +625,7 @@ function render(enter) {
   document.body.classList.toggle('bare', bare);
   document.body.classList.toggle('in-session', app && S.view === 'session');
   document.body.classList.toggle('on-prefs', app && (S.view === 'prefs' || S.view === 'guide'));
-  document.body.classList.toggle('in-full', app && S.view === 'widget');
+  document.body.classList.toggle('in-full', app && (S.view === 'widget' || S.view === 'coach'));
   if (enter) {
     const hr = S.view === 'today' && S.homeRestore;
     if (hr) { const d = $('#dash', v); if (d) d.scrollLeft = hr.x; scrollTo(0, hr.y); S.homeRestore = null; } else scrollTo(0, 0);
@@ -1056,7 +1056,7 @@ function coachMood(a) {
   return null;
 }
 function vCoach() {
-  if (!coachOn()) return pageTop('Coach') + `<div class="co"><section class="card rv co-offc"><h2 class="co-call-t">Coach is off</h2><p class="co-lead">Turn it on for targets in every session, a call each day to train, go easy or rest, deload and split checks, and goals with a plan. Your goals are kept while it’s off.</p><div class="co-acts"><button class="btn" data-act="coach-switch">${roll('Turn the coach on')}</button></div></section></div>`;
+  if (!coachOn()) return `<header class="co-top rv"><span class="co-tt">Coach</span><button class="iconbtn" data-act="coach-close" aria-label="Close the coach">${ICON.x}</button></header>` + pageTop('Coach') + `<div class="co"><section class="card rv co-offc"><h2 class="co-call-t">Coach is off</h2><p class="co-lead">Turn it on for targets in every session, a call each day to train, go easy or rest, deload and split checks, and goals with a plan. Your goals are kept while it’s off.</p><div class="co-acts"><button class="btn" data-act="coach-switch">${roll('Turn the coach on')}</button></div></section></div>`;
   const a = coach(), r = a.next, c = callOf(r), nx = nextSplitDay(), act = activeSession(), wk = sorted().filter(s => s.endedAt && Date.now() - s.startedAt < 7 * 864e5).length;
   if (COACH_TABS.some(t => t[0] === S.arg)) S.coachTab = S.arg;
   const tab = S.coachTab || 'plan', today = r.when === 'today';
@@ -1074,7 +1074,9 @@ function vCoach() {
   const recWarn = ['soon', 'now'].includes(a.deload.status) || ['change', 'consider'].includes(a.split.status);
   const tabs = `<div class="seg co-tabs rv" role="tablist" aria-label="Coach">${COACH_TABS.map(([id, t]) => `<button role="tab" aria-selected="${tab === id}" class="${tab === id ? 'on' : ''}" data-act="coach-tab" data-t="${id}">${t}${id === 'goals' && a.goals.length ? ` <span class="co-n">${a.goals.length}</span>` : ''}${id === 'recovery' && recWarn ? ' <i class="co-dot" aria-label="needs a look"></i>' : ''}</button>`).join('')}</div>`;
   const body = tab === 'goals' ? coachGoals(a) : tab === 'recovery' ? coachRecovery(a, nx) : coachPlan(a, nx);
-  return pageTop('Coach') + `<div class="co">${hero}${tabs}<div class="co-panel" role="tabpanel">${body}</div>
+  /* on phones and tablets the Coach opens full screen (as a widget does), so it has its own close button */
+  return `<header class="co-top rv"><span class="co-tt">Coach</span><button class="iconbtn" data-act="coach-close" aria-label="Close the coach">${ICON.x}</button></header>`
+    + pageTop('Coach') + `<div class="co">${hero}${tabs}<div class="co-panel" role="tabpanel">${body}</div>
     <p class="muted co-foot rv">The coach reads your log: estimated maxes, rep ranges, training load and recovery. It’s guidance, not medical advice: if something hurts, stop. <button class="linkbtn" data-act="how">How it works</button></p></div>`;
 }
 function coachPlan(a, nx) {
@@ -1336,15 +1338,27 @@ function bwChart(days) {
 }
 const WIDGETS = {
   coach: {
-    title: 'Coach', desc: 'Train, go easy or rest, deloads and your goals', link: 'coach',
+    title: 'Coach', desc: 'Today’s call, what’s next, your week, recovery and goals', link: 'coach',
     card: (open, z) => { const a = coach(), r = a.next, c = callOf(r), when = r.when === 'tomorrow' ? 'Tomorrow' : 'Today';
       if (z === 's') return wTile('Coach', CALL[c][0], when.toLowerCase(), open);
-      const g = a.goals.find(x => x.status !== 'no-data'), dl = a.deload.status === 'now' || a.deload.status === 'soon', nx = nextSplitDay();
-      const tg = nx && c !== 'rest' && !phoneDash() ? dayTargets(nx.sp.days[nx.i]).filter(t => t.g).slice(0, z === 'l' ? 3 : 2) : [];
-      return wHead('Coach', when, open) + `<div class="co-wc"><b class="co-call-t co-${c}">${CALL[c][0]}</b><span class="muted">${esc(callReason(r))}</span></div>`
-        + (dl ? `<p class="co-wl"><span class="co-pill warn">${REC[recKey(a.deload)][0]}</span></p>` : phoneDash() && nx && c !== 'rest' ? `<p class="co-wl muted">Targets ready for ${esc(nx.sp.days[nx.i].type || 'your next day')}</p>` : '')
-        + (tg.length ? `<div class="co-wn">${tg.map(t => `<span><b>${esc(t.e.name)}</b>${tgtText(t.g, t.e.kind === 'bw')}</span>`).join('')}</div>` : '')
-        + (g && !phoneDash() && (z === 'l' || !tg.length) ? `<div class="co-wg"><span class="lbl">${esc(exOf(g.goal.exId)?.name || 'Goal')} · ${fmtW(g.goal.kg)} ${unit()} · ${Math.round(g.progress * 100)}%</span><div class="co-bar"><i style="width:${Math.round(g.progress * 100)}%"></i></div></div>` : ''); }
+      const nx = nextSplitDay(), day = nx && nx.sp.days[nx.i], tg = day ? dayTargets(day).filter(t => t.g) : [];
+      const wk = sorted().filter(s => s.endedAt && Date.now() - s.startedAt < 7 * 864e5).length, tgt = S.profile.target || 3, dk = recKey(a.deload);
+      const g = a.goals.find(x => x.status !== 'no-data') || a.goals[0];
+      /* each row opens its part of the Coach */
+      const row = (k, v, t) => `<div class="co-wr" data-k="${k.toLowerCase()}" data-act="coach-go" data-t="${t}"><span class="lbl">${k}</span><span class="co-wv">${v}</span></div>`;
+      /* compact targets (80×9) so a row never clips its reps */
+      const short = t => t.e.kind === 'bw' && !t.g.next.w ? `${t.g.next.r} reps` : `${fmtW(t.g.next.w)}×${t.g.next.r}`;
+      /* the tall phone card and the large one list the session's targets underneath, so their Next row just names the day */
+      const list = (phoneDash() || z === 'l') && tg.length > 1 && c !== 'rest', first = tg[0];
+      const next = !day ? 'Plan a split to get targets' : `<b>${esc(day.type || 'Training')}</b>${first && !list ? ` · ${esc(first.e.name)} ${short(first)}${tg.length > 1 ? ` <span class="muted">+${tg.length - 1}</span>` : ''}` : ` · ${plural(day.exercises.length, 'exercise')}`}`;
+      const when2 = t => t - Date.now() < 300 * 864e5 ? 'by ' + new Date(t).toLocaleDateString('en-GB', { month: 'short' }) : monthYear(t);
+      const goal = !g ? 'Set a goal' : g.status === 'no-data' ? `<b>${esc(exOf(g.goal.exId)?.name || 'Lift')} ${fmtW(g.goal.kg)}</b> · log it to start` : `<b>${esc(exOf(g.goal.exId)?.name || 'Lift')} ${fmtW(g.goal.kg)}</b> · ${Math.round(g.progress * 100)}%${g.status === 'ready' ? ' · test it' : g.eta && g.eta.likely ? ` · ${when2(g.eta.likely)}` : ''}`;
+      const rows = row(c === 'rest' ? 'After' : 'Next', next, 'plan')
+        + row('Week', `<b>${wk} of ${tgt}</b><span class="co-wbar" aria-hidden="true"><i style="width:${Math.min(100, Math.round(wk / tgt * 100))}%"></i></span>`, 'plan')
+        + row('Recovery', ['soon', 'now', 'off'].includes(dk) ? `<b class="co-warn">${REC[dk][0]}</b>` : `${a.deload.weeks} of ~${a.deload.every} weeks`, 'recovery')
+        + row('Goal', goal, 'goals');
+      const more = list ? `<div class="co-wn"><span class="lbl">Targets · ${esc(day.type || 'next session')} · ${unit()}</span>${tg.slice(0, 4).map(t => `<span><b>${esc(t.e.name)}</b><i class="co-wt">${short(t)} <small>× ${t.g.sets}</small></i></span>`).join('')}</div>` : '';
+      return wHead('Coach', when, open) + `<div class="co-wc"><b class="co-call-t co-${c}">${CALL[c][0]}</b><span class="muted co-wwhy">${esc(callReason(r))}</span></div><div class="co-wrows">${rows}</div>${more}`; }
   },
   intensity: {
     title: 'Intensity', desc: 'How hard each training day was', opts: [[30, '30d'], [90, '90d'], [365, '1y']],
@@ -2567,7 +2581,9 @@ const ACT = {
   nav: el => go(el.dataset.v),
   'goal-new': el => goalSheet(el.dataset.id || null),
   'coach-switch': () => { S.profile.coachOn = !coachOn(); queue('p', 0); render(false); toast(coachOn() ? 'Coach on. Its card is back on Home.' : 'Coach off. Switch it back on in Settings any time.'); },
-  'coach-go': el => go('coach', el.dataset.t || null),
+  'coach-close': () => back(),
+  /* the plan is the Coach's first tab, so it gets the plain /coach address */
+  'coach-go': el => { const t = el.dataset.t || 'plan'; S.coachTab = t; go('coach', t === 'plan' ? null : t); },
   'coach-tab': el => { S.coachTab = el.dataset.t; if (S.arg) go('coach', null, { replace: true }); else render(false); },
   'ts-split': el => go('split', el.dataset.id),
   'goal-menu': el => goalMenu(el.dataset.id),
@@ -2726,7 +2742,7 @@ const ACT = {
 };
 /* app feel on phones: a light haptic tick on key taps (Android; iOS has no web vibration) */
 const coarse = matchMedia('(pointer:coarse)');
-const BUZZ = new Set(['day-move', 'w-open', 'w-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install']);
+const BUZZ = new Set(['day-move', 'w-open', 'w-close', 'coach-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install']);
 const buzz = (ms = 8) => { if (!coarse.matches || reduced) return; try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;

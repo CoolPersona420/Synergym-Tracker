@@ -1687,14 +1687,32 @@ a.srow{color:inherit;text-decoration:none}
 .co-foot .linkbtn{display:inline;padding:0;font-size:inherit}
 .co-pre{min-height:3rem;font-size:.9rem;color:var(--ink-2);line-height:1.5}
 .co-pre b{color:var(--ink)}
+/* full screen on phones and tablets: a slim bar with the close button (wide screens have the sidebar) */
+.co-top{display:flex;align-items:center;justify-content:space-between;gap:var(--s0);padding:var(--s-2) 0 var(--s-1)}
+.co-tt{font-family:var(--font-display);font-size:var(--t2);font-weight:700;line-height:1;text-transform:uppercase;letter-spacing:.01em}
+@media (min-width:60rem){.co-top{display:none}}
+@media (max-width:59.99rem){.co-top + header.top{display:none!important}}
 /* the coach elsewhere: the Home card, the today panel, a session, an exercise, a split */
-.co-wc{display:flex;flex-direction:column;gap:6px}
+.co-wc{display:flex;flex-direction:column;gap:4px}
 .co-wc .muted{font-size:.85rem;line-height:1.4}
-.co-wl{margin-top:var(--s-1);font-size:.85rem}
-.co-wn{display:grid;gap:4px;margin-top:var(--s-1)}
+.co-wwhy{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.co-wrows{display:grid;margin-top:var(--s-1);border-top:1px solid var(--line)}
+.co-wr{display:grid;grid-template-columns:4.6rem minmax(0,1fr);align-items:center;gap:8px;min-height:2.1rem;padding:5px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.co-wr:last-child{border-bottom:0}
+.co-wr .lbl{font-size:.62rem}
+/* a long value wraps to a second line rather than losing its end */
+.co-wv{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;min-width:0;font-size:.85rem;line-height:1.35;color:var(--ink-2)}
+.co-wv b{font-weight:700;color:var(--ink)}
+.co-wv .co-warn{color:var(--bad)}
+.co-wbar{flex:1;max-width:7rem;height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.co-wbar i{display:block;height:100%;border-radius:inherit;background:var(--accent)}
+@media (hover:hover){.co-wr:hover .co-wv{color:var(--ink)}}
+.co-wn{display:grid;gap:5px;margin-top:var(--s0)}
+.co-wn > .lbl{display:block;margin-bottom:2px}
+.co-wt{font-style:normal;flex:none}
+.co-wn small{color:var(--muted);font-size:.72rem}
 .co-wn span{display:flex;justify-content:space-between;gap:8px;font-size:.82rem;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .co-wn b{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.co-wg{margin-top:var(--s-1);display:grid;gap:6px}
 .ts-coach{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s-1);width:100%;margin-top:var(--s0);padding:var(--s-1) var(--s0);border-radius:var(--r-md);background:var(--surface-2);text-align:left}
 .ts-coach .co-call-t{font-size:1.4rem}
 .ts-coach .muted{font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

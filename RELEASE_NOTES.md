@@ -10,6 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.2-alpha · 27 October 2026
+
+**The Coach card and a full-screen Coach**
+
+- **A more informative Coach card on Home.** Under today's call and its reason, four short rows:
+  - **Next:** the next day and its first target, like "Lower · Back Squat 137.5×1 +1";
+  - **Week:** sessions in the last 7 days against your target, with a bar;
+  - **Recovery:** weeks since your last lighter week, or "Deload next week" in red when one is due;
+  - **Goal:** your goal, how far along you are, and when it's likely.
+  Each row opens its part of the Coach (Plan, Recovery or Goals). On phones, and on the large card, the next
+  session's targets are listed underneath.
+- **The Coach opens full screen on phones and tablets,** like a widget's full view, with a **✕** at the top to
+  close it and go back. The bottom bar steps aside on phones. On a computer it stays a page in the sidebar.
+
 ## 0.0.11-alpha · 27 October 2026
 
 **The coach, redesigned and built into the app**

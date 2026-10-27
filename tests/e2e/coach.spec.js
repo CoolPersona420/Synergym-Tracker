@@ -205,3 +205,40 @@ test('switching the coach off in Settings hides it everywhere, and on again brin
   await page.goto('/');
   await expect(page.locator('#dash > [data-w]').first()).toHaveAttribute('data-w', 'coach');
 });
+
+test('on a phone the Coach opens full screen, with a close button that goes back', async ({ page }, info) => {
+  const fake = withSplit();
+  await login(page, fake, 'A');
+  await page.locator('[data-w="coach"] .co-wc').click();
+  await expect(page).toHaveURL(/\/coach$/);
+  const close = page.locator('.co-top [data-act="coach-close"]');
+  if (info.project.name === 'phone') {
+    await expect(close).toBeVisible();
+    /* full screen: the dock steps aside, as for a widget's full view */
+    await expect(page.locator('#nav')).toBeHidden();
+    await close.click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator('#nav')).toBeVisible();
+  } else {
+    /* on a computer it's a page in the sidebar */
+    await expect(close).toBeHidden();
+    await expect(page.locator('#nav')).toBeVisible();
+  }
+});
+
+test('the Coach card on Home: the call, then next, week, recovery and goal, each opening its part', async ({ page }) => {
+  const fake = withSplit();
+  fake.profiles[0].lift_goals = [{ id: 'g', exId: fake.exercises[0].id, kg: 110, at: Date.now() - 864e5, from: 90 }];
+  await login(page, fake, 'A');
+  const card = page.locator('[data-w="coach"]');
+  await expect(card).toContainText('Train');
+  await expect(card.locator('.co-wr[data-k="next"]')).toContainText('Push');
+  /* the 110 kg goal puts bench in its Strength block: 4 reps at 80% of about 101 kg */
+  await expect(card.locator('.co-wr[data-k="next"]')).toContainText('Bench Press 80×4');
+  await expect(card.locator('.co-wr[data-k="week"]')).toContainText('1 of 3');
+  await expect(card.locator('.co-wr[data-k="recovery"]')).toContainText('weeks');
+  await expect(card.locator('.co-wr[data-k="goal"]')).toContainText('110');
+  await card.locator('.co-wr[data-k="goal"]').click();
+  await expect(page).toHaveURL(/\/coach\/goals$/);
+  await expect(page.locator('.co-goal')).toContainText('110');
+});
