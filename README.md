@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.0.8, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.0.9, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.0.8-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.0.9-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -56,8 +56,6 @@ The version lives in `package.json` (`0.0.8-alpha`) and shows in Settings › Ab
   starter split, a theme) followed by a short tour. One device is signed in per account at a time.
 - **Your data:** export everything as JSON or every set as CSV; import replaces all data after a warning.
 - **Help:** a user guide for phone and desktop (Settings › User guide) and "How the numbers work".
-- **Admin console** (`/admin`, for admins only): approve new accounts, deactivate, reactivate, sign out or
-  delete accounts, make admins, see usage and errors, and an activity log of every admin action (see below).
 
 What's planned from here to the Beta is in [ROADMAP.md](ROADMAP.md), in phases. Phase 1 covers coaching
 progression, more set types, warm-ups, muscle balance and more.
@@ -79,8 +77,6 @@ progression, more set types, warm-ups, muscle balance and more.
 
 1. Create a project at [supabase.com](https://supabase.com) (the free tier is fine).
 2. **SQL Editor → New query**: paste all of `supabase/schema.sql` and click **Run**. (Re-running it later is safe; it only adds what is missing.)
-   Then make yourself the first admin (after you've signed up in the app), with your own email:
-   `insert into public.admins (user_id) select id from auth.users where lower(email) = lower('you@example.com') on conflict do nothing;`
 3. **Project Settings → API**: copy the **Project URL** and the **publishable / anon key**.
    (Never use the `service_role` / secret key in the frontend.)
 4. **Authentication → Sign In / Providers → Email**: keep **Confirm email** on and set the
@@ -139,8 +135,7 @@ auth and database calls in memory.
 | `src/lib/` | logic with no UI: the coach, progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, push reminders, error reports and stats |
 | `api/` | the reminders function (Vercel) |
 | `public/sw.js` | the service worker: offline app shell and reminder notifications |
-| `src/ui/` | brand and icons, themes, the login and open splashes, the user guide, rubber-band scrolling, the today panel |
-| `src/admin/` | the admin console, loaded only when an admin opens `/admin` |
+| `src/ui/` | brand and icons, themes, the login and open splashes, the user guide |
 | `src/data/` | starter split templates, quotes |
 
 ## Offline mode (phone app)
@@ -229,32 +224,6 @@ sidebar on a computer. It's guidance, not medical advice.
 with a file: it shows what will be deleted and offers to export first, then swaps everything in one
 database transaction (`import_replace`), so a failed import changes nothing.
 
-## Admin console
-
-Admins open **Settings › Admin console** (or `/admin`; on desktop there's also an Admin link in the sidebar).
-
-- **Overview:** accounts (active, pending, deactivated), active lifters, sessions, sets, sign-ups, splits,
-  reminders and errors, with 30-day charts of sessions and sign-ups, and a call-out when accounts are waiting.
-- **Users:** search by email, username or name; filter by status or admins; approve pending accounts (one by
-  one or all at once); export the list as CSV. Opening an account shows its sign-in, activity and counts, and
-  lets you approve, deactivate, reactivate, sign it out everywhere, make or remove an admin, or delete it
-  permanently (by typing its email).
-- **Errors:** errors from people's browsers, grouped, over 7 or 30 days; clear them when dealt with.
-- **Activity log:** every admin action, who took it, and when.
-- **Settings:** require approval for new accounts (on by default), and the list of admins.
-
-How access works:
-
-- Every account has a status. New accounts start as **pending** when approval is on: they see a waiting screen
-  that checks by itself, and nothing loads. **Deactivated** accounts see a deactivated screen.
-- This is enforced by the database, not just the app: every data table's policy requires an active account,
-  and the cross-user functions check it too. Deactivating also blocks sign-in and signs the account out on
-  every device; reactivating lifts that. Deleting removes the account and all its data.
-- Admins are listed in `admins`; every admin function checks it, so non-admins get nothing even by calling
-  the API directly. You can't deactivate, delete or remove admin access from your own account, and another
-  admin has to have admin access removed before they can be deactivated or deleted.
-- Admins see accounts and counts, not anyone's workouts.
-
 ## Data model
 
 | Table | Holds | Who can see it |
@@ -266,12 +235,7 @@ How access works:
 | `split_shares` | which user a split was shared with | sender and recipient |
 | `client_errors` | errors reported by the app | nobody through the API (SQL editor only) |
 | `push_subscriptions` | each device that gets reminders | owner |
-| `admins` | who can use the admin console | nobody through the API (admin functions only) |
-| `app_settings` | one row: whether new accounts need approval | nobody through the API (admin functions only) |
-| `admin_log` | every admin action, with emails copied so it survives deletions | nobody through the API (admin functions only) |
 
 The functions `share_split`, `unshare_split`, `split_recipients`, `shared_with_me`,
 `get_public_split`, `restore_default_exercises`, `delete_account`, `import_replace` and `report_error` handle the
-cross-user actions safely. `my_access` tells the app an account's status, and the `admin_*` functions run the admin
-console; each checks the caller is an admin and records what it did. `profiles.status` (pending, active,
-deactivated) can only be changed by an admin.
+cross-user actions safely.
