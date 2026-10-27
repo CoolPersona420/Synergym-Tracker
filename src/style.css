@@ -592,6 +592,8 @@ body{font-weight:500}
 .stat .n{font-size:clamp(3.2rem,13vw,var(--t4));line-height:.85;letter-spacing:0}
 .row .d{font-size:2.3rem;line-height:.85}
 .kv .term{font-size:var(--t3);line-height:.9}
+/* the smallest phones: dates and volumes in the big display face overran their box */
+@media (max-width:22.5rem){.kv .term{font-size:var(--t2)}}
 .cons-meta b{font-size:var(--t3)}
 .exrow .v{font-size:1.9rem;line-height:.85}
 .day-type{font-size:1.5rem;text-transform:uppercase;line-height:1}
@@ -1667,3 +1669,71 @@ a.srow{color:inherit;text-decoration:none}
 /* phones reach the console from Settings; the dock keeps its five places */
 @media (max-width:59.99rem){.nav-adm{display:none!important}}
 .adm-body .sg + .sg{margin-top:var(--s1)}
+
+/* ---------- coach ---------- */
+.co{display:grid;gap:var(--s0);margin-top:var(--s-1)}
+.co-main,.co-side{display:grid;gap:var(--s0);align-content:start;min-width:0}
+@media (min-width:60rem){.co{grid-template-columns:1.618fr 1fr;align-items:start}}
+.co-call{display:flex;align-items:center;gap:var(--s0);margin:var(--s-1) 0 var(--s0)}
+.co-ico{width:3.2rem;height:3.2rem;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);flex:none}
+.co-train .co-ico{background:color-mix(in srgb,var(--good) 22%,transparent)}
+.co-easy .co-ico{background:color-mix(in srgb,var(--accent) 24%,transparent)}
+.co-rest .co-ico{background:var(--solid);color:var(--solid-ink)}
+.co-call-t{font-family:var(--font-display);font-size:var(--t3);font-weight:700;line-height:.9;text-transform:uppercase;letter-spacing:.01em}
+.co-why{margin:0;padding:0 0 0 1.1rem;display:grid;gap:6px;font-size:.92rem;line-height:1.45;color:var(--ink-2)}
+.co-why li::marker{color:var(--muted)}
+.co-note{font-size:.85rem;margin-top:var(--s-1)}
+.co-today .btns{justify-content:flex-start}
+.co-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.co-pill.good{background:color-mix(in srgb,var(--good) 20%,transparent);color:var(--ink)}
+.co-pill.warn{background:color-mix(in srgb,var(--accent) 26%,transparent);color:var(--ink)}
+.co-plan .row{grid-template-columns:minmax(0,1fr) auto}
+.co-plan .sub{white-space:normal}
+.co-tg{display:flex;flex-direction:column;align-items:flex-end;text-align:right;gap:2px}
+.co-tg b{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.co-tg small{color:var(--muted);font-size:.75rem;white-space:nowrap}
+.co-meter,.co-bar{height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.co-meter i,.co-bar i{display:block;height:100%;border-radius:inherit;background:var(--ink);transition:width .8s var(--ease)}
+.co-bar i{background:var(--accent)}
+.co-mt{margin:8px 0 var(--s-1)}
+.co-how{margin-top:var(--s0);font-size:.9rem}
+.co-how summary{cursor:pointer;font-weight:700}
+.co-how p{margin-top:6px;color:var(--ink-2);line-height:1.5}
+.co-sub{display:block;margin:-6px 0 var(--s-1);font-size:.85rem}
+.co-gh{display:flex;align-items:center;justify-content:space-between;gap:var(--s0);margin-top:var(--s-1)}
+.co-gh h2{font-family:var(--font-display);font-size:var(--t2);line-height:.9;text-transform:uppercase;letter-spacing:.01em}
+.co-gt{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:var(--s-1);margin-bottom:var(--s0)}
+.co-gt h3{font-family:var(--font-display);font-size:var(--t3);line-height:.9;margin-top:4px}
+.co-nums{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font-size:.8rem;color:var(--muted)}
+.co-nums b{color:var(--ink);font-weight:700;text-align:center}
+.co-eta{margin-top:var(--s0)}
+.co-pace{font-size:.85rem;margin-top:4px}
+.co-dl{font-size:.88rem;margin-top:6px}
+.co-dl.good,.co-pre .good{color:var(--good)}
+.co-dl.warn,.co-pre .warn{color:var(--bad)}
+.co-block{display:flex;flex-direction:column;gap:4px;margin-top:var(--s0);padding:var(--s0);border-radius:var(--r-md);background:var(--surface-2)}
+.co-block b{font-size:1.15rem;font-weight:800}
+.co-block small{color:var(--ink-2);font-size:.82rem;line-height:1.45}
+.co-ms{margin-top:var(--s0)}
+.co-ms>div{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.co-ms>div span{padding:4px 10px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-size:.8rem;color:var(--muted)}
+.co-ms b{color:var(--ink)}
+.co-goal .co-why{margin-top:var(--s0)}
+.co-empty p{color:var(--ink-2);line-height:1.5}
+.co-foot{font-size:.8rem;line-height:1.5}
+.co-foot .linkbtn{display:inline;padding:0;font-size:inherit}
+.co-pre{min-height:3rem;font-size:.9rem;color:var(--ink-2);line-height:1.5}
+.co-pre b{color:var(--ink)}
+/* the Home card, the today panel and the exercise page */
+.co-wc{display:flex;flex-direction:column;gap:6px}
+.co-wc .muted{font-size:.85rem;line-height:1.4}
+.co-wl{margin-top:var(--s-1);font-size:.85rem}
+.co-wg{margin-top:var(--s-1);display:grid;gap:6px}
+.ts-coach{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s-1);width:100%;margin-top:var(--s0);padding:var(--s-1) var(--s0);border-radius:var(--r-md);background:var(--surface-2);text-align:left}
+.ts-coach .co-call-t{font-size:1.4rem}
+.ts-coach .muted{font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ts-coach .ico{width:18px;height:18px;color:var(--muted)}
+.co-exg .muted{font-size:.88rem}
+.co-exg .co-bar{margin-bottom:8px}
+/* phones reach the Coach from its Home card and the today panel; the dock keeps its five places */
+@media (max-width:59.99rem){.nav-coach{display:none!important}}

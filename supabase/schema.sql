@@ -44,6 +44,9 @@ alter table public.profiles add column if not exists active_session uuid;
 alter table public.profiles add column if not exists bw_log jsonb check (bw_log is null or (jsonb_typeof(bw_log) = 'array' and jsonb_array_length(bw_log) <= 400));
 -- Deleted splits that sessions still point at: {"<split id>": {"name", "days": [{"type","rest","same"}], "at"}}, so history keeps their names
 alter table public.profiles add column if not exists split_archive jsonb check (split_archive is null or (jsonb_typeof(split_archive) = 'object' and pg_column_size(split_archive) < 100000));
+-- Lift goals: [{"id","exId","kg","by","at","from"}], at most 20. kg is the target one-rep max; by an optional deadline (ms);
+-- at when it was set; from the estimated max then (so progress has a start).
+alter table public.profiles add column if not exists lift_goals jsonb check (lift_goals is null or (jsonb_typeof(lift_goals) = 'array' and jsonb_array_length(lift_goals) <= 20));
 -- Account status: pending (signed up, waiting for an admin to approve), active, or deactivated by an admin.
 -- Accounts that existed before approval was introduced are active. Only admins can change it (see profiles_status).
 alter table public.profiles add column if not exists status text not null default 'active' check (status in ('pending','active','deactivated'));
@@ -392,7 +395,7 @@ begin
       rest_sound = coalesce(r.rest_sound, t.rest_sound), bodyweight = coalesce(r.bodyweight, t.bodyweight),
       display_name = coalesce(r.display_name, t.display_name), experience = coalesce(r.experience, t.experience),
       goal = coalesce(r.goal, t.goal), theme = r.theme, muscles = r.muscles, widgets = r.widgets,
-      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive
+      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive, lift_goals = r.lift_goals
     from jsonb_populate_record(null::public.profiles, p->'profile') r
     where t.id = uid;
   end if;

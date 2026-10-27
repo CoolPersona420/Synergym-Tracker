@@ -26,7 +26,7 @@ for (const [w, h] of [[320, 568], [390, 844], [844, 390]]) {
     await login(page, fake, 'A');
     const check = async name => { await page.waitForTimeout(500); expect(await page.evaluate(audit), name).toEqual(clean); };
     await check('home');
-    for (const p of ['/splits', '/splits/' + fake.splits[0].id, '/exercises', '/history', '/settings', '/guide', '/w/week', '/w/bw', '/w/consistency']) { await page.goto(p); await check(p); }
+    for (const p of ['/splits', '/splits/' + fake.splits[0].id, '/exercises', '/history', '/settings', '/guide', '/coach', '/exercises/' + hist.exercises[0].id, '/w/week', '/w/bw', '/w/consistency']) { await page.goto(p); await check(p); }
     await page.goto('/'); await page.locator('[data-act="start-menu"]:visible').first().click(); await page.locator('[data-st-foot]', { hasText: 'Empty session' }).click();
     await page.waitForSelector('.s-top'); await page.click('[data-act="add-ex"]'); await page.locator('[data-act="pk-pick"]', { hasText: 'Bench Press' }).click();
     await check('session');

@@ -45,6 +45,8 @@ export function parseImport(d, fallbackBw = 75) {
   const p = d.profile && typeof d.profile === 'object' ? { ...DEFAULT_PROFILE, ...profFromDb(profToDb({ ...DEFAULT_PROFILE, ...d.profile, bw: num(d.profile.bw) || fallbackBw })) } : null;
   if (p && p.nextDay) { const sp = spId.get(String(p.nextDay.sp)); p.nextDay = sp && !archive[sp] ? { ...p.nextDay, sp } : null; }
   if (p) p.splitArchive = archive;
+  /* goals follow their exercises to the new ids; a goal for an exercise not in the file is dropped */
+  if (p) p.liftGoals = p.liftGoals.filter(g => exId.has(g.exId)).map(g => ({ ...g, exId: exId.get(g.exId) }));
   if (p && Array.isArray(p.widgets)) p.widgets = p.widgets.filter(w => typeof w === 'string');
   return { library, sessions, splits, profile: p, exportedAt: Date.parse(d.exportedAt) || null };
 }

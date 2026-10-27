@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.0.7, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.0.8, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.0.7-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.0.8-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -22,7 +22,13 @@ The version lives in `package.json` (`0.0.7-alpha`) and shows in Settings › Ab
   top, following the finger; swipe it up to close. It's today's plan until the day's training is done, then
   today's summary: sessions, sets, volume and PRs, the week so far, and the split's next day with what to
   lift and what to aim for.
-- **Next-set suggestions:** each exercise shows last time's top set and what to try today.
+- **Coach:** reads your log and says what to do next (see [Coach](#coach)):
+  - **targets** for every exercise (weight, reps and sets) that climb through your split's rep ranges,
+    filled in when you start a split day and shown in the session;
+  - **today's call:** train, go easy or rest, with the reasons;
+  - **when to deload or take a week off**, and **whether to keep or change your split**;
+  - **lift goals**, for example squat 150 kg: a realistic date and range, milestones, and 4-week training
+    blocks that set that lift's targets.
 - **Plate calculator:** the plates for each side of the bar for any weight, with your bar remembered.
 - **Intensity and records:** every set and session gets an intensity score against your best; each
   exercise keeps a one-rep max, and beating it offers to save the new one.
@@ -34,7 +40,7 @@ The version lives in `package.json` (`0.0.7-alpha`) and shows in Settings › Ab
   starting again that day asks first, unless the split plans a second session. Two sessions a day at most.
 - **Rest days:** mark today as a rest day on Home; the start button turns into a moon and stars, and no
   session can be started until the rest day is undone.
-- **Home:** a greeting and quote, the next session, and widgets you choose and size: this week's summary,
+- **Home:** a greeting and quote, the next session, and widgets you choose and size: the coach, this week's summary,
   bodyweight trend, intensity, consistency, volume, muscle focus, records, top lifts and your week's plan.
   Each opens full screen with more detail.
 - **Bodyweight log**, **History** with search, and an **exercise library** of your own with editable
@@ -130,7 +136,7 @@ auth and database calls in memory.
 | Path | What's in it |
 |---|---|
 | `src/main.js` | app state, screens, actions, saving and sync |
-| `src/lib/` | logic with no UI: progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, push reminders, error reports and stats |
+| `src/lib/` | logic with no UI: the coach, progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, push reminders, error reports and stats |
 | `api/` | the reminders function (Vercel) |
 | `public/sw.js` | the service worker: offline app shell and reminder notifications |
 | `src/ui/` | brand and icons, themes, the login and open splashes, the user guide, rubber-band scrolling, the today panel |
@@ -181,6 +187,41 @@ select at, message, path, build from client_errors order by at desc limit 50;
 Page views go to Vercel Web Analytics (no cookies; ids in addresses are replaced with `:id`). Turn it on
 once in the Vercel dashboard: project → Analytics → Enable.
 
+## Coach
+
+The coach is a set of plain rules over your own log (`src/lib/coach.js`, pure functions with unit tests).
+It runs in your browser, needs no extra data, and is worked out again only when finished sessions,
+exercises, splits, goals or the date change, so the app stays as quick as before (three years of
+four sessions a week takes a few milliseconds). Open it from its card on Home, the today panel, or the
+sidebar on a computer. It's guidance, not medical advice.
+
+- **Targets.** Strength from a set is estimated with Epley (load × (1 + reps ÷ 30)), using sets of 12 reps
+  or fewer. With a rep range in the split (say 8–12) it's double progression: keep the weight and add reps
+  until every set reaches the top, then add about 2.5% (at least one plate step) and go back to the bottom;
+  under the range twice at a weight drops 5%. Without a range it's the earlier next-set rule.
+- **Today: train, go easy or rest.** Rest after more training days in a row than your split plans (2–4
+  without a split, by experience) or when the split has a rest day next. Go easy (about 10% lighter, a set
+  fewer) when this week's sets are 50% above your usual week (acute:chronic load), when two main lifts are 5%
+  under their recent best two sessions running, when yesterday already gave today's muscles 6+ sets, or after
+  two weeks away.
+- **Deloads and weeks off.** A lighter week about every 10, 6 or 5 weeks of hard training (beginner,
+  intermediate, advanced), counted from the last break of 6+ days or the last lighter week, and straight
+  away when half the main lifts stall or two keep falling. A full week off after 16 weeks without a break,
+  or when lifts stay stuck after a recent deload. While a deload is due, every target is about 10% lighter
+  with half the sets. After a lighter week, stalls are ignored for two weeks while lifts bounce back.
+- **The split.** Give a split 6–8 weeks. Time to change when, at the rate you actually train, a 4+ day split
+  hits major muscles less than once a week, or when half the main lifts have stalled after 8+ weeks outside a
+  deload; worth a tweak after 16 weeks with fewer than half still climbing, or if it skips a major muscle.
+- **Goals.** A target one-rep max per lift, with an optional deadline. Your current max is the best estimate
+  from your last three sessions (or a one-rep max saved in the last 6 weeks), eased off after 3+ weeks away.
+  The pace blends your own 12-week trend (a median of pairwise slopes, so one odd day doesn't swing it)
+  with typical gains for your level (about 1%, 0.5% or 0.2% a week), capped at twice the typical rate and
+  slowing as the months go on. You get a likely date with a fast-to-slow range, milestones every 4 weeks,
+  whether the deadline is realistic, and a plan in 4-week blocks (three building weeks, one deload): Build
+  (4×6 at 72.5–77.5% of your current max) while the goal is over 10% away, Strength (5×3–4 at 80–85%)
+  within 10%, Peak (heavy doubles and singles, then a test) within 3%. That lift's session targets follow
+  the block. Goals are stored on the profile (`lift_goals`), so they sync, export and import.
+
 ## Export and import
 
 **Settings → Export JSON** saves everything (exercises, sessions, splits, settings, bodyweight log);
@@ -218,7 +259,7 @@ How access works:
 
 | Table | Holds | Who can see it |
 |---|---|---|
-| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account), deleted splits that sessions still point at (`split_archive`) | owner |
+| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account), deleted splits that sessions still point at (`split_archive`), lift goals (`lift_goals`) | owner |
 | `exercises` | each user's own exercise list (seeded from `default_exercises`) | owner |
 | `sessions` | one row per workout; sets are stored as JSON inside it | owner |
 | `splits` | training plans: days, session types, exercises with sets × reps; at most 6 per account (`splits_limit` trigger) | owner |

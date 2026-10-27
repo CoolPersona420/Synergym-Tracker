@@ -1,6 +1,6 @@
 # Synergym roadmap: Alpha to Beta
 
-**Roadmap version 1.0** · 26 October 2026 · app at 0.0.5-alpha
+**Roadmap version 1.1** · 27 October 2026 · app at 0.0.8-alpha
 
 This roadmap covers the rest of the Alpha, up to the start of the Beta. It's split into phases. Phase 1 is
 set out below; later phases are added as they're planned. The Beta starts once every phase on this roadmap
@@ -16,7 +16,7 @@ extra tap for anyone who doesn't use it. The core loop (open, log a set, done) s
 
 | Phase | Theme | Items | Status |
 |---|---|---|---|
-| [Phase 1](#phase-1-coaching-and-better-logging) | Coaching progression, logging any workout, balance and recovery, guidance | 10 | Planned |
+| [Phase 1](#phase-1-coaching-and-better-logging) | Coaching progression, logging any workout, balance and recovery, guidance, the coach | 17 | In progress |
 | Phase 2 | To be planned | – | Not started |
 | Beta | Starts when every phase above has shipped | – | – |
 
@@ -34,7 +34,7 @@ extra tap for anyone who doesn't use it. The core loop (open, log a set, done) s
 
 ## Phase 1: Coaching and better logging
 
-**Status:** Planned · **Roadmap version added:** 1.0
+**Status:** In progress · **Roadmap version added:** 1.0
 
 **Before building a lot:** put the app in front of 5–10 real lifters and use the privacy-friendly usage
 stats (see the README's "Errors and usage stats") to see what people actually use. That should decide the
@@ -47,9 +47,9 @@ next.
 
 | Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
-| 1.1.1 | **Effort per set (RIR / RPE).** One optional tap after a set: "how many more reps could you have done?" (0–4). | Next-set suggestions only see weight × reps, so they can't tell an easy 8 from a grinding 8 and sometimes push too fast or hold back. | Next-set suggestions (`src/lib/progress.js`), set rows in the session view. | Planned |
-| 1.1.2 | **Rep-range progression from the split.** With a range like 8–12: keep the weight until every set reaches 12, then add weight and drop back to 8 (double progression). | The most proven method for most lifters. | Split days already store reps as a range (e.g. `"8-12"`); suggestions engine. | Planned |
-| 1.1.3 | **Stall and deload alerts.** When a lift hasn't improved in 3 sessions, or session intensity keeps falling, say so and suggest a lighter week or a variation. | Catches plateaus and fatigue before they cost weeks. | Records engine (`src/lib/records.js`), set and session intensity. | Planned |
+| 1.1.1 | **Effort per set (RIR / RPE).** One optional tap after a set: "how many more reps could you have done?" (0–4). | Next-set suggestions only see weight × reps, so they can't tell an easy 8 from a grinding 8 and sometimes push too fast or hold back. | Next-set suggestions (`src/lib/progress.js`), set rows in the session view. The coach assumes 2 reps in reserve; real RIR would make every target and goal projection sharper. | Planned |
+| 1.1.2 | **Rep-range progression from the split.** With a range like 8–12: keep the weight until every set reaches 12, then add weight and drop back to 8 (double progression). | The most proven method for most lifters. | Split days already store reps as a range (e.g. `"8-12"`); suggestions engine. | Shipped in v0.0.8-alpha (the coach's targets) |
+| 1.1.3 | **Stall and deload alerts.** When a lift hasn't improved in 3 sessions, or session intensity keeps falling, say so and suggest a lighter week or a variation. | Catches plateaus and fatigue before they cost weeks. | Records engine (`src/lib/records.js`), set and session intensity. | Shipped in v0.0.8-alpha (the coach's deload and split checks) |
 
 ### 1.2 Log any workout
 
@@ -73,6 +73,22 @@ next.
 | 1.4.1 | **Notes that stay with each exercise** (seat height, grip, cues), shown the next time you do it. | Setup details stop getting lost between sessions. | Session notes (per session only). | Planned |
 | 1.4.2 | **Swap an exercise** for another that works the same muscle, for when equipment is taken. | Keeps the plan on track in a busy gym. | Exercise library with muscle groups. | Planned |
 
+### 1.5 The coach (added in roadmap 1.1)
+
+The coach (`src/lib/coach.js`) shipped in v0.0.8-alpha. These make it smarter, in rough order of value.
+
+| Id | Enhancement | Why it helps | What already exists | Status |
+|---|---|---|---|---|
+| 1.5.1 | **The coach:** targets (weight, reps, sets), today's call (train, go easy, rest), deloads and weeks off, the split check, lift goals with realistic dates and 4-week blocks. | Turns the log into what to do next. | – | Shipped in v0.0.8-alpha |
+| 1.5.2 | **Learn each lifter's own rates.** Keep the coach's projections and compare them with what happened; tune the pace, fatigue thresholds and deload timing per person, and show how accurate it's been. | Population averages are a start; individuals vary two- or threefold. | Goal plans, e1RM history per lift. | Planned |
+| 1.5.3 | **Readiness check-in feeds the call** (with 1.3.2): sleep, soreness, energy, and optionally resting heart rate. | Today's call currently sees only the log. | Today's call. | Planned |
+| 1.5.4 | **Strength standards by bodyweight, sex and age** (optional profile fields) to judge how ambitious a goal is and where gains slow. | Makes "realistic" sharper for very strong or very new lifters. | Bodyweight log, experience level. | Planned |
+| 1.5.5 | **More goal kinds:** reps at a weight (10 pull-ups), bodyweight targets, weekly volume, a total (squat + bench + deadlift). | Not every goal is a one-rep max. | Lift goals. | Planned |
+| 1.5.6 | **Variations when a lift stalls:** suggest a paused, tempo or close-grip version for a 4-week block (with 1.4.2 swaps). | The split check can say "change" but not yet to what. | Split check, exercise library. | Planned |
+| 1.5.7 | **Test-day helper:** warm-up ramp and attempt selection (about 90%, 95%, then the goal) with plates shown (with 1.2.2). | Testing a max well is a skill; this removes the guesswork. | Plate calculator, goal "ready" state. | Planned |
+| 1.5.8 | **Coach nudges:** a push reminder on deload weeks, planned rest days and when a milestone is due. | The advice reaches you without opening the app. | Workout reminders (web push). | Planned |
+| 1.5.9 | **Run the coach off the main thread** (a Web Worker) if logs grow far past today's size. | Today it takes milliseconds; this keeps it that way at any size. | Cached coach reading. | Planned |
+
 ## Phase 2
 
 To be planned. Add it here as a new section, list it in the overview, and raise the roadmap's version.
@@ -94,3 +110,4 @@ To be planned. Add it here as a new section, list it in the overview, and raise 
 | Roadmap version | Date | App version | Change |
 |---|---|---|---|
 | 1.0 | 26 October 2026 | 0.0.5-alpha | First roadmap: Phase 1 (10 items) planned; Beta starts after the last phase. |
+| 1.1 | 27 October 2026 | 0.0.8-alpha | Added 1.5 The coach (1.5.1 shipped, 1.5.2–1.5.9 planned); 1.1.2 and 1.1.3 shipped as part of it. |

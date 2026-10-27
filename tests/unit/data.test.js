@@ -49,6 +49,17 @@ test('an export parses with fresh ids and every reference remapped', () => {
   assert.ok(d.sessions[0].endedAt > d.sessions[0].startedAt);
 });
 
+test('lift goals: cleaned, one per exercise, round-trip the database row, and follow their exercise on import', () => {
+  const g = [{ id: 'a', exId: 'sq', kg: 150, by: 0, at: 5, from: 120 }, { exId: 'sq', kg: 160 }, { exId: 'bp', kg: -1 }, { exId: 'dl', kg: '200' }, null];
+  const clean = profFromDb(profToDb({ ...DEFAULT_PROFILE, liftGoals: g })).liftGoals;
+  assert.deepEqual(clean.map(x => [x.exId, x.kg, x.by, x.from]), [['sq', 150, null, 120], ['dl', 200, null, null]]);
+  assert.equal(profToDb({ ...DEFAULT_PROFILE, liftGoals: [] }).lift_goals, null);
+  const d = parseImport({ app: 'Synergym', library: [{ id: 'old-sq', name: 'Back Squat', kind: 'w' }], sessions: [], splits: [],
+    profile: { liftGoals: [{ id: 'g', exId: 'old-sq', kg: 150, at: 1 }, { id: 'h', exId: 'gone', kg: 100, at: 1 }] } });
+  assert.equal(d.profile.liftGoals.length, 1);
+  assert.equal(d.profile.liftGoals[0].exId, d.library[0].id);
+});
+
 test('files that are not exports are rejected', () => {
   assert.equal(parseImport(null), null);
   assert.equal(parseImport({ app: 'Other', sessions: [{}] }), null);
