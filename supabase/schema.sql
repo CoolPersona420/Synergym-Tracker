@@ -47,6 +47,8 @@ alter table public.profiles add column if not exists split_archive jsonb check (
 -- Lift goals: [{"id","exId","kg","by","at","from"}], at most 20. kg is the target one-rep max; by an optional deadline (ms);
 -- at when it was set; from the estimated max then (so progress has a start).
 alter table public.profiles add column if not exists lift_goals jsonb check (lift_goals is null or (jsonb_typeof(lift_goals) = 'array' and jsonb_array_length(lift_goals) <= 20));
+-- The coach (targets, today's call, deloads, split check, goals) can be switched off in Settings.
+alter table public.profiles add column if not exists coach_on boolean not null default true;
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
@@ -328,7 +330,7 @@ begin
       rest_sound = coalesce(r.rest_sound, t.rest_sound), bodyweight = coalesce(r.bodyweight, t.bodyweight),
       display_name = coalesce(r.display_name, t.display_name), experience = coalesce(r.experience, t.experience),
       goal = coalesce(r.goal, t.goal), theme = r.theme, muscles = r.muscles, widgets = r.widgets,
-      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive, lift_goals = r.lift_goals
+      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive, lift_goals = r.lift_goals, coach_on = coalesce(r.coach_on, t.coach_on)
     from jsonb_populate_record(null::public.profiles, p->'profile') r
     where t.id = uid;
   end if;

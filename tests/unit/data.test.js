@@ -54,6 +54,9 @@ test('lift goals: cleaned, one per exercise, round-trip the database row, and fo
   const clean = profFromDb(profToDb({ ...DEFAULT_PROFILE, liftGoals: g })).liftGoals;
   assert.deepEqual(clean.map(x => [x.exId, x.kg, x.by, x.from]), [['sq', 150, null, 120], ['dl', 200, null, null]]);
   assert.equal(profToDb({ ...DEFAULT_PROFILE, liftGoals: [] }).lift_goals, null);
+  /* the coach is on unless switched off */
+  assert.equal(profFromDb({}).coachOn, true);
+  assert.equal(profFromDb(profToDb({ ...DEFAULT_PROFILE, coachOn: false })).coachOn, false);
   const d = parseImport({ app: 'Synergym', library: [{ id: 'old-sq', name: 'Back Squat', kind: 'w' }], sessions: [], splits: [],
     profile: { liftGoals: [{ id: 'g', exId: 'old-sq', kg: 150, at: 1 }, { id: 'h', exId: 'gone', kg: 100, at: 1 }] } });
   assert.equal(d.profile.liftGoals.length, 1);

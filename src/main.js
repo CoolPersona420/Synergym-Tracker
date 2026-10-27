@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import './style.css';
 import { analyse, readiness, prescribe, parseRange, goalPlan } from './lib/coach.js';
+import { suggestNext } from './lib/progress.js';
 import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
 import { DEFAULT_EXERCISES } from './data/exercises.js';
@@ -412,6 +413,8 @@ const suggestFor = (s, it) => { const x = dayPlan(s, it.exId); return planFor(it
    session; loads swap in new Maps and arrays, which the cache also notices. */
 let DATA_REV = 0;
 const CO = { a: null, k: null };
+/* the coach can be switched off in Settings: then every hint of it goes, and suggestions are the plain next-set rule */
+const coachOn = () => S.profile.coachOn !== false;
 function coach() {
   const now = Date.now(), p = S.profile;
   const k = [DATA_REV, dayKey(now), p.exp, p.target, bwNow(), p.unit, JSON.stringify(p.liftGoals || []), (p.restDays || []).slice(-1)[0] || ''].join('|');
@@ -435,6 +438,7 @@ function coach() {
    day or a deload week lightens everything. */
 function planFor(exId, { reps = null, sets = 3, excludeSid = null } = {}) {
   const ex = exOf(exId); if (!ex) return null;
+  if (!coachOn()) { const p = suggestNext(historyFor(exId, excludeSid), { bw: ex.kind === 'bw', step: fromU(loadStep()), round: snapW }); return p && { ...p, sets }; }
   const a = coach(), g = a.goals.find(x => x.goal.exId === exId && x.plan && x.status !== 'ready' && x.status !== 'no-data');
   return prescribe(historyFor(exId, excludeSid), { range: parseRange(reps), sets, bw: ex.kind === 'bw', step: fromU(loadStep()), round: snapW,
     call: a.ready.call === 'train' ? 'train' : 'easy', deload: a.deload.status === 'now', goalWeek: g ? g.plan.week : null, e1: g ? g.cur : 0 });
@@ -482,13 +486,13 @@ function parsePath() {
     case 'session': return seg[1] ? ['session', seg[1]] : ['today'];
     case 'settings': return ['prefs'];
     case 'guide': return ['guide'];
-    case 'coach': return ['coach'];
+    case 'coach': return ['coach', seg[1]];
     case 'w': return seg[1] ? ['widget', seg[1]] : ['today'];
     case 's': return seg[1] ? ['public', seg[1]] : ['today'];
     default: return ['today'];
   }
 }
-const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', coach: '/coach', public: '/s/' + a, widget: '/w/' + a })[v] || '/';
+const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', coach: '/coach' + (a ? '/' + a : ''), public: '/s/' + a, widget: '/w/' + a })[v] || '/';
 function go(v, a = null, { replace = false } = {}) {
   const path = pathOf(v, a);
   if (replace) history.replaceState({ d: depth }, '', path); else { depth++; history.pushState({ d: depth, from: S.view }, '', path); }
@@ -710,7 +714,7 @@ function renderNav() {
     fab.innerHTML = `<span class="ring">${a ? ICON.play : rest ? ICON.rest : ICON.plus}</span><span class="nl">${roll(a ? 'Resume session' : rest ? 'Rest day' : 'Start session')}</span>`;
   }
   fab.insertAdjacentHTML('beforebegin', `<div class="nav-brand">${brand()}</div>${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}`);
-  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}<button class="nav-i nav-desk nav-coach${on('coach') ? ' on' : ''}" data-act="nav" data-v="coach">${ICON.coach}${roll('Coach')}</button><button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>`);
+  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}${coachOn() ? `<button class="nav-i nav-desk nav-coach${on('coach') ? ' on' : ''}" data-act="nav" data-v="coach">${ICON.coach}${roll('Coach')}</button>` : ''}<button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>`);
 }
 function pageTop(title, extra = '', logo = false) {
   return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div>${extra ? `<div class="hx">${extra}</div>` : ''}</header>`;
@@ -983,8 +987,8 @@ function todayContent() {
     ${prs.length ? `<span class="lbl ts-sub">PRs today</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(exOf(p.exId)?.name || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}`;
   else if (!a) today += isRestToday() ? `<p class="ts-note">${ICON.moon}Rest day. Recovery counts.</p>` : `<p class="ts-note">Nothing logged yet today.</p>`;
   const wkBar = `<div class="ts-week"><span class="lbl">This week</span><b>${wk} of ${tgt}</b><span class="ts-bar"><i style="width:${Math.min(100, wk / tgt * 100).toFixed(0)}%"></i></span></div>`;
-  const co = coach().next, cc = callOf(co);
-  today += `<button class="ts-coach" data-act="ts-go" data-to="coach"><span class="co-call-t co-${cc}">${co.when === 'tomorrow' ? 'Tomorrow: ' : ''}${CALL[cc][0]}</span><span class="muted">${esc(callReason(co))}</span>${ICON.coach}</button>`;
+  const co = coachOn() && coach().next, cc = co && callOf(co);
+  if (co) today += `<button class="ts-coach" data-act="ts-go" data-to="coach"><span class="co-call-t co-${cc}">${co.when === 'tomorrow' ? 'Tomorrow: ' : ''}${CALL[cc][0]}</span><span class="muted">${esc(callReason(co))}</span>${ICON.coach}</button>`;
   return { html: `<div class="sh-h"><div><span class="lbl">${DAYS[new Date(now).getDay()]} · ${fmtDate(now)}</span><h3 id="tsh-title">${dayDone() ? 'Today’s summary' : 'Today’s plan'}</h3></div><button class="btn ghost sm tsh-x" data-act="top-close">Close</button></div>
   <section class="ts-sec">${today}</section>${wkBar}
   <section class="ts-sec ts-next">${nextBlock(nx, done, a)}</section>` };
@@ -1032,74 +1036,118 @@ const monthYear = t => new Date(t).toLocaleDateString('en-GB', { month: 'short',
 const weeksText = w => w < 9 ? plural(w, 'week') : w < 104 ? `${Math.round(w / 4.35)} months` : `${(w / 52).toFixed(1).replace(/\.0$/, '')} years`;
 const pill = ([t, c]) => `<span class="co-pill${c ? ' ' + c : ''}">${t}</span>`;
 const whyList = l => l.length ? `<ul class="co-why">${l.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
+/* the Coach page: a short summary of today on top, then one tab at a time (the plan, goals, recovery), so it
+   reads without scrolling. Details fold away. /coach/goals and /coach/recovery open a tab directly. */
+const COACH_TABS = [['plan', 'Plan'], ['goals', 'Goals'], ['recovery', 'Recovery']];
+const HOW_DELOAD = { off: 'No lifting for 5 to 7 days. Walk, stretch and sleep. Strength holds for several weeks, so you lose nothing; tiredness clears and joints recover. Come back at about 90% for the first session.',
+  deload: 'Keep the same exercises and days. Do about half your usual sets at about 90% of your usual weights, stopping 3 to 4 reps short of failure. One week, then back to normal: most people come back stronger. The coach’s targets switch to this by themselves.' };
+const tgtText = (g, bw) => bw && !g.next.w ? `${g.next.r} reps` : `${fmtW(g.next.w)} ${unit()} × ${g.next.r}`;
+/* the split day's exercises with the coach's target for each */
+function dayTargets(d) {
+  return d.exercises.map(x => {
+    const e = (x.exId && exOf(x.exId)) || S.library.find(y => y.name.toLowerCase() === String(x.name).toLowerCase());
+    return { x, e, g: e ? planFor(e.id, { reps: x.reps, sets: x.sets }) : null };
+  });
+}
+/* what's lightening today's targets, if anything: a deload week, then an easy or rest call */
+function coachMood(a) {
+  if (a.deload.status === 'now') return { k: 'deload', t: a.deload.kind === 'week-off' ? 'Week off due' : 'Deload week', b: 'Targets are about 10% lighter with half the sets.' };
+  if (a.ready.call !== 'train') return { k: 'easy', t: a.ready.call === 'rest' ? 'Rest was the call' : 'Easy day', b: 'Targets are about 10% lighter, one set fewer.' };
+  return null;
+}
 function vCoach() {
+  if (!coachOn()) return pageTop('Coach') + `<div class="co"><section class="card rv co-offc"><h2 class="co-call-t">Coach is off</h2><p class="co-lead">Turn it on for targets in every session, a call each day to train, go easy or rest, deload and split checks, and goals with a plan. Your goals are kept while it’s off.</p><div class="co-acts"><button class="btn" data-act="coach-switch">${roll('Turn the coach on')}</button></div></section></div>`;
   const a = coach(), r = a.next, c = callOf(r), nx = nextSplitDay(), act = activeSession(), wk = sorted().filter(s => s.endedAt && Date.now() - s.startedAt < 7 * 864e5).length;
-  const today = r.when === 'today', reasons = today && isRestToday() && !act ? ['You marked today as a rest day.'] : r.reasons;
-  let btns = '';
-  if (act) btns = `<button class="btn" data-act="resume" data-id="${act.id}">${roll('Resume session')}</button>`;
-  else if (today && !isRestToday() && c === 'rest') btns = `<button class="btn line" data-act="rest-today">${ICON.moon}${roll('Make today a rest day')}</button>`;
-  else if (today && !isRestToday() && nx && !dayDone()) btns = `<button class="btn" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}">${roll(`Start ${nx.sp.days[nx.i].type || 'next day'}`)}</button>`;
-  const todayCard = `<section class="card co-today co-${c} rv"><div class="card-h"><span class="lbl">${today ? 'Today' : 'Tomorrow'}</span><span class="lbl">${wk} of ${S.profile.target || 3} sessions in 7 days</span></div>
-    <div class="co-call"><span class="co-ico" aria-hidden="true">${c === 'rest' ? ICON.rest : c === 'easy' ? ICON.down : ICON.check}</span><div><h2 class="co-call-t co-${c}">${CALL[c][0]}</h2><p class="muted">${CALL[c][1]}</p></div></div>
-    ${whyList(reasons)}${r.notes && r.notes.length ? `<p class="muted co-note">${esc(r.notes[0])}</p>` : ''}${btns ? `<div class="btns">${btns}</div>` : ''}</section>`;
-  /* next session: the split's next day with the coach's target for each exercise */
-  let next;
-  if (nx) {
-    const d = nx.sp.days[nx.i], rows = d.exercises.map(x => {
-      const e = (x.exId && exOf(x.exId)) || S.library.find(y => y.name.toLowerCase() === String(x.name).toLowerCase()), g = e && planFor(e.id, { reps: x.reps, sets: x.sets }), bw = e && e.kind === 'bw';
-      const w = g ? (bw && !g.next.w ? `${g.next.r} reps` : `${fmtW(g.next.w)} ${unit()} × ${g.next.r}`) : `${x.sets} × ${esc(x.reps)}`;
-      return `<div class="row co-ex"><span class="row-m"><span class="t">${esc(e ? e.name : x.name)}</span><span class="sub">${g ? WHY[g.why] : 'First time: pick a weight you could lift for about 3 more reps.'}</span></span>
-        <span class="co-tg"><b>${w}</b><small>${g ? `${g.sets} ${g.sets === 1 ? 'set' : 'sets'}` : 'plan'}${g && g.why === 'goal' ? ' · goal block' : x.reps && parseRange(x.reps) ? ` · range ${esc(x.reps)}` : ''}</small></span></div>`;
-    }).join('');
-    next = `<section class="card rv"><div class="card-h"><span class="lbl">Next session · ${esc(d.type || 'Training')}</span><span class="lbl">${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}</span></div>
-      ${rows ? `<div class="list co-plan">${rows}</div>` : `<p class="muted">No exercises on this day yet.</p>`}</section>`;
-  } else next = `<section class="card rv"><div class="card-h"><span class="lbl">Next session</span></div><p class="muted">Plan a split and the coach sets a weight, reps and sets for every exercise, every session.</p><div class="btns" style="justify-content:flex-start"><button class="btn line sm" data-act="nav" data-v="splits">${roll('Plan a split')}</button></div></section>`;
-  /* recovery: deloads and weeks off */
-  const dl = a.deload, rk = recKey(dl), pct = dl.every ? Math.min(100, Math.round(dl.weeks / dl.every * 100)) : 0;
-  const how = rk === 'off' ? 'No lifting for 5 to 7 days. Walk, stretch and sleep. Strength holds for several weeks, so you lose nothing; tiredness clears and joints recover. Come back at about 90% for the first session.'
-    : 'Keep the same exercises and days. Do about half your usual sets at about 90% of your usual weights, stopping 3 to 4 reps short of failure. One week, then back to normal: most people come back stronger. The coach’s targets switch to this by themselves.';
-  const rec = `<section class="card rv co-rec"><div class="card-h"><span class="lbl">Recovery</span>${pill(REC[rk])}</div>
-    <div class="co-meter" role="img" aria-label="${dl.weeks} of about ${dl.every} weeks"><i style="width:${pct}%"></i></div><p class="lbl co-mt">${dl.weeks} of about ${dl.every} weeks since your last lighter week</p>
-    ${whyList(dl.reasons)}${rk === 'now' || rk === 'off' || rk === 'soon' ? `<details class="co-how"${rk === 'soon' ? '' : ' open'}><summary>${rk === 'off' ? 'How to take a week off' : 'How to deload'}</summary><p>${how}</p></details>` : ''}</section>`;
-  /* the split */
-  const sc = a.split, sp = nx ? nx.sp : null;
-  const split = `<section class="card rv"><div class="card-h"><span class="lbl">Your split${sp ? ' · ' + esc(sp.name) : ''}</span>${pill(SPLIT_ST[sc.status])}</div>
+  if (COACH_TABS.some(t => t[0] === S.arg)) S.coachTab = S.arg;
+  const tab = S.coachTab || 'plan', today = r.when === 'today';
+  const reasons = today && isRestToday() && !act ? ['You marked today as a rest day.'] : r.reasons, notes = r.notes || [];
+  let btn = '';
+  if (act) btn = `<button class="btn" data-act="resume" data-id="${act.id}">${roll('Resume session')}</button>`;
+  else if (today && !isRestToday() && c === 'rest') btn = `<button class="btn line" data-act="rest-today">${ICON.moon}${roll('Make today a rest day')}</button>`;
+  else if (today && !isRestToday() && nx && !dayDone()) btn = `<button class="btn" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}">${roll(`Start ${nx.sp.days[nx.i].type || 'next day'}`)}</button>`;
+  const more = reasons.slice(1).concat(notes);
+  const hero = `<section class="card co-hero co-${c} rv">
+    <div class="co-call"><span class="co-ico" aria-hidden="true">${c === 'rest' ? ICON.rest : c === 'easy' ? ICON.down : ICON.check}</span>
+      <div class="co-cm"><span class="lbl">${today ? 'Today' : 'Tomorrow'} · ${wk} of ${S.profile.target || 3} this week</span><h2 class="co-call-t co-${c}">${CALL[c][0]}</h2></div></div>
+    <p class="co-lead">${esc(reasons[0] || CALL[c][1])}</p>
+    ${btn || more.length ? `<div class="co-acts">${btn}${more.length ? `<details class="co-more"><summary>Why</summary>${whyList(more)}</details>` : ''}</div>` : ''}</section>`;
+  const recWarn = ['soon', 'now'].includes(a.deload.status) || ['change', 'consider'].includes(a.split.status);
+  const tabs = `<div class="seg co-tabs rv" role="tablist" aria-label="Coach">${COACH_TABS.map(([id, t]) => `<button role="tab" aria-selected="${tab === id}" class="${tab === id ? 'on' : ''}" data-act="coach-tab" data-t="${id}">${t}${id === 'goals' && a.goals.length ? ` <span class="co-n">${a.goals.length}</span>` : ''}${id === 'recovery' && recWarn ? ' <i class="co-dot" aria-label="needs a look"></i>' : ''}</button>`).join('')}</div>`;
+  const body = tab === 'goals' ? coachGoals(a) : tab === 'recovery' ? coachRecovery(a, nx) : coachPlan(a, nx);
+  return pageTop('Coach') + `<div class="co">${hero}${tabs}<div class="co-panel" role="tabpanel">${body}</div>
+    <p class="muted co-foot rv">The coach reads your log: estimated maxes, rep ranges, training load and recovery. It’s guidance, not medical advice: if something hurts, stop. <button class="linkbtn" data-act="how">How it works</button></p></div>`;
+}
+function coachPlan(a, nx) {
+  if (!nx) return `<section class="card rv"><p class="muted">Plan a split and the coach sets a weight, reps and sets for every exercise, every session.</p><div class="btns" style="justify-content:flex-start"><button class="btn line sm" data-act="nav" data-v="splits">${roll('Plan a split')}</button></div></section>`;
+  const d = nx.sp.days[nx.i], rows = dayTargets(d), mood = coachMood(a);
+  const list = rows.map(({ x, e, g }) => `<button class="row co-ex" data-act="open-ex" data-id="${e ? e.id : ''}"${e ? '' : ' disabled'}><span class="row-m"><span class="t">${esc(e ? e.name : x.name)}</span><span class="sub">${g ? WHY_SHORT[g.why] : 'first time: pick a weight you could lift for 3 more reps'}</span></span>
+    <span class="co-tg"><b>${g ? tgtText(g, e.kind === 'bw') : `${x.sets} × ${esc(x.reps)}`}</b><small>${g ? `${g.sets} ${g.sets === 1 ? 'set' : 'sets'}` : 'planned'}${g && g.why === 'goal' ? ' · goal' : x.reps && parseRange(x.reps) ? ` · ${esc(x.reps)}` : ''}</small></span></button>`).join('');
+  return `<section class="card rv co-plan"><div class="card-h"><span class="lbl">Next · ${esc(d.type || 'Training')}</span><span class="lbl">${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}</span></div>
+    ${mood ? `<p class="co-mood"><span class="co-pill warn">${mood.t}</span> ${mood.b}</p>` : ''}
+    ${list ? `<div class="list">${list}</div>` : `<p class="muted">No exercises on this day yet.</p>`}</section>`;
+}
+function coachGoals(a) {
+  const add = `<div class="co-gh rv"><span class="lbl">${a.goals.length ? plural(a.goals.length, 'goal') : 'No goals yet'}</span><button class="btn sm" data-act="goal-new">${roll('+ Goal')}</button></div>`;
+  return add + (a.goals.length ? a.goals.map(goalCard).join('') : `<section class="card rv co-empty"><p><b>Set a strength goal</b>, for example squat 150 kg. The coach works out how long it realistically takes, plans 4-week blocks to get there and sets your weights each week.</p></section>`);
+}
+function coachRecovery(a, nx) {
+  const dl = a.deload, rk = recKey(dl), pct = dl.every ? Math.min(100, Math.round(dl.weeks / dl.every * 100)) : 0, sc = a.split, sp = nx ? nx.sp : null;
+  const rec = `<section class="card rv co-rec"><div class="card-h"><span class="lbl">Lighter weeks</span>${pill(REC[rk])}</div>
+    <div class="co-meter" role="img" aria-label="${dl.weeks} of about ${dl.every} weeks"><i style="width:${pct}%"></i></div><p class="lbl co-mt">${dl.weeks} of ~${dl.every} weeks</p>
+    <p class="co-lead">${esc(dl.reasons[0] || '')}</p>${dl.reasons.length > 1 ? whyList(dl.reasons.slice(1)) : ''}
+    ${rk === 'now' || rk === 'off' || rk === 'soon' ? `<details class="co-more co-how"${rk === 'soon' ? '' : ' open'}><summary>${rk === 'off' ? 'How to take a week off' : 'How to deload'}</summary><p>${rk === 'off' ? HOW_DELOAD.off : HOW_DELOAD.deload}</p></details>` : ''}</section>`;
+  const split = `<section class="card rv co-split"><div class="card-h"><span class="lbl">Your split${sp ? ' · ' + esc(sp.name) : ''}</span>${pill(SPLIT_ST[sc.status])}</div>
     ${sc.status !== 'none' ? `<p class="muted co-sub">${sc.weeks ? plural(sc.weeks, 'week') : 'Under a week'} on it · ${plural(sc.sessions, 'session')} · ${sc.perWeek} a week lately</p>` : ''}
-    ${whyList(sc.reasons)}${sc.ideas.length ? `<span class="lbl co-sub">Ideas</span>${whyList(sc.ideas)}` : ''}
-    <div class="btns" style="justify-content:flex-start">${sp ? `<button class="btn line sm" data-act="nav" data-v="splits">${roll('Your splits')}</button>` : `<button class="btn line sm" data-act="nav" data-v="splits">${roll('Plan a split')}</button>`}</div></section>`;
-  const goals = a.goals;
-  /* phones: one column in reading order; wide screens: the day and goals beside recovery and the split */
-  return pageTop('Coach') + `<div class="co"><div class="co-main">${todayCard}${next}
-    <div class="co-gh rv"><h2>Goals</h2><button class="btn sm" data-act="goal-new">${roll('+ Goal')}</button></div>
-    ${goals.length ? goals.map(goalCard).join('') : `<section class="card rv co-empty"><p><b>Set a strength goal</b>, for example squat 150 kg. The coach works out how long it realistically takes, plans 4-week blocks to get there and sets your weights each week.</p></section>`}</div>
-    <div class="co-side">${rec}${split}
-    <p class="muted co-foot rv">The coach reads your log: estimated maxes, rep ranges, training load and recovery. It’s guidance, not medical advice: if something hurts, stop. <button class="linkbtn" data-act="how">How it works</button></p></div></div>`;
+    <p class="co-lead">${esc(sc.reasons[0] || '')}</p>
+    ${sc.reasons.length > 1 || sc.ideas.length ? `<details class="co-more"${sc.status === 'change' ? ' open' : ''}><summary>${sc.ideas.length ? 'Ideas' : 'More'}</summary>${whyList(sc.reasons.slice(1).concat(sc.ideas))}</details>` : ''}
+    <div class="btns" style="justify-content:flex-start"><button class="btn line sm" data-act="${sp ? 'ts-split' : 'nav'}" ${sp ? `data-id="${sp.id}"` : 'data-v="splits"'}>${roll(sp ? 'Open split' : 'Plan a split')}</button></div></section>`;
+  return rec + split;
 }
 function goalCard(g) {
   const ex = exOf(g.goal.exId), u = unit(), name = esc(ex ? ex.name : 'Exercise');
-  const head = `<div class="co-gt"><div><span class="lbl">${name} · one-rep max goal</span><h3>${fmtW(g.goal.kg)} ${u}</h3></div>${pill(GOAL_ST[g.status])}<button class="iconbtn" data-act="goal-menu" data-id="${g.goal.exId}" aria-label="Goal options">${ICON.dots}</button></div>`;
+  const head = `<div class="co-gt"><div><span class="lbl">${name} · one-rep max</span><h3>${fmtW(g.goal.kg)} ${u}</h3></div>${pill(GOAL_ST[g.status])}<button class="iconbtn" data-act="goal-menu" data-id="${g.goal.exId}" aria-label="Goal options">${ICON.dots}</button></div>`;
   if (g.status === 'no-data') return `<section class="card rv co-goal" id="goal-${g.goal.exId}">${head}<p class="muted">Log a set of 1 to 12 reps on ${name} and the plan appears.</p></section>`;
-  const bar = `<div class="co-bar" role="img" aria-label="${Math.round(g.progress * 100)}% of the way"><i style="width:${Math.round(g.progress * 100)}%"></i></div>
-    <div class="co-nums"><span>Start ${fmtW(roundW(g.from))}</span><b>Now about ${fmtW(roundW(g.cur))} ${u}</b><span>Goal ${fmtW(g.goal.kg)}</span></div>`;
-  let when = '';
-  if (g.status === 'ready') when = `<p class="co-eta"><b>You’re there on paper.</b> Your estimated max has reached the goal: time to test it.</p>`;
-  else if (g.weeks && g.weeks.likely != null) {
-    const soon = g.weeks.likely <= 8, range = g.eta.slow && monthYear(g.eta.fast) === monthYear(g.eta.slow) ? '' : ` Range ${monthYear(g.eta.fast)} to ${g.eta.slow ? monthYear(g.eta.slow) : 'later'}.`;
-    when = `<p class="co-eta"><b>Likely ${soon ? 'by ' + new Date(g.eta.likely).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : monthYear(g.eta.likely)}</b>, in about ${weeksText(g.weeks.likely)}.${range}</p>`;
-    when += `<p class="muted co-pace">A realistic pace for you: about ${(g.rate * 100).toFixed(1)}% a week, ${fmtW(g.cur * g.rate)} ${u}.</p>`;
-  } else when = `<p class="co-eta"><b>More than five years away</b> at a realistic pace. Set a nearer goal first.</p>`;
-  if (g.deadline === 'yes') when += `<p class="co-dl good">Deadline ${fmtDate(g.goal.by)}: on pace.</p>`;
-  else if (g.deadline === 'tight') when += `<p class="co-dl warn">Deadline ${fmtDate(g.goal.by)}: tight. It needs about ${(g.needed * 100).toFixed(1)}% a week; follow the plan closely.</p>`;
-  else if (g.deadline === 'no') when += `<p class="co-dl warn">Deadline ${fmtDate(g.goal.by)}: not realistic. It needs about ${(g.needed * 100).toFixed(1)}% a week. ${g.eta && g.eta.likely ? `Aim for ${monthYear(g.eta.likely)} instead.` : ''}</p>`;
-  else if (g.deadline === 'passed') when += `<p class="co-dl warn">The deadline ${fmtDate(g.goal.by)} has passed. Edit the goal to set a new one.</p>`;
-  const w = g.plan.week, block = `<div class="co-block"><span class="lbl">${esc(g.plan.name)} block · week ${g.plan.weekNo} of 4${w.deload ? ' · deload' : w.test ? ' · test' : ''}</span>
-    <b>${w.test ? `Work up to ${fmtW(roundW(Math.max(g.goal.kg, w.kg)))} ${u}` : `${w.sets} × ${w.reps} at ${fmtW(w.kg)} ${u}`}</b><small>${esc(g.plan.focus)} Twice a week; the session targets use it.</small></div>`;
-  const ms = g.milestones && g.milestones.length ? `<div class="co-ms"><span class="lbl">Milestones</span><div>${g.milestones.map(m => `<span><b>${fmtW(m.kg)}</b> ${new Date(m.t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>`).join('')}</div></div>` : '';
-  return `<section class="card rv co-goal" id="goal-${g.goal.exId}">${head}${bar}${when}${g.status === 'ready' ? '' : block}${ms}${whyList(g.tips.slice(0, 2))}</section>`;
+  const p = Math.round(g.progress * 100), soon = g.weeks && g.weeks.likely != null && g.weeks.likely <= 8;
+  const eta = g.status === 'ready' ? 'Ready to test' : g.weeks && g.weeks.likely != null ? `Likely ${soon ? 'by ' + new Date(g.eta.likely).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : monthYear(g.eta.likely)}` : 'Over five years away';
+  const bar = `<div class="co-bar" role="img" aria-label="${p}% of the way"><i style="width:${p}%"></i></div>
+    <div class="co-nums"><span>Now about <b>${fmtW(roundW(g.cur))} ${u}</b></span><span>${p}%</span><span>${eta}</span></div>`;
+  const w = g.plan.week, block = g.status === 'ready' ? `<div class="co-block"><span class="lbl">Test it</span><b>Work up to ${fmtW(g.goal.kg)} ${u}</b></div>`
+    : `<div class="co-block"><span class="lbl">${esc(g.plan.name)} block · week ${g.plan.weekNo} of 4${w.deload ? ' · deload' : w.test ? ' · test' : ''}</span><b>${w.test ? `Work up to ${fmtW(roundW(Math.max(g.goal.kg, w.kg)))} ${u}` : `${w.sets} × ${w.reps} at ${fmtW(w.kg)} ${u}`}</b></div>`;
+  /* everything else folds away */
+  let det = '';
+  if (g.weeks && g.weeks.likely != null && g.status !== 'ready') {
+    const range = g.eta.slow && monthYear(g.eta.fast) === monthYear(g.eta.slow) ? '' : ` Range ${monthYear(g.eta.fast)} to ${g.eta.slow ? monthYear(g.eta.slow) : 'later'}.`;
+    det += `<p>About ${weeksText(g.weeks.likely)} away at a realistic pace for you, about ${(g.rate * 100).toFixed(1)}% a week (${fmtW(g.cur * g.rate)} ${u}).${range}</p>`;
+  }
+  if (g.deadline === 'yes') det += `<p class="co-dl good">Deadline ${fmtDate(g.goal.by)}: on pace.</p>`;
+  else if (g.deadline === 'tight') det += `<p class="co-dl warn">Deadline ${fmtDate(g.goal.by)}: tight. It needs about ${(g.needed * 100).toFixed(1)}% a week; follow the plan closely.</p>`;
+  else if (g.deadline === 'no') det += `<p class="co-dl warn">Deadline ${fmtDate(g.goal.by)}: not realistic. It needs about ${(g.needed * 100).toFixed(1)}% a week.${g.eta && g.eta.likely ? ` Aim for ${monthYear(g.eta.likely)} instead.` : ''}</p>`;
+  else if (g.deadline === 'passed') det += `<p class="co-dl warn">The deadline ${fmtDate(g.goal.by)} has passed. Edit the goal to set a new one.</p>`;
+  if (g.status !== 'ready') det += `<p class="muted">${esc(g.plan.focus)} Train it twice a week; the session targets follow the block.</p>`;
+  if (g.milestones && g.milestones.length) det += `<div class="co-ms"><span class="lbl">Milestones</span><div>${g.milestones.map(m => `<span><b>${fmtW(m.kg)}</b> ${new Date(m.t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>`).join('')}</div></div>`;
+  det += whyList(g.tips);
+  const warn = g.deadline === 'no' || g.deadline === 'passed';
+  return `<section class="card rv co-goal" id="goal-${g.goal.exId}">${head}${bar}${block}<details class="co-more"${warn ? ' open' : ''}><summary>Plan details</summary>${det}</details></section>`;
+}
+/* an exercise page's next-time target, with the rep range and sets from the split it's in, if any */
+function exNext(ex) {
+  if (!coachOn()) return '';
+  const nx = nextSplitDay(), sps = [...(nx ? [nx.sp] : []), ...S.splits.values()];
+  let x = null; for (const sp of sps) { for (const d of sp.days) { x = d.exercises.find(y => y.exId === ex.id); if (x) break; } if (x) break; }
+  const g = planFor(ex.id, { reps: x ? x.reps : null, sets: x ? x.sets : 3 }); if (!g) return '';
+  return `<p class="co-nx"><span class="lbl">Coach · next time</span><b>${tgtText(g, ex.kind === 'bw')}</b> · ${plural(g.sets, 'set')}<small>${WHY[g.why]}</small></p>`;
+}
+/* in a live session: why today's targets are lighter, or that a lift follows a goal's block */
+function sessCoachBand(s) {
+  if (s.endedAt || !coachOn()) return '';
+  const a = coach(), mood = coachMood(a), goal = a.goals.find(g => g.plan && g.status !== 'ready' && g.status !== 'no-data' && s.items.some(it => it.exId === g.goal.exId));
+  if (mood) return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill warn">${mood.t}</span><span>${mood.b}</span>${ICON.coach}</button>`;
+  if (goal) { const ex = exOf(goal.goal.exId); return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill good">Goal</span><span>${esc(ex ? ex.name : 'This lift')} follows your ${fmtW(goal.goal.kg)} ${unit()} plan: ${esc(goal.plan.name)}, week ${goal.plan.weekNo} of 4.</span>${ICON.coach}</button>`; }
+  return '';
 }
 /* the lift's goal on its exercise page */
 function exGoalCard(ex) {
-  if (ex.kind === 'bw') return '';
+  if (ex.kind === 'bw' || !coachOn()) return '';
   const g = coach().goals.find(x => x.goal.exId === ex.id);
   if (!g) return `<section class="card span rv co-exg"><div class="card-h"><span class="lbl">Goal</span></div><p class="muted">Set a target one-rep max and the coach plans a realistic way there: how long it takes, 4-week blocks and your weights each week.</p><div class="btns" style="justify-content:flex-start"><button class="btn sm" data-act="goal-new" data-id="${ex.id}">${roll('Set a goal')}</button></div></section>`;
   return `<section class="card span rv co-exg"><div class="card-h"><span class="lbl">Goal · ${fmtW(g.goal.kg)} ${unit()}</span>${pill(GOAL_ST[g.status])}</div>
@@ -1160,11 +1208,16 @@ const DEFAULT_WIDGETS = ['coach', 'week', 'intensity', 'consistency', 'recent'];
 const WSIZES = [['s', 'S', 'Small'], ['m', 'M', 'Medium'], ['l', 'L', 'Large']], WSPAN = { s: 2, m: 3, l: 6 };
 function homeEntries() {
   const raw = Array.isArray(S.profile.widgets) ? S.profile.widgets : DEFAULT_WIDGETS, out = [], seen = new Set();
-  for (const r of raw) { const [id, z] = String(r).split(':'); if (!WIDGETS[id] || seen.has(id)) continue; seen.add(id); out.push({ id, size: WSPAN[z] ? z : (WIDGETS[id].size || 'm') }); }
+  for (const r of raw) { const [id, z] = String(r).split(':'); if (!WIDGETS[id] || seen.has(id) || (id === 'coach' && !coachOn())) continue; seen.add(id); out.push({ id, size: WSPAN[z] ? z : (WIDGETS[id].size || 'm') }); }
   return out;
 }
 const homeWidgets = () => homeEntries().map(e => e.id);
-const saveEntries = list => { S.profile.widgets = list.map(e => e.id + ':' + e.size); queue('p', 400); };
+const saveEntries = list => {
+  /* while the coach is off its card isn't listed, so put it back where it was: it returns when the coach does */
+  const raw = Array.isArray(S.profile.widgets) ? S.profile.widgets : DEFAULT_WIDGETS, k = coachOn() ? -1 : raw.findIndex(r => String(r).split(':')[0] === 'coach'), out = list.map(e => e.id + ':' + e.size);
+  if (k >= 0) out.splice(Math.min(k, out.length), 0, String(raw[k]));
+  S.profile.widgets = out; queue('p', 400);
+};
 /* desktop grid is 6 columns: small 2, medium 3, large 6. Rows are packed in order and the last widget in a
    row stretches to close any gap, so the layout always fits edge to edge. */
 function packSpans(spans) {
@@ -1286,11 +1339,12 @@ const WIDGETS = {
     title: 'Coach', desc: 'Train, go easy or rest, deloads and your goals', link: 'coach',
     card: (open, z) => { const a = coach(), r = a.next, c = callOf(r), when = r.when === 'tomorrow' ? 'Tomorrow' : 'Today';
       if (z === 's') return wTile('Coach', CALL[c][0], when.toLowerCase(), open);
-      const g = a.goals.find(x => x.status !== 'no-data'), dl = a.deload.status === 'now' || a.deload.status === 'soon';
+      const g = a.goals.find(x => x.status !== 'no-data'), dl = a.deload.status === 'now' || a.deload.status === 'soon', nx = nextSplitDay();
+      const tg = nx && c !== 'rest' && !phoneDash() ? dayTargets(nx.sp.days[nx.i]).filter(t => t.g).slice(0, z === 'l' ? 3 : 2) : [];
       return wHead('Coach', when, open) + `<div class="co-wc"><b class="co-call-t co-${c}">${CALL[c][0]}</b><span class="muted">${esc(callReason(r))}</span></div>`
-        + (dl ? `<p class="co-wl"><span class="co-pill warn">${REC[recKey(a.deload)][0]}</span></p>` : '')
-        + (g && z === 'l' ? `<div class="co-wg"><span class="lbl">${esc(exOf(g.goal.exId)?.name || 'Goal')} · ${fmtW(g.goal.kg)} ${unit()}</span><div class="co-bar"><i style="width:${Math.round(g.progress * 100)}%"></i></div></div>` : '')
-        + (g && z === 'm' && !dl ? `<p class="co-wl muted">${esc(exOf(g.goal.exId)?.name || 'Goal')} ${fmtW(g.goal.kg)} ${unit()}: ${Math.round(g.progress * 100)}% there</p>` : ''); }
+        + (dl ? `<p class="co-wl"><span class="co-pill warn">${REC[recKey(a.deload)][0]}</span></p>` : phoneDash() && nx && c !== 'rest' ? `<p class="co-wl muted">Targets ready for ${esc(nx.sp.days[nx.i].type || 'your next day')}</p>` : '')
+        + (tg.length ? `<div class="co-wn">${tg.map(t => `<span><b>${esc(t.e.name)}</b>${tgtText(t.g, t.e.kind === 'bw')}</span>`).join('')}</div>` : '')
+        + (g && !phoneDash() && (z === 'l' || !tg.length) ? `<div class="co-wg"><span class="lbl">${esc(exOf(g.goal.exId)?.name || 'Goal')} · ${fmtW(g.goal.kg)} ${unit()} · ${Math.round(g.progress * 100)}%</span><div class="co-bar"><i style="width:${Math.round(g.progress * 100)}%"></i></div></div>` : ''); }
   },
   intensity: {
     title: 'Intensity', desc: 'How hard each training day was', opts: [[30, '30d'], [90, '90d'], [365, '1y']],
@@ -1406,7 +1460,7 @@ function editHome() {
   const body = $('#sheet-body');
   const draw = () => {
     const rects = new Map($$('.wrow', body).map(r => [r.dataset.id, r.getBoundingClientRect().top])), prev = fluidCapture(body);
-    const ents = homeEntries(), on = ents.map(e => e.id), sizes = new Map(ents.map(e => [e.id, e.size])), all = [...on, ...Object.keys(WIDGETS).filter(id => !on.includes(id))];
+    const ents = homeEntries(), on = ents.map(e => e.id), sizes = new Map(ents.map(e => [e.id, e.size])), all = [...on, ...Object.keys(WIDGETS).filter(id => !on.includes(id) && (id !== 'coach' || coachOn()))];
     body.innerHTML = `<div class="sh-h"><h3>Edit home</h3><button class="btn sm" data-act="close">Done</button></div>
     <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">${phoneDash() ? 'Choose your widgets and their order. On a phone they’re all one size and fill the screen.' : 'Choose your widgets, their order and size (S, M, L). Home fits them to your screen.'} Tap a widget on Home to open it full screen. Changes save automatically.</p>
     <div class="sg-b wlist">${all.map(id => { const W = WIDGETS[id], i = on.indexOf(id), shown = i >= 0;
@@ -1441,7 +1495,7 @@ function vSession() {
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button>
     <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80">
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
-  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : 'completed'}</div>
+  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : 'completed'}</div>${sessCoachBand(s)}
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
     <div class="bignum" id="sint" style="margin-top:10px">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
@@ -1669,7 +1723,7 @@ function vExercise() {
   <div class="dash" style="margin-top:18px">
     <div class="card rv"><div class="card-h"><span class="lbl">${ex.oneRm > 0 ? 'Your 1RM' : 'Estimated 1RM'} · ${unit()}</span><button class="btn ghost sm" data-act="edit-orm" data-id="${ex.id}">${roll(ex.oneRm > 0 ? 'Edit' : 'Set 1RM')}</button></div>
       <div class="bignum md">${big(ex.oneRm > 0 ? fmtW(ex.oneRm) : x ? fmtW(roundW(x.best)) : '–')}<span class="dot"></span></div>
-      <p class="muted" style="margin-top:14px;font-size:13px">${ex.oneRm > 0 ? `Saved ${fmtDate(ex.oneRmAt || Date.now())}${x ? ` · best estimate ${fmtW(roundW(x.best))} ${unit()}` : ''}` : bs ? `From ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set to see your estimate.'}</p></div>
+      <p class="muted" style="margin-top:14px;font-size:13px">${ex.oneRm > 0 ? `Saved ${fmtDate(ex.oneRmAt || Date.now())}${x ? ` · best estimate ${fmtW(roundW(x.best))} ${unit()}` : ''}` : bs ? `From ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set to see your estimate.'}</p>${exNext(ex)}</div>
     <div class="card rv"><div class="card-h"><span class="lbl">e1RM by session</span><span class="lbl">${x ? x.pts.length : 0} logged</span></div>${trend(x)}</div>
     ${recordsCard(ex)}
     ${exGoalCard(ex)}
@@ -1728,8 +1782,19 @@ function vSplit() {
   <textarea class="sp-desc" data-f="spdesc" maxlength="1000" placeholder="Describe it: goal, who it suits, how to progress" aria-label="Description">${esc(sp.description)}</textarea></div>
   <div class="toolbar rv" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:12px"><span class="lbl">Days</span><span class="stepper" style="background:var(--surface)"><button data-act="days-step" data-d="-1" aria-label="Remove last day">−</button><span>${sp.days.length}</span><button data-act="days-step" data-d="1" aria-label="Add a day">+</button></span></div>
   <span class="lbl">${tr} training · ${sp.days.length - tr} rest${rec && rec.length ? ` · shared with ${rec.length}` : ''}${sp.shareToken ? ' · link on' : ''}</span></div>
+  ${splitCoach(sp)}
   ${dayBar(sp.days)}
   <div class="days">${sp.days.map((d, i) => dayCard(d, i, false, sp.days)).join('')}</div>`;
+}
+/* on a split's page: what the coach thinks of it (for the split you're on), and a nudge to give reps a range */
+function splitCoach(sp) {
+  if (!coachOn()) return '';
+  const nx = nextSplitDay(), on = nx && nx.sp.id === sp.id, sc = on ? coach().split : null;
+  const flat = sp.days.some(d => !isRestDay(d) && d.exercises.some(x => !parseRange(x.reps) || parseRange(x.reps).lo === parseRange(x.reps).hi));
+  let out = '';
+  if (sc && sc.status !== 'none') out += `<button class="co-band rv" data-act="coach-go" data-t="recovery">${pill(SPLIT_ST[sc.status])}<span>${esc(sc.reasons[0] || '')}</span>${ICON.coach}</button>`;
+  if (flat) out += `<p class="co-tip rv">Tip: give reps a range, like 8–12. The coach keeps the weight until every set reaches the top, then adds weight.</p>`;
+  return out;
 }
 /* split days: exercises can be linked like session sets (superset, giant set, or one exercise's sets as a drop set) */
 function dayGroups(d) {
@@ -1854,6 +1919,10 @@ function vPrefs() {
     (d.restOn ? row('Rest length', `<span class="stepper"><button data-act="d-step" data-k="rest" data-d="-15" aria-label="Shorter">−</button><span>${mmss(d.rest * 1000)}</span><button data-act="d-step" data-k="rest" data-d="15" aria-label="Longer">+</button></span>`) +
       row('Rest sound', `<button class="toggle${d.sound ? ' on' : ''}" data-act="d-toggle" data-k="sound" aria-pressed="${d.sound}" aria-label="Rest sound"></button>`, 'A short beep when rest ends') : ''),
     'Your weekly target drives the consistency score and streak.')}
+  ${group('Coach',
+    row('Coach', `<button class="toggle${coachOn() ? ' on' : ''}" data-act="coach-switch" aria-pressed="${coachOn()}" aria-label="Coach"></button>`, 'Targets, today’s call, deloads, your split and goals') +
+    (coachOn() ? link('Open the coach', 'data-act="nav" data-v="coach"') : ''),
+    coachOn() ? 'On: the Coach card is on Home and the coach sets your targets.' : 'Off: the Coach card is hidden and sessions show plain next-set suggestions. Your goals are kept.')}
   ${group('Appearance', `<div class="srow"><span class="k">Theme</span><span class="v">${esc((THEMES.find(t => t.id === themePref()) || THEMES[0]).name)}</span></div><div class="sg-pad">${themePicker()}</div>` + link('Home widgets', 'data-act="edit-home"', plural(homeWidgets().length, 'widget')))}
   ${remGroup(row, link, group)}
   ${S.local ? group('Account',
@@ -2145,7 +2214,7 @@ function startFromSplit(spid, di, force = false) {
   if (!force && !plannedSecond(spid, di) && askSecond(() => startFromSplit(spid, di, true))) return;
   const groups = dayGroups(d), gid = new Map();
   const items = d.exercises.map(x => {
-    const e = ensureExercise(x), last = lastSetsFor(e.id), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g), plan = planFor(e.id, { reps: x.reps, sets: x.sets });
+    const e = ensureExercise(x), last = lastSetsFor(e.id), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g), plan = coachOn() ? planFor(e.id, { reps: x.reps, sets: x.sets }) : null;
     return { id: sid(), exId: e.id, sets: Array.from({ length: plan ? plan.sets : x.sets }, (_, i) => {
       const l = plan ? { w: plan.next.w, r: plan.next.r } : last && last[Math.min(i, last.length - 1)];
       /* superset / giant set: set i of each linked exercise forms round i; a single linked exercise links all its sets */
@@ -2155,7 +2224,7 @@ function startFromSplit(spid, di, force = false) {
   });
   const tmp = { items }; cleanGroups(tmp);
   newSession({ name: d.type || null, items, splitId: spid, splitDay: di });
-  toast(`${dayLabel(sp.days, di)} loaded with the coach’s targets as hints.`);
+  toast(coachOn() ? `${dayLabel(sp.days, di)} loaded with the coach’s targets as hints.` : `${dayLabel(sp.days, di)} loaded. Last weights show as hints.`);
 }
 function repeatSession(id, force = false) {
   const src = S.sessions.get(id); if (!src) return;
@@ -2497,6 +2566,10 @@ function changeUsername(intro = false) {
 const ACT = {
   nav: el => go(el.dataset.v),
   'goal-new': el => goalSheet(el.dataset.id || null),
+  'coach-switch': () => { S.profile.coachOn = !coachOn(); queue('p', 0); render(false); toast(coachOn() ? 'Coach on. Its card is back on Home.' : 'Coach off. Switch it back on in Settings any time.'); },
+  'coach-go': el => go('coach', el.dataset.t || null),
+  'coach-tab': el => { S.coachTab = el.dataset.t; if (S.arg) go('coach', null, { replace: true }); else render(false); },
+  'ts-split': el => go('split', el.dataset.id),
   'goal-menu': el => goalMenu(el.dataset.id),
   'auth-mode': el => { S.authMode = el.dataset.m; S.authMsg = null; S.authSwap = true; render(false); },
   signout: signOut,

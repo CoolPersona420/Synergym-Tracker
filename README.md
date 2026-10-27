@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.0.10, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.0.11, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.0.10-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.0.11-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -58,7 +58,7 @@ The version lives in `package.json` (`0.0.10-alpha`) and shows in Settings › A
 - **Your data:** export everything as JSON or every set as CSV; import replaces all data after a warning.
 - **Help:** a user guide for phone and desktop (Settings › User guide) and "How the numbers work".
 
-What's planned from here to the Beta is in [ROADMAP.md](ROADMAP.md), in phases. Phase 1 covers coaching
+What changed in each release is in [RELEASE_NOTES.md](RELEASE_NOTES.md). What's planned from here to the Beta is in [ROADMAP.md](ROADMAP.md), in phases. Phase 1 covers coaching
 progression, more set types, warm-ups, muscle balance and more.
 
 ## How it's built
@@ -189,7 +189,13 @@ The coach is a set of plain rules over your own log (`src/lib/coach.js`, pure fu
 It runs in your browser, needs no extra data, and is worked out again only when finished sessions,
 exercises, splits, goals or the date change, so the app stays as quick as before (three years of
 four sessions a week takes a few milliseconds). Open it from its card on Home, the today panel, or the
-sidebar on a computer. It's guidance, not medical advice.
+sidebar on a computer: a short summary (train, go easy or rest, with the main reason and the next step) over
+three tabs, **Plan**, **Goals** and **Recovery**, so it reads without scrolling. It also shows up where you
+train: the targets in a session and a note when they're lighter, next time's target on each exercise page,
+and its view of a split on the split's page. It's guidance, not medical advice.
+
+**Settings › Coach** switches it off: the Home card hides (and comes back where it was when switched on),
+every coach hint goes, sessions show plain next-set suggestions, and goals are kept (`profiles.coach_on`).
 
 - **Targets.** Strength from a set is estimated with Epley (load × (1 + reps ÷ 30)), using sets of 12 reps
   or fewer. With a rep range in the split (say 8–12) it's double progression: keep the weight and add reps
@@ -229,7 +235,7 @@ database transaction (`import_replace`), so a failed import changes nothing.
 
 | Table | Holds | Who can see it |
 |---|---|---|
-| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account), deleted splits that sessions still point at (`split_archive`), lift goals (`lift_goals`) | owner |
+| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account), deleted splits that sessions still point at (`split_archive`), lift goals (`lift_goals`), whether the coach is on (`coach_on`) | owner |
 | `exercises` | each user's own exercise list (seeded from `default_exercises`) | owner |
 | `sessions` | one row per workout; sets are stored as JSON inside it | owner |
 | `splits` | training plans: days, session types, exercises with sets × reps; at most 6 per account (`splits_limit` trigger) | owner |
