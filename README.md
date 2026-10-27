@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.0.7, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.0.8, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.0.7-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.0.8-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -50,8 +50,8 @@ The version lives in `package.json` (`0.0.7-alpha`) and shows in Settings › Ab
   starter split, a theme) followed by a short tour. One device is signed in per account at a time.
 - **Your data:** export everything as JSON or every set as CSV; import replaces all data after a warning.
 - **Help:** a user guide for phone and desktop (Settings › User guide) and "How the numbers work".
-- **Admin console** (`/admin`, for admins only): approve new accounts, deactivate, reactivate, sign out or
-  delete accounts, make admins, see usage and errors, and an activity log of every admin action (see below).
+- **Account approval:** new accounts can wait for an admin to let them in, and admins can deactivate
+  accounts. Admins work from a separate, private admin site (see below).
 
 What's planned from here to the Beta is in [ROADMAP.md](ROADMAP.md), in phases. Phase 1 covers coaching
 progression, more set types, warm-ups, muscle balance and more.
@@ -73,7 +73,7 @@ progression, more set types, warm-ups, muscle balance and more.
 
 1. Create a project at [supabase.com](https://supabase.com) (the free tier is fine).
 2. **SQL Editor → New query**: paste all of `supabase/schema.sql` and click **Run**. (Re-running it later is safe; it only adds what is missing.)
-   Then make yourself the first admin (after you've signed up in the app), with your own email:
+   Then make yourself the first admin (after you've signed up in the app), with your own email; admins use the separate admin site:
    `insert into public.admins (user_id) select id from auth.users where lower(email) = lower('you@example.com') on conflict do nothing;`
 3. **Project Settings → API**: copy the **Project URL** and the **publishable / anon key**.
    (Never use the `service_role` / secret key in the frontend.)
@@ -134,7 +134,6 @@ auth and database calls in memory.
 | `api/` | the reminders function (Vercel) |
 | `public/sw.js` | the service worker: offline app shell and reminder notifications |
 | `src/ui/` | brand and icons, themes, the login and open splashes, the user guide, rubber-band scrolling, the today panel |
-| `src/admin/` | the admin console, loaded only when an admin opens `/admin` |
 | `src/data/` | starter split templates, quotes |
 
 ## Offline mode (phone app)
@@ -188,19 +187,13 @@ once in the Vercel dashboard: project → Analytics → Enable.
 with a file: it shows what will be deleted and offers to export first, then swaps everything in one
 database transaction (`import_replace`), so a failed import changes nothing.
 
-## Admin console
+## Accounts and approval
 
-Admins open **Settings › Admin console** (or `/admin`; on desktop there's also an Admin link in the sidebar).
-
-- **Overview:** accounts (active, pending, deactivated), active lifters, sessions, sets, sign-ups, splits,
-  reminders and errors, with 30-day charts of sessions and sign-ups, and a call-out when accounts are waiting.
-- **Users:** search by email, username or name; filter by status or admins; approve pending accounts (one by
-  one or all at once); export the list as CSV. Opening an account shows its sign-in, activity and counts, and
-  lets you approve, deactivate, reactivate, sign it out everywhere, make or remove an admin, or delete it
-  permanently (by typing its email).
-- **Errors:** errors from people's browsers, grouped, over 7 or 30 days; clear them when dealt with.
-- **Activity log:** every admin action, who took it, and when.
-- **Settings:** require approval for new accounts (on by default), and the list of admins.
+Admins don't use this app to run Synergym. The admin console is a **separate website**, kept in its own
+private repository and deployed on its own address. It signs in with the same Synergym account, lets in
+admins only, and covers approving, deactivating, reactivating and deleting accounts, admins, usage, errors
+and an activity log. Its database functions (`admin_*`, `admin_log`) are set up from that repository.
+The app has no admin pages or links; an admin uses it like anyone else.
 
 How access works:
 
@@ -225,12 +218,10 @@ How access works:
 | `split_shares` | which user a split was shared with | sender and recipient |
 | `client_errors` | errors reported by the app | nobody through the API (SQL editor only) |
 | `push_subscriptions` | each device that gets reminders | owner |
-| `admins` | who can use the admin console | nobody through the API (admin functions only) |
+| `admins` | who can use the admin site | nobody through the API (admin functions only) |
 | `app_settings` | one row: whether new accounts need approval | nobody through the API (admin functions only) |
-| `admin_log` | every admin action, with emails copied so it survives deletions | nobody through the API (admin functions only) |
 
 The functions `share_split`, `unshare_split`, `split_recipients`, `shared_with_me`,
 `get_public_split`, `restore_default_exercises`, `delete_account`, `import_replace` and `report_error` handle the
-cross-user actions safely. `my_access` tells the app an account's status, and the `admin_*` functions run the admin
-console; each checks the caller is an admin and records what it did. `profiles.status` (pending, active,
-deactivated) can only be changed by an admin.
+cross-user actions safely. `my_access` tells the app an account's status (and the admin site whether it's an admin).
+`profiles.status` (pending, active, deactivated) can only be changed by an admin.

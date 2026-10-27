@@ -123,7 +123,7 @@ create index if not exists split_shares_to on public.split_shares (to_user);
 create index if not exists split_shares_from_user_idx on public.split_shares (from_user);
 
 -- ---------------------------------------------------------------- accounts: approval and admins
--- Who can use the admin console (/admin). Changed only through the admin functions below, or in SQL.
+-- Who can use the admin site. Changed from the admin site (its functions live in that private repo), or in SQL.
 create table if not exists public.admins (
   user_id    uuid primary key references auth.users(id) on delete cascade,
   created_at timestamptz not null default now()
@@ -135,22 +135,9 @@ create table if not exists public.app_settings (
   updated_at       timestamptz not null default now()
 );
 insert into public.app_settings (id) values (1) on conflict (id) do nothing;
--- Every admin action, kept for accountability. Emails are copied so the record survives a deleted account.
-create table if not exists public.admin_log (
-  id           bigint generated always as identity primary key,
-  at           timestamptz not null default now(),
-  admin_id     uuid,
-  admin_email  text,
-  action       text not null,
-  target_id    uuid,
-  target_email text,
-  detail       text check (char_length(detail) <= 500)
-);
-create index if not exists admin_log_at on public.admin_log (at desc);
 alter table public.admins       enable row level security;
 alter table public.app_settings enable row level security;
-alter table public.admin_log    enable row level security;
-revoke all on public.admins, public.app_settings, public.admin_log from anon, authenticated;
+revoke all on public.admins, public.app_settings from anon, authenticated;
 
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
@@ -496,228 +483,16 @@ revoke execute on function public.save_push_subscription(text, text, text), publ
 grant execute on function public.save_push_subscription(text, text, text) to authenticated;
 grant execute on function public.reminders_due(text), public.reminders_drop(text, text[]) to anon;
 
--- ---------------------------------------------------------------- admin console
--- Everything the admin console (/admin) does goes through these functions. Each one checks that the caller
--- is an admin, and every change is written to admin_log. Admins see accounts and counts, not workouts.
-
--- This account's access: its status and whether it is an admin. The app checks it before loading anything.
+-- ---------------------------------------------------------------- access
+-- This account's access: its status and whether it is an admin. The app checks it before loading anything,
+-- and the admin site lets in only admins. The admin site's own functions (admin_*) and its log are set up
+-- from the private Synergym-Admin repo.
 create or replace function public.my_access() returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object('status', coalesce((select status from public.profiles where id = auth.uid()), 'active'), 'admin', public.is_admin());
 $$;
-
-create or replace function public.admin_guard() returns uuid
-language plpgsql stable security definer set search_path = public as $$
-begin
-  if auth.uid() is null or not public.is_admin() then raise exception 'Admins only' using errcode = '42501'; end if;
-  return auth.uid();
-end $$;
-
-create or replace function public.admin_note(p_action text, p_target uuid, p_detail text) returns void
-language plpgsql security definer set search_path = public as $$
-begin
-  insert into public.admin_log (admin_id, admin_email, action, target_id, target_email, detail)
-  values (auth.uid(), (select email from auth.users where id = auth.uid()), p_action, p_target,
-          (select email from auth.users where id = p_target), left(p_detail, 500));
-end $$;
-
--- Numbers for the overview: accounts, activity, content, reminders and errors, plus 30 days of sign-ups and sessions.
-create or replace function public.admin_overview() returns jsonb
-language plpgsql stable security definer set search_path = public as $$
-declare r jsonb;
-begin
-  perform public.admin_guard();
-  select jsonb_build_object(
-    'users', (select jsonb_build_object('total', count(*), 'pending', count(*) filter (where status = 'pending'),
-                'active', count(*) filter (where status = 'active'), 'deactivated', count(*) filter (where status = 'deactivated')) from public.profiles),
-    'admins', (select count(*) from public.admins),
-    'signups_7d', (select count(*) from auth.users where created_at > now() - interval '7 days'),
-    'signups_30d', (select count(*) from auth.users where created_at > now() - interval '30 days'),
-    'active_7d', (select count(distinct user_id) from public.sessions where started_at > now() - interval '7 days'),
-    'active_30d', (select count(distinct user_id) from public.sessions where started_at > now() - interval '30 days'),
-    'sessions_today', (select count(*) from public.sessions where started_at >= date_trunc('day', now())),
-    'sessions_7d', (select count(*) from public.sessions where started_at > now() - interval '7 days'),
-    'sessions_30d', (select count(*) from public.sessions where started_at > now() - interval '30 days'),
-    'sessions_total', (select count(*) from public.sessions),
-    'sets_30d', (select coalesce(sum((select count(*) from jsonb_array_elements(s.items) it, jsonb_array_elements(coalesce(it->'sets', '[]'::jsonb)) st
-                   where jsonb_typeof(st->'r') = 'number' and (st->>'r')::numeric > 0)), 0)
-                 from public.sessions s where s.started_at > now() - interval '30 days'),
-    'splits', (select count(*) from public.splits),
-    'shared_links', (select count(*) from public.splits where share_token is not null),
-    'shares', (select count(*) from public.split_shares),
-    'reminders_on', (select count(*) from public.profiles where reminder_on),
-    'devices', (select count(*) from public.push_subscriptions),
-    'errors_7d', (select count(*) from public.client_errors where at > now() - interval '7 days'),
-    'require_approval', (select require_approval from public.app_settings where id = 1),
-    'daily', (select jsonb_agg(jsonb_build_object('d', d::date,
-                'signups', (select count(*) from auth.users u where u.created_at >= d and u.created_at < d + interval '1 day'),
-                'sessions', (select count(*) from public.sessions x where x.started_at >= d and x.started_at < d + interval '1 day')) order by d)
-              from generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d)
-  ) into r;
-  return r;
-end $$;
-
--- Accounts, newest first with pending ones on top. p_status: pending, active, deactivated, admin, or null for all.
-create or replace function public.admin_users(p_search text default null, p_status text default null, p_limit int default 50, p_offset int default 0)
-returns table (id uuid, email text, username text, display_name text, status text, is_admin boolean, created_at timestamptz,
-               last_sign_in_at timestamptz, sessions bigint, last_session_at timestamptz, splits bigint, total bigint)
-language plpgsql stable security definer set search_path = public as $$
-#variable_conflict use_column
-declare q text := '%' || replace(replace(replace(coalesce(btrim(p_search), ''), '\', '\\'), '%', '\%'), '_', '\_') || '%';
-begin
-  perform public.admin_guard();
-  return query
-  select u.id, u.email::text, p.username, p.display_name, p.status, exists (select 1 from public.admins a where a.user_id = u.id),
-    u.created_at, u.last_sign_in_at,
-    (select count(*) from public.sessions x where x.user_id = u.id), (select max(x.started_at) from public.sessions x where x.user_id = u.id),
-    (select count(*) from public.splits x where x.user_id = u.id), count(*) over ()
-  from auth.users u join public.profiles p on p.id = u.id
-  where (coalesce(p_status, '') = '' or p.status = p_status or (p_status = 'admin' and exists (select 1 from public.admins a where a.user_id = u.id)))
-    and (coalesce(btrim(p_search), '') = '' or u.email ilike q or p.username ilike q or p.display_name ilike q)
-  order by (p.status = 'pending') desc, u.created_at desc
-  limit least(greatest(coalesce(p_limit, 50), 1), 200) offset greatest(coalesce(p_offset, 0), 0);
-end $$;
-
--- One account in detail: profile, sign-in, counts, and the admin actions taken on it.
-create or replace function public.admin_user(p_id uuid) returns jsonb
-language plpgsql stable security definer set search_path = public as $$
-declare r jsonb;
-begin
-  perform public.admin_guard();
-  select jsonb_build_object(
-    'id', u.id, 'email', u.email, 'created_at', u.created_at, 'last_sign_in_at', u.last_sign_in_at, 'confirmed_at', u.email_confirmed_at,
-    'banned', u.banned_until is not null and u.banned_until > now(),
-    'username', p.username, 'display_name', p.display_name, 'status', p.status, 'status_at', p.status_at,
-    'is_admin', exists (select 1 from public.admins a where a.user_id = u.id),
-    'onboarded', p.onboarded, 'experience', p.experience, 'goal', p.goal, 'unit', p.unit, 'weekly_target', p.weekly_target, 'theme', p.theme,
-    'reminder_on', p.reminder_on, 'tz', p.tz,
-    'sessions', (select count(*) from public.sessions x where x.user_id = u.id),
-    'sessions_30d', (select count(*) from public.sessions x where x.user_id = u.id and x.started_at > now() - interval '30 days'),
-    'last_session_at', (select max(x.started_at) from public.sessions x where x.user_id = u.id),
-    'splits', (select count(*) from public.splits x where x.user_id = u.id),
-    'custom_exercises', (select count(*) from public.exercises x where x.user_id = u.id and not x.is_default),
-    'devices', (select count(*) from public.push_subscriptions x where x.user_id = u.id),
-    'errors_30d', (select count(*) from public.client_errors x where x.user_id = u.id and x.at > now() - interval '30 days'),
-    'log', (select coalesce(jsonb_agg(jsonb_build_object('at', l.at, 'action', l.action, 'admin_email', l.admin_email, 'detail', l.detail) order by l.at desc), '[]'::jsonb)
-            from (select * from public.admin_log where target_id = u.id order by at desc limit 20) l)
-  ) into r
-  from auth.users u join public.profiles p on p.id = u.id where u.id = p_id;
-  if r is null then raise exception 'User not found'; end if;
-  return r;
-end $$;
-
--- Approve (pending to active), deactivate, or reactivate an account. Deactivating also blocks sign-in and
--- signs the account out everywhere; reactivating lifts the block. Not for your own account or other admins.
-create or replace function public.admin_set_status(p_id uuid, p_status text) returns text
-language plpgsql security definer set search_path = public as $$
-declare me uuid := public.admin_guard(); cur text; act text;
-begin
-  if p_status not in ('active', 'deactivated') then raise exception 'Unknown status'; end if;
-  if p_id = me then raise exception 'You can''t change your own account here'; end if;
-  if exists (select 1 from public.admins where user_id = p_id) then raise exception 'Remove their admin access first'; end if;
-  select status into cur from public.profiles where id = p_id;
-  if cur is null then raise exception 'User not found'; end if;
-  if cur = p_status then return cur; end if;
-  update public.profiles set status = p_status where id = p_id;
-  if p_status = 'deactivated' then
-    update auth.users set banned_until = now() + interval '100 years' where id = p_id;
-    delete from auth.sessions where user_id = p_id;
-    act := 'deactivate';
-  else
-    update auth.users set banned_until = null where id = p_id;
-    act := case when cur = 'pending' then 'approve' else 'reactivate' end;
-  end if;
-  perform public.admin_note(act, p_id, cur || ' → ' || p_status);
-  return p_status;
-end $$;
-
--- Sign an account out on every device (their open app signs out within the hour, when its session expires).
-create or replace function public.admin_sign_out(p_id uuid) returns void
-language plpgsql security definer set search_path = public as $$
-declare me uuid := public.admin_guard();
-begin
-  if p_id = me then raise exception 'Use Log out for your own account'; end if;
-  delete from auth.sessions where user_id = p_id;
-  perform public.admin_note('sign_out', p_id, null);
-end $$;
-
--- Delete an account and everything in it, permanently. Not your own account or another admin.
-create or replace function public.admin_delete_user(p_id uuid) returns void
-language plpgsql security definer set search_path = public as $$
-declare me uuid := public.admin_guard();
-begin
-  if p_id = me then raise exception 'Delete your own account from Settings'; end if;
-  if exists (select 1 from public.admins where user_id = p_id) then raise exception 'Remove their admin access first'; end if;
-  if not exists (select 1 from auth.users where id = p_id) then raise exception 'User not found'; end if;
-  perform public.admin_note('delete', p_id, (select coalesce('@' || username, 'no username') from public.profiles where id = p_id));
-  delete from auth.users where id = p_id;
-end $$;
-
--- Give or take admin access. Only active accounts can be admins, and you can't remove your own.
-create or replace function public.admin_set_admin(p_id uuid, p_on boolean) returns void
-language plpgsql security definer set search_path = public as $$
-declare me uuid := public.admin_guard();
-begin
-  if p_on then
-    if not exists (select 1 from public.profiles where id = p_id and status = 'active') then raise exception 'Only active accounts can be admins'; end if;
-    insert into public.admins (user_id) values (p_id) on conflict do nothing;
-    perform public.admin_note('grant_admin', p_id, null);
-  else
-    if p_id = me then raise exception 'You can''t remove your own admin access'; end if;
-    delete from public.admins where user_id = p_id;
-    perform public.admin_note('revoke_admin', p_id, null);
-  end if;
-end $$;
-
-create or replace function public.admin_settings(p_require_approval boolean) returns void
-language plpgsql security definer set search_path = public as $$
-begin
-  perform public.admin_guard();
-  update public.app_settings set require_approval = p_require_approval, updated_at = now() where id = 1;
-  perform public.admin_note('settings', null, 'require approval: ' || case when p_require_approval then 'on' else 'off' end);
-end $$;
-
--- Errors from people's browsers, grouped by message.
-create or replace function public.admin_errors(p_days int default 7)
-returns table (message text, n bigint, users bigint, last_at timestamptz, path text, build text)
-language plpgsql stable security definer set search_path = public as $$
-#variable_conflict use_column
-begin
-  perform public.admin_guard();
-  return query
-  select e.message, count(*), count(distinct e.user_id), max(e.at),
-    (array_agg(e.path order by e.at desc))[1], (array_agg(e.build order by e.at desc))[1]
-  from public.client_errors e where e.at > now() - make_interval(days => least(greatest(coalesce(p_days, 7), 1), 30))
-  group by e.message order by max(e.at) desc limit 100;
-end $$;
-
-create or replace function public.admin_clear_errors() returns void
-language plpgsql security definer set search_path = public as $$
-begin
-  perform public.admin_guard();
-  delete from public.client_errors;
-  perform public.admin_note('clear_errors', null, null);
-end $$;
-
-create or replace function public.admin_log_list(p_limit int default 50, p_offset int default 0)
-returns table (at timestamptz, admin_email text, action text, target_email text, detail text, total bigint)
-language plpgsql stable security definer set search_path = public as $$
-#variable_conflict use_column
-begin
-  perform public.admin_guard();
-  return query
-  select l.at, l.admin_email, l.action, l.target_email, l.detail, count(*) over ()
-  from public.admin_log l order by l.at desc
-  limit least(greatest(coalesce(p_limit, 50), 1), 200) offset greatest(coalesce(p_offset, 0), 0);
-end $$;
-
-revoke execute on function public.admin_guard(), public.admin_note(text, uuid, text) from public, anon, authenticated;
-revoke execute on function public.my_access(), public.admin_overview(), public.admin_users(text, text, int, int), public.admin_user(uuid),
-  public.admin_set_status(uuid, text), public.admin_sign_out(uuid), public.admin_delete_user(uuid), public.admin_set_admin(uuid, boolean),
-  public.admin_settings(boolean), public.admin_errors(int), public.admin_clear_errors(), public.admin_log_list(int, int) from public, anon;
-grant execute on function public.my_access(), public.admin_overview(), public.admin_users(text, text, int, int), public.admin_user(uuid),
-  public.admin_set_status(uuid, text), public.admin_sign_out(uuid), public.admin_delete_user(uuid), public.admin_set_admin(uuid, boolean),
-  public.admin_settings(boolean), public.admin_errors(int), public.admin_clear_errors(), public.admin_log_list(int, int) to authenticated;
+revoke execute on function public.my_access() from public, anon;
+grant execute on function public.my_access() to authenticated;
 
 -- The first admin is set in SQL (replace the email with yours):
 --   insert into public.admins (user_id) select id from auth.users where lower(email) = lower('you@example.com') on conflict do nothing;

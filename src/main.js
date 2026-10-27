@@ -58,7 +58,7 @@ const HF0 = () => ({ open: false, split: null, ex: null, muscle: null, pr: null,
 const S = {
   authReady: false, user: null, loaded: false, loadError: null,
   profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(),
-  view: 'today', arg: null, link: null, rest: null, q: '', hf: HF0(), access: { status: 'active', admin: false }, gate: null, exq: '', exm: '', showArchived: false, A: null, animate: false,
+  view: 'today', arg: null, link: null, rest: null, q: '', hf: HF0(), access: { status: 'active' }, gate: null, exq: '', exm: '', showArchived: false, A: null, animate: false,
   ob: { step: 2, name: '', username: '', unit: 'kg', bw: 75, exp: null, goal: null, days: 3, tpl: null },
   pk: {}, authMode: 'signin', authMsg: null, recover: false, pub: null, lastFetch: 0
 };
@@ -444,13 +444,12 @@ function parsePath() {
     case 'session': return seg[1] ? ['session', seg[1]] : ['today'];
     case 'settings': return ['prefs'];
     case 'guide': return ['guide'];
-    case 'admin': return ['admin'];
     case 'w': return seg[1] ? ['widget', seg[1]] : ['today'];
     case 's': return seg[1] ? ['public', seg[1]] : ['today'];
     default: return ['today'];
   }
 }
-const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', admin: '/admin', public: '/s/' + a, widget: '/w/' + a })[v] || '/';
+const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', public: '/s/' + a, widget: '/w/' + a })[v] || '/';
 function go(v, a = null, { replace = false } = {}) {
   const path = pathOf(v, a);
   if (replace) history.replaceState({ d: depth }, '', path); else { depth++; history.pushState({ d: depth }, '', path); }
@@ -559,7 +558,6 @@ function render(enter) {
         case 'shared': html = vShared(); break;
         case 'prefs': html = vPrefs(); break;
         case 'guide': html = vGuide(); break;
-        case 'admin': html = vAdmin(); break;
         case 'widget': html = vWidget(); break;
         default: html = vToday();
       }
@@ -665,20 +663,10 @@ function renderNav() {
     fab.innerHTML = `<span class="ring">${a ? ICON.play : rest ? ICON.rest : ICON.plus}</span><span class="nl">${roll(a ? 'Resume session' : rest ? 'Rest day' : 'Start session')}</span>`;
   }
   fab.insertAdjacentHTML('beforebegin', `<div class="nav-brand">${brand()}</div>${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}`);
-  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}<button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>${S.access.admin ? `<button class="nav-i nav-desk nav-adm${on('admin') ? ' on' : ''}" data-act="nav" data-v="admin">${SHIELD}${roll('Admin')}</button>` : ''}`);
+  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}<button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>`);
 }
 function pageTop(title, extra = '', logo = false) {
   return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div>${extra ? `<div class="hx">${extra}</div>` : ''}</header>`;
-}
-/* ---------- admin console: its own module, loaded when an admin opens it ---------- */
-const SHIELD = '<svg class="ico" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.2-2.9 7.9-7 9.5-4.1-1.6-7-5.3-7-9.5V6z"/><path d="M9 12l2 2 4-4"/></svg>';
-function vAdmin() {
-  if (!S.access.admin) return vMissing('This page doesn’t exist.');
-  requestAnimationFrame(() => import('./admin/admin.js').then(m => {
-    const el = $('#admin'); if (!el || el.dataset.on) return; el.dataset.on = '1';
-    m.mountAdmin(el, { sb, esc, toast, fmtDate, fmtTime, openSheet, closeSheet, confirmSheet, roll, me: S.user && S.user.id });
-  }).catch(err => { reportError('Admin console failed to load: ' + (err && err.message), err && err.stack); const el = $('#admin'); if (el) el.innerHTML = '<div class="msg err">The admin console couldn’t load. Check your connection and reload.</div>'; }));
-  return `<div id="admin" class="adm"><div class="empty">Loading the admin console…</div></div>`;
 }
 const vMissing = msg => `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button></header><div class="empty rv"><b>${esc(msg)}</b>It may have been deleted on another device.</div>`;
 const shell = inner => `<div class="ob ob-plain"><div class="ob-main"><div class="ob-top">${brand()}</div><div class="ob-in">${inner}</div></div></div>`;
@@ -691,13 +679,13 @@ function vGate() {
     <div class="gate-wait" aria-hidden="true"><i></i><i></i><i></i></div>
     <button class="btn lg" data-act="gate-check">Check again</button><button class="linkbtn" data-act="signout">Sign out</button>`);
 }
-/* this account's status and whether it's an admin; anything unexpected counts as active (the database still decides) */
+/* this account's status; anything unexpected counts as active (the database still decides) */
 async function myAccess() {
   try {
     const { data, error } = await sb.rpc('my_access');
-    if (error || !data || typeof data !== 'object' || Array.isArray(data)) return { status: 'active', admin: false };
-    return { status: ['pending', 'deactivated'].includes(data.status) ? data.status : 'active', admin: !!data.admin };
-  } catch { return { status: 'active', admin: false }; }
+    if (error || !data || typeof data !== 'object' || Array.isArray(data)) return { status: 'active' };
+    return { status: ['pending', 'deactivated'].includes(data.status) ? data.status : 'active' };
+  } catch { return { status: 'active' }; }
 }
 let gateTimer = 0;
 async function gateCheck(manual = false) {
@@ -1706,7 +1694,6 @@ function vPrefs() {
     (standalone() ? '' : link('Install the app', 'data-act="install"')),
     'Your sessions, exercises and splits are private to your account. Others only see a split when you share it.')}
   ${group('Your data', link('Export JSON', 'data-act="export" data-f="json"') + link('Export CSV', 'data-act="export" data-f="csv"') + link('Import JSON', 'data-act="import"'))}
-  ${S.access.admin ? group('Admin', link('Admin console', 'data-act="nav" data-v="admin"'), 'Approve new accounts, manage users, and see activity and errors.') : ''}
   ${group('Help', link('User guide', 'data-act="nav" data-v="guide"') + link('Replay the tour', 'data-act="tour"') + link('How the numbers work', 'data-act="how"'))}
   ${group('About',
     `<div class="srow"><span class="k">Version<small class="keep">Build ${esc(BUILD_ID)}</small></span><span class="v ver">v${esc(VER_NUM)}${VER_PRE ? ` <span class="badge acc">${esc(VER_PRE.replace(/[.\d]+$/, ''))}</span>` : ''}</span></div>` +
@@ -2835,7 +2822,7 @@ function lockAppZoom() {
 
 /* ================= boot ================= */
 function resetState() {
-  Object.assign(S, { user: null, loaded: false, loadError: null, profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(), rest: null, link: null, q: '', hf: HF0(), access: { status: 'active', admin: false }, gate: null, exq: '', exm: '' });
+  Object.assign(S, { user: null, loaded: false, loadError: null, profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(), rest: null, link: null, q: '', hf: HF0(), access: { status: 'active' }, gate: null, exq: '', exm: '' });
   OB.pending.clear(); OB.inflight.clear(); for (const t of OB.timers.values()) clearTimeout(t); OB.timers.clear(); OB.failing = false;
   clearInterval(gateTimer); gateTimer = 0;
 }
