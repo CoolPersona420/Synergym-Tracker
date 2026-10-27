@@ -60,8 +60,8 @@ self.addEventListener('fetch', e => {
     })));
     return;
   }
-  /* icons, manifest, theme script and Google Fonts: cached copy now, fresh copy for next time */
-  const own = url.origin === location.origin && /^\/(icon|apple-touch-icon|manifest\.webmanifest|theme\.js)/.test(url.pathname);
+  /* icons, manifests, theme script and Google Fonts: cached copy now, fresh copy for next time */
+  const own = url.origin === location.origin && /^\/(icon|apple-touch-icon|manifest\.webmanifest|manifests\/|theme\.js)/.test(url.pathname);
   const fonts = url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com';
   if (own || fonts) {
     e.respondWith((async () => {

@@ -12,7 +12,12 @@ export const fmtTime = t => { const d = new Date(t); return `${pad(d.getHours())
 export const mmss = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
 export const dayKey = t => { const d = new Date(t); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
 export const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-export function weekStart(t) { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); }
+/* the day weeks start on (Settings › Training): 1 Monday (the default), 0 Sunday or 6 Saturday, as Date.getDay() */
+export const WEEK_DAYS = [1, 0, 6];
+let week0 = 1;
+export const setWeekStart = d => { week0 = WEEK_DAYS.includes(+d) ? +d : 1; };
+export const weekStartDay = () => week0;
+export function weekStart(t) { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() - week0 + 7) % 7)); return d.getTime(); }
 export function shiftWeek(t, n) { const d = new Date(t); d.setDate(d.getDate() + 7 * n); return weekStart(d.getTime()); }
 export function roll(t) { return `<span class="roll"><span data-t="${esc(t)}">${esc(t)}</span></span>`; }
 let toastT;

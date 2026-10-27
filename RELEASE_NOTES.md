@@ -10,6 +10,25 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.4-alpha · 27 October 2026
+
+**An app icon in your colours, and your own start of the week**
+
+- **The Home Screen icon matches the app.** The wolf now comes white on black, black on white, and in each
+  theme's colours. By default the icon follows the app: your theme, or with Auto your phone's light mode
+  (white) or dark mode (black). **Settings › App icon** can keep it light or dark instead, and your app's theme
+  never changes with it.
+  - **iPhone:** an icon is set when Synergym is added to the Home Screen, and iOS doesn't let web apps change
+    it afterwards or give them a dark version. The icon is right whenever you add it, and Settings explains how
+    to change it: copy a link, add Synergym again from Safari, and remove the old icon.
+  - **Android:** Chrome updates the installed icon by itself, usually within a day of opening the app. With
+    **Themed icons** on (Android 13 or later), a new one-colour wolf follows your phone's colours and light or
+    dark mode.
+- **Choose the day your week starts:** Monday, Sunday or Saturday, in **Settings › Training**. It sets this
+  week's count, the weekly target and streaks, the charts, the today panel and reminders, and the reminder
+  days are listed in that order. Saved to your account (`profiles.week_start`).
+- **Fixed:** changing a reminder's time briefly showed the footer's old wording.
+
 ## 0.1.3-alpha · 27 October 2026
 
 **Reminders that know your training, and that keep arriving**

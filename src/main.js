@@ -6,7 +6,7 @@ import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
 import { DEFAULT_EXERCISES } from './data/exercises.js';
 import { reduced, LITE } from './lib/env.js';
-import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, roll, toast } from './lib/util.js';
+import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays } from './lib/sanitize.js';
 import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
 import { parseImport, SPLIT_MAX } from './lib/importer.js';
@@ -588,7 +588,7 @@ function render(enter) {
   if (SPL.hold) { SPL.dirty = true; SPL.dirtyEnter = SPL.dirtyEnter || !!enter; return; }
   const v = $('#view'), y = scrollY, nav = $('#nav');
   let html = '', app = false, bare = false;
-  S.animate = !!enter;
+  S.animate = !!enter; setWeekStart(S.profile.weekStart);
   try {
     if (!sb) { html = vNoConfig(); bare = true; }
     else if (S.recover) { html = vRecover(); bare = true; }
@@ -1930,6 +1930,7 @@ function vPrefs() {
     row('Bodyweight', `<span class="unitin"><input class="field" data-f="d-bw" inputmode="decimal" value="${bwShown}" aria-label="Bodyweight"><span class="lbl">${du}</span></span>`, 'Used for bodyweight exercises'))}
   ${group('Training',
     row('Units', `<span class="seg"><button class="${du === 'kg' ? 'on' : ''}" data-act="d-set" data-k="unit" data-v="kg">kg</button><button class="${du === 'lb' ? 'on' : ''}" data-act="d-set" data-k="unit" data-v="lb">lb</button></span>`, 'Stored precisely; switch any time') +
+    row('Week starts on', `<span class="seg">${[[1, 'Mon'], [0, 'Sun'], [6, 'Sat']].map(([n, t]) => `<button class="${weekStartDay() === n ? 'on' : ''}" data-act="d-week" data-v="${n}" aria-pressed="${weekStartDay() === n}">${t}</button>`).join('')}</span>`, 'For your weekly target, streaks and charts') +
     row('Weekly target', `<span class="stepper"><button data-act="d-step" data-k="target" data-d="-1" aria-label="Fewer">−</button><span>${d.target}</span><button data-act="d-step" data-k="target" data-d="1" aria-label="More">+</button></span>`, 'Sessions per week for consistency') +
     row('Rest timer', `<button class="toggle${d.restOn ? ' on' : ''}" data-act="d-toggle" data-k="restOn" aria-pressed="${d.restOn}" aria-label="Rest timer"></button>`, 'Counts down after you tick a set') +
     (d.restOn ? row('Rest length', `<span class="stepper"><button data-act="d-step" data-k="rest" data-d="-15" aria-label="Shorter">−</button><span>${mmss(d.rest * 1000)}</span><button data-act="d-step" data-k="rest" data-d="15" aria-label="Longer">+</button></span>`) +
@@ -1940,6 +1941,7 @@ function vPrefs() {
     (coachOn() ? link('Open the coach', 'data-act="nav" data-v="coach"') : ''),
     coachOn() ? 'On: the Coach card is on Home and the coach sets your targets.' : 'Off: the Coach card is hidden and sessions show plain next-set suggestions. Your goals are kept.')}
   ${group('Appearance', `<div class="srow"><span class="k">Theme</span><span class="v">${esc((THEMES.find(t => t.id === themePref()) || THEMES[0]).name)}</span></div><div class="sg-pad">${themePicker()}</div>` + link('Home widgets', 'data-act="edit-home"', plural(homeWidgets().length, 'widget')))}
+  ${iconGroup(group)}
   ${remGroup(row, link, group)}
   ${S.local ? group('Account',
     `<div class="srow"><span class="k">Offline<small class="keep">Everything is saved on this phone only</small></span><span class="off-dot" aria-hidden="true"></span></div>` +
@@ -1959,6 +1961,33 @@ function vPrefs() {
   <section class="sg rv"><div class="sg-b">${S.local ? link('Delete data on this phone', 'data-act="delete-local"', '', ' center danger') : link('Sign out', 'data-act="signout"', '', ' center') + link('Delete account', 'data-act="delete-account"', '', ' center danger')}</div></section>
   </div>`;
 }
+/* the Home Screen icon (phones): it matches the app by default (the theme, or with Auto the phone's light or dark
+   mode), or stays light or dark. Picking one never changes the app's theme. public/theme.js points the page's icon
+   links at it; a phone reads them when the app is added. */
+const ICON_CHOICES = [['app', 'Match the app'], ['light', 'Light'], ['dark', 'Dark']];
+const iconChoice = () => { try { const c = localStorage.getItem('sg-icon'); return c === 'light' || c === 'dark' ? c : 'app'; } catch { return 'app'; } };
+const iconVariant = () => (window.sgAppIcon && window.sgAppIcon()) || 'dark';
+function iconGroup(group) {
+  if (!coarse.matches) return '';
+  const c = iconChoice(), v = iconVariant(), ios = isIOS(), inApp = standalone();
+  const pick = ICON_CHOICES.map(([k, t]) => { const img = k === 'app' ? v : k;
+    return `<button class="ic-opt${c === k ? ' on' : ''}" data-act="app-icon" data-v="${k}" aria-pressed="${c === k}"><img src="/icons/${img}-180.png" alt="" width="60" height="60"><span>${t}</span></button>`; }).join('');
+  const note = ios && inApp ? 'iPhone keeps the icon Synergym had when it was added. To show this one, add Synergym again from Safari, then remove the old icon.'
+    : ios ? 'Add Synergym to your Home Screen from Safari’s Share menu and it gets this icon.'
+    : inApp ? 'Android swaps the installed icon by itself, usually within a day of opening the app, and may ask first. For an icon that follows light and dark mode, turn on Themed icons in your phone’s wallpaper and style settings.'
+    : 'Install Synergym and it gets this icon. For one that follows light and dark mode, turn on Themed icons in your phone’s wallpaper and style settings.';
+  const again = ios && inApp ? `<button class="srow link" data-act="icon-safari"><span class="k">Copy the link for Safari<small class="keep">Paste it in Safari, then Share › Add to Home Screen</small></span><span class="chev" aria-hidden="true"></span></button>` : '';
+  return group('App icon', `<div class="ic-pick" role="group" aria-label="App icon">${pick}</div>${again}`,
+    `${note} Your app’s theme stays as it is.${ios && inApp && S.local ? ' Your offline workouts stay in this copy of the app, so go online first: the new one picks them up when you log in.' : ios && inApp ? ' In the new one you log in again; everything in your account is there.' : ''}`);
+}
+async function iconSafari() {
+  const url = `${location.origin}/?icon=${iconVariant()}`;
+  try { await navigator.clipboard.writeText(url); toast('Link copied. Paste it in Safari, then Share › Add to Home Screen.'); }
+  catch { toast(url); }
+}
+/* the reminder days (bit 0 = Monday) in the order of the user's week */
+const weekOrder = () => Array.from({ length: 7 }, (_, k) => (weekStartDay() + 6 + k) % 7);
+const remFoot = () => `At ${timeText(S.profile.reminderTime)}, ${daysText(S.profile.reminderDays, weekOrder()).toLowerCase()}. Each one says what’s next for you, and stays quiet on days you’ve trained or rested and once your week’s target is met.`;
 /* reminders: phones only; they need an account (the server sends them) and a browser that can receive push */
 const localTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 function remGroup(row, link, group) {
@@ -1974,9 +2003,9 @@ function remGroup(row, link, group) {
   return group('Reminders',
     `<div class="srow"><span class="k">Workout reminders<small${fix ? ' class="keep"' : ''}>${fix || 'A short note on your training days'}</small></span><button class="toggle${on ? ' on' : ''}" data-act="rem-toggle" aria-pressed="${on}" aria-label="Workout reminders"></button></div>` +
     (on ? row('Time', `<input class="field rem-time" type="time" data-f="rem-time" value="${esc(d.reminderTime)}" aria-label="Reminder time">`) +
-      `<div class="srow rem-row"><span class="k">Days<small class="keep" id="rem-days-t">${daysText(d.reminderDays)}</small></span><span class="rem-days" role="group" aria-label="Reminder days">${DAY_LETTERS.map((l, i) => `<button class="${d.reminderDays & (1 << i) ? 'on' : ''}" data-act="rem-day" data-i="${i}" aria-pressed="${!!(d.reminderDays & (1 << i))}" aria-label="${DAY_NAMES[i]}">${l}</button>`).join('')}</span></div>` +
+      `<div class="srow rem-row"><span class="k">Days<small class="keep" id="rem-days-t">${daysText(d.reminderDays, weekOrder())}</small></span><span class="rem-days" role="group" aria-label="Reminder days">${weekOrder().map(i => `<button class="${d.reminderDays & (1 << i) ? 'on' : ''}" data-act="rem-day" data-i="${i}" aria-pressed="${!!(d.reminderDays & (1 << i))}" aria-label="${DAY_NAMES[i]}">${DAY_LETTERS[i]}</button>`).join('')}</span></div>` +
       link('Send a test reminder', 'data-act="rem-test"') : ''),
-    on ? `<span id="rem-foot">At ${timeText(d.reminderTime)}, ${daysText(d.reminderDays).toLowerCase()}. Each one says what’s next for you, and stays quiet on days you’ve trained or rested and once your week’s target is met.</span>` : '');
+    on ? `<span id="rem-foot">${remFoot()}</span>` : '');
 }
 async function reminderOn() {
   if (S.local) return toast('Go online to use reminders');
@@ -2087,7 +2116,7 @@ const HOW = `<div class="sh-h"><h3>How the numbers work</h3><button class="btn g
     <p><b>Coach: goals.</b> Your current max is the best estimate from your last three sessions of the lift (sets of 1–12 reps), or a one-rep max you saved in the last 6 weeks, eased off after 3+ weeks away. A realistic pace blends your own 12-week trend with typical gains for your level (about 1%, 0.5% or 0.2% a week for beginner, intermediate and advanced), at most twice the typical rate, slowing as the months go on. The likely date uses that pace; the range uses 1.5× and 0.6× of it. The plan runs 4-week blocks of three building weeks and a deload: Build (4×6 at 72.5–77.5% of your max) while the goal is over 10% away, Strength (5×3–4 at 80–85%) within 10%, Peak (heavy doubles and singles, then a test) within 3%.</p>
     <p><b>Linked sets.</b> Link two or more sets and Synergym names the structure: two exercises make a superset, three or more a giant set. On one exercise, falling weight is a drop set, the same weight a rest-pause set, anything else a pyramid. Rest starts after the last set of a group.</p>
     <p><b>Consistency.</b> Sessions per week against your weekly target, averaged over the last 8 full weeks (or since your first session). A week at or above target scores 100. The streak counts consecutive weeks on target. Rest days you mark on Home show on the heat map; on a rest day no session can be started until you undo it.</p>
-    <p><b>This week.</b> Sessions since Monday, volume (weight × reps) against last week, and the lifts whose heaviest set beats your best from the four weeks before.</p>
+    <p><b>This week.</b> Sessions since your week started (Monday unless you change it in Settings › Training), volume (weight × reps) against last week, and the lifts whose heaviest set beats your best from the four weeks before.</p>
     <p><b>Bodyweight.</b> One entry per day, from Settings or the Bodyweight widget. The change is your latest entry minus the first one in the range you’re viewing.</p>
     <p><b>Splits.</b> Home suggests the next training day of the split you used last, skipping rest days. Pick a different day from the Up next menu and the split carries on from there. A day marked “Same day as” the day before is a second session: it comes up next only on the day you trained the first, otherwise the split moves on to the next day.</p>
     <p><b>Done for today.</b> Once you finish a session with logged sets, Home shows today as completed and the next day waits for your next visit. Starting another session that day asks first, unless your split plans it as a second session. A day holds at most two sessions.</p>
@@ -2787,6 +2816,9 @@ const ACT = {
   'theme-flip': flipTheme,
   'd-theme': el => { const t = el.dataset.t; applyTheme(t); S.profile.theme = t; queue('p', 300); render(false); },
   'd-set': el => { S.profile[el.dataset.k] = el.dataset.v; queue('p', 300); render(false); },
+  'd-week': el => { S.profile.weekStart = +el.dataset.v; setWeekStart(S.profile.weekStart); queue('p', 300); render(false); },
+  'app-icon': el => { const v = el.dataset.v; try { v === 'app' ? localStorage.removeItem('sg-icon') : localStorage.setItem('sg-icon', v); } catch {} iconVariant(); buzz(); render(false); },
+  'icon-safari': () => iconSafari(),
   'd-step': el => { const k = el.dataset.k, d = +el.dataset.d, p = S.profile; p[k] = k === 'target' ? Math.min(7, Math.max(1, p.target + d)) : Math.min(600, Math.max(15, p.rest + d)); queue('p', 600); render(false); },
   'd-toggle': el => { const k = el.dataset.k; S.profile[k] = !S.profile[k]; queue('p', 300); render(false); },
   resend: async () => { if (!S.pendingEmail) return; const { error } = await sb.auth.resend({ type: 'signup', email: S.pendingEmail, options: { emailRedirectTo: location.origin } }); S.authMsg = error ? { text: authErr(error), err: true } : { text: 'Sent again. It can take a minute to arrive.', err: false }; render(false); },
@@ -2834,7 +2866,7 @@ document.addEventListener('input', e => {
     case 'notes': if (s) { s.notes = el.value.slice(0, 4000); queue('s:' + s.id, 1200); } break;
     case 'q': S.q = el.value; $('#hlist').innerHTML = historyList(); break;
     case 'exq': S.exq = el.value; $('#exlist').innerHTML = exList(); break;
-    case 'rem-time': if (/^\d{2}:\d{2}$/.test(el.value)) { S.profile.reminderTime = el.value; queue('p', 800); const f = $('#rem-foot'); if (f) f.textContent = `At ${timeText(el.value)}, ${daysText(S.profile.reminderDays).toLowerCase()}. Days you’ve already trained stay quiet.`; } break;
+    case 'rem-time': if (/^\d{2}:\d{2}$/.test(el.value)) { S.profile.reminderTime = el.value; queue('p', 800); const f = $('#rem-foot'); if (f) f.textContent = remFoot(); } break;
     case 'd-bw': { const v = parseFloat(el.value.replace(',', '.')), kg = unit() === 'lb' ? v / KG_LB : v; const ok = isFinite(kg) && kg >= 30 && kg <= 300; el.classList.toggle('bad', !ok && el.value.trim() !== ''); if (ok) { S.profile.bw = kg; S.profile.bwLog = logBw(S.profile.bwLog, kg); queue('p', 900); } break; }
     case 'pw': { const v = el.value; let sc = 0; if (v.length >= 8) sc++; if (v.length >= 12) sc++; if (/[a-z]/.test(v) && /[A-Z]/.test(v)) sc++; if (/\d/.test(v)) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
       const m = $('#pwm'), t = $('#pwt'); if (m) { m.style.width = (sc * 20) + '%'; m.style.background = sc <= 1 ? 'var(--bad)' : sc <= 3 ? 'var(--accent)' : 'var(--good)'; }
@@ -2983,7 +3015,7 @@ async function loadLocal() {
 function afterLoad() {
   S.loaded = true; flushAll();
   if (S.profile.theme) applyTheme(S.profile.theme);
-  const p = S.profile;
+  const p = S.profile; setWeekStart(p.weekStart);
   if (!S.local && p.reminderOn && localTz() && p.tz !== localTz()) { p.tz = localTz(); queue('p', 3000); }
   S.ob = { step: (S.local ? p.name : p.username) ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null, theme: themePref() };
 }

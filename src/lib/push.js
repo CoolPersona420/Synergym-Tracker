@@ -26,12 +26,13 @@ export async function unsubscribe() {
 /* the reminder days are a bitmask, Monday = bit 0 … Sunday = bit 6 */
 export const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-export const daysText = mask => {
+/* order: the bits in the order the user's week runs (Monday first unless set otherwise) */
+export const daysText = (mask, order = [0, 1, 2, 3, 4, 5, 6]) => {
   if ((mask & 127) === 127) return 'Every day';
   if ((mask & 127) === 31) return 'Weekdays';
   if ((mask & 127) === 96) return 'Weekends';
   if (!(mask & 127)) return 'No days';
-  return DAY_NAMES.filter((_, i) => mask & (1 << i)).map(d => d.slice(0, 3)).join(', ');
+  return order.filter(i => mask & (1 << i)).map(i => DAY_NAMES[i].slice(0, 3)).join(', ');
 };
 export const timeText = hhmm => {
   const [h, m] = String(hhmm || '18:00').split(':').map(Number);

@@ -49,6 +49,8 @@ alter table public.profiles add column if not exists split_archive jsonb check (
 alter table public.profiles add column if not exists lift_goals jsonb check (lift_goals is null or (jsonb_typeof(lift_goals) = 'array' and jsonb_array_length(lift_goals) <= 20));
 -- The coach (targets, today's call, deloads, split check, goals) can be switched off in Settings.
 alter table public.profiles add column if not exists coach_on boolean not null default true;
+-- The day weeks start on, as in JavaScript's Date.getDay(): 1 Monday (the default), 0 Sunday, 6 Saturday.
+alter table public.profiles add column if not exists week_start smallint not null default 1 check (week_start in (0, 1, 6));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
@@ -330,7 +332,8 @@ begin
       rest_sound = coalesce(r.rest_sound, t.rest_sound), bodyweight = coalesce(r.bodyweight, t.bodyweight),
       display_name = coalesce(r.display_name, t.display_name), experience = coalesce(r.experience, t.experience),
       goal = coalesce(r.goal, t.goal), theme = r.theme, muscles = r.muscles, widgets = r.widgets,
-      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive, lift_goals = r.lift_goals, coach_on = coalesce(r.coach_on, t.coach_on)
+      rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive, lift_goals = r.lift_goals, coach_on = coalesce(r.coach_on, t.coach_on),
+      week_start = coalesce(r.week_start, t.week_start)
     from jsonb_populate_record(null::public.profiles, p->'profile') r
     where t.id = uid;
   end if;
@@ -396,9 +399,9 @@ drop function if exists public.reminders_due(text);
 drop function if exists public.reminders_drop(text, text[]);
 
 -- Called by the reminders function every few minutes with the shared secret (kept in Vault).
--- Returns, for each device of each person due now, what's going on in their training: this week's sessions,
--- days since the last one (or since joining), days trained in a row, whether today is trained or marked as rest,
--- days since the last reminder sent, and the brief. The function writes the message, or stays quiet. Each person
+-- Returns, for each device of each person due now, what's going on in their training: this week's sessions (the
+-- week starts on their chosen day), days since the last one (or since joining), days trained in a row, whether
+-- today is trained or marked as rest, days since the last reminder sent, and the brief. The function writes the message, or stays quiet. Each person
 -- is marked as handled for their local day. The window is 45 minutes so a late run still sends; people without
 -- a device aren't marked, so a phone registered within the window still gets that day's reminder.
 create or replace function public.reminders_next(p_secret text)
@@ -421,12 +424,12 @@ begin
       and (p.reminder_sent_on is null or p.reminder_sent_on < (now() at time zone p.tz)::date)
   ), marked as (
     update public.profiles t set reminder_sent_on = d.lt::date from due d where t.id = d.id
-    returning t.id, d.tz, d.lt, t.display_name, t.weekly_target, t.rest_days, t.reminder_pushed_on, t.reminder_brief, t.created_at
+    returning t.id, d.tz, d.lt, t.display_name, t.weekly_target, t.week_start, t.rest_days, t.reminder_pushed_on, t.reminder_brief, t.created_at
   ), info as (
     select m.*,
       exists (select 1 from public.sessions s where s.user_id = m.id and (s.started_at at time zone m.tz)::date = m.lt::date) as trained,
       (select count(*) from public.sessions s where s.user_id = m.id and s.items <> '[]'::jsonb
-         and (s.started_at at time zone m.tz) >= date_trunc('week', m.lt))::int as n_wk,
+         and (s.started_at at time zone m.tz) >= m.lt::date - ((extract(dow from m.lt)::int - m.week_start + 7) % 7))::int as n_wk,
       (select count(*) from public.sessions s where s.user_id = m.id and s.items <> '[]'::jsonb)::int as n_all,
       (select max((s.started_at at time zone m.tz)::date) from public.sessions s where s.user_id = m.id and s.items <> '[]'::jsonb
          and (s.started_at at time zone m.tz)::date < m.lt::date) as last_day,

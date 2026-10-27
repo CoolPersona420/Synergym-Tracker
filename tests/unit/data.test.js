@@ -101,3 +101,19 @@ test('reminder days and times read naturally', async () => {
   assert.equal(timeText('00:30'), '12:30 am');
   assert.equal(timeText('12:00'), '12:00 pm');
 });
+
+test('the week can start on Monday, Sunday or Saturday', async () => {
+  const { weekStart, shiftWeek, setWeekStart } = await import('../../src/lib/util.js'), { daysText } = await import('../../src/lib/push.js');
+  const wed = new Date(2026, 9, 28, 15).getTime(), day = t => new Date(t).getDay();
+  assert.equal(day(weekStart(wed)), 1, 'Monday by default');
+  setWeekStart(0); assert.equal(day(weekStart(wed)), 0); assert.equal(new Date(weekStart(wed)).getDate(), 25);
+  /* Sunday itself starts its own week */
+  assert.equal(weekStart(new Date(2026, 10, 1, 9).getTime()), new Date(2026, 10, 1).getTime());
+  setWeekStart(6); assert.equal(new Date(weekStart(wed)).getDate(), 24); assert.equal(day(shiftWeek(wed, 1)), 6);
+  setWeekStart('nonsense'); assert.equal(day(weekStart(wed)), 1);
+  assert.equal(profFromDb({}).weekStart, 1);
+  assert.equal(profFromDb({ week_start: 0 }).weekStart, 0);
+  assert.equal(profFromDb({ week_start: 3 }).weekStart, 1);
+  assert.equal(profToDb({ ...DEFAULT_PROFILE, weekStart: 6 }).week_start, 6);
+  assert.equal(daysText(0b1000001, [6, 0, 1, 2, 3, 4, 5]), 'Sun, Mon', 'listed in the order the week runs');
+});
