@@ -123,7 +123,7 @@ function restoreOutbox() {
 }
 function queue(key, delay = 600) {
   if (!S.user) return;
-  if (!(key.startsWith('s:') && S.sessions.get(key.slice(2))?.endedAt == null)) DATA_REV++;
+  if (!(key.startsWith('s:') && S.sessions.get(key.slice(2))?.endedAt == null)) { DATA_REV++; briefSoon(); }
   OB.pending.add(key); persistOutbox();
   clearTimeout(OB.timers.get(key)); OB.timers.set(key, setTimeout(() => flush(key), delay)); syncUI();
 }
@@ -169,8 +169,10 @@ function saveError(key, e) {
 addEventListener('online', flushAll);
 addEventListener('pagehide', flushAll);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') flushAll();
-  else if (S.loaded && Date.now() - S.lastFetch > 120000 && !OB.pending.size && !OB.inflight.size) refresh();
+  if (document.visibilityState === 'hidden') { flushAll(); return; }
+  if (S.loaded && Date.now() - S.lastFetch > 120000 && !OB.pending.size && !OB.inflight.size) refresh();
+  /* back in the foreground (maybe on a new day): check this phone is still signed up, refresh the brief */
+  pushHeal(); briefSoon(1500);
 });
 const autosaveText = () => OB.pending.has('p') || OB.inflight.has('p') ? 'Saving…' : S.local ? (OB.failing ? 'Couldn’t save on this phone · retrying' : 'Saved on this phone') : OB.failing ? 'Saved on this device · syncs when online' : 'Changes save automatically';
 function syncUI() {
@@ -1964,13 +1966,17 @@ function remGroup(row, link, group) {
   const d = S.profile, note = t => group('Reminders', `<div class="srow"><span class="k">Workout reminders<small class="keep">${t}</small></span></div>`);
   if (S.local) return note('Reminders need an online account. Go online below to turn them on.');
   if (!pushSupported()) return note(isIOS() && !standalone() ? 'On iPhone, add Synergym to your Home Screen and open it from there to get reminders.' : 'This browser can’t show reminders. Try the app from your Home Screen.');
-  const blocked = Notification.permission === 'denied', on = d.reminderOn && !blocked;
+  /* on for the account, and allowed on this phone: a new phone, or one whose app was reinstalled, asks again */
+  const perm = Notification.permission, blocked = perm === 'denied', on = d.reminderOn && perm === 'granted';
+  /* a problem with this phone stays visible on phones, where row hints are otherwise hidden */
+  const fix = blocked ? 'Blocked. Allow notifications for Synergym in your phone’s settings.' : d.reminderOn && !on ? 'On for your account. Turn on to get them on this phone.'
+    : on && PUSH.ok === false ? 'This phone couldn’t sign up for notifications. Send a test to try again.' : '';
   return group('Reminders',
-    row('Workout reminders', `<button class="toggle${on ? ' on' : ''}" data-act="rem-toggle" aria-pressed="${on}" aria-label="Workout reminders"></button>`, blocked ? 'Blocked. Allow notifications for Synergym in your phone’s settings.' : 'A nudge on your training days') +
+    `<div class="srow"><span class="k">Workout reminders<small${fix ? ' class="keep"' : ''}>${fix || 'A short note on your training days'}</small></span><button class="toggle${on ? ' on' : ''}" data-act="rem-toggle" aria-pressed="${on}" aria-label="Workout reminders"></button></div>` +
     (on ? row('Time', `<input class="field rem-time" type="time" data-f="rem-time" value="${esc(d.reminderTime)}" aria-label="Reminder time">`) +
       `<div class="srow rem-row"><span class="k">Days<small class="keep" id="rem-days-t">${daysText(d.reminderDays)}</small></span><span class="rem-days" role="group" aria-label="Reminder days">${DAY_LETTERS.map((l, i) => `<button class="${d.reminderDays & (1 << i) ? 'on' : ''}" data-act="rem-day" data-i="${i}" aria-pressed="${!!(d.reminderDays & (1 << i))}" aria-label="${DAY_NAMES[i]}">${l}</button>`).join('')}</span></div>` +
       link('Send a test reminder', 'data-act="rem-test"') : ''),
-    on ? `<span id="rem-foot">At ${timeText(d.reminderTime)}, ${daysText(d.reminderDays).toLowerCase()}. Days you’ve already trained stay quiet.</span>` : '');
+    on ? `<span id="rem-foot">At ${timeText(d.reminderTime)}, ${daysText(d.reminderDays).toLowerCase()}. Each one says what’s next for you, and stays quiet on days you’ve trained or rested and once your week’s target is met.</span>` : '');
 }
 async function reminderOn() {
   if (S.local) return toast('Go online to use reminders');
@@ -1979,12 +1985,34 @@ async function reminderOn() {
   if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; } }
   if (perm !== 'granted') { render(false); return toast('Notifications are blocked. Allow them for Synergym in your phone’s settings.'); }
   try {
-    const sub = await pushSubscribe();
-    const { error } = await sb.rpc('save_push_subscription', { p_endpoint: sub.endpoint, p_p256dh: sub.keys.p256dh, p_auth: sub.keys.auth });
-    if (error) throw error;
+    await pushRegister();
   } catch (e) { console.error(e); return toast(e && /worker/.test(e.message || '') ? e.message : 'Couldn’t turn on reminders. Check your connection and try again.'); }
   S.profile.reminderOn = true; S.profile.tz = localTz(); queue('p', 0); buzz(); render(false);
+  briefSoon(0);
   toast(`Reminders on · ${timeText(S.profile.reminderTime)}`);
+}
+/* this phone's push subscription, saved for the signed-in account (a phone used by someone else before moves over) */
+async function pushRegister() {
+  const sub = await pushSubscribe();
+  const { error } = await sb.rpc('save_push_subscription', { p_endpoint: sub.endpoint, p_p256dh: sub.keys.p256dh, p_auth: sub.keys.auth });
+  if (error) throw error;
+  PUSH.ok = true; PUSH.at = Date.now();
+}
+/* A reminder reaches a phone only while its subscription is on the server, and phones lose theirs: iOS after an
+   update or a reinstall, any browser now and then, and signing out removes it. So whenever the app opens (and at
+   most every few hours while it stays open), a phone with reminders on and notifications allowed quietly checks
+   in again. Nothing is asked of the user. */
+const PUSH = { ok: null, at: 0 };
+async function pushHeal(force = false) {
+  if (S.local || !S.user || !sb || !S.loaded || !coarse.matches || !pushSupported() || !S.profile.reminderOn || Notification.permission !== 'granted') return false;
+  /* the account is open on another device: this one is about to sign itself out */
+  if (S.profile.activeSession && DEV.sid && S.profile.activeSession !== DEV.sid) return false;
+  if (!force && Date.now() - PUSH.at < 4 * 36e5) return PUSH.ok;
+  PUSH.at = Date.now();
+  const was = PUSH.ok;
+  try { await pushRegister(); } catch (e) { console.error('Push registration failed', e); PUSH.ok = false; }
+  if (was !== PUSH.ok && S.view === 'prefs') render(false);
+  return PUSH.ok;
 }
 /* stop reminders on this device (and for the account, which uses one device at a time) */
 async function reminderOff() {
@@ -1996,10 +2024,55 @@ async function reminderOff() {
 async function reminderTest() {
   const { data } = await sb.auth.getSession(), t = data.session && data.session.access_token;
   if (!t) return toast('Log in again to send a test');
+  /* make sure this phone is signed up first: that's usually why a test doesn't arrive */
+  if (!(await pushHeal(true))) return toast('This phone couldn’t sign up for notifications. Check your connection, then try again.');
   try {
-    const r = await fetch('/api/reminders', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true }) });
-    toast(r.ok ? 'Test sent. It should arrive in a few seconds.' : r.status === 404 ? 'This phone isn’t registered. Turn reminders off and on again.' : 'Couldn’t send a test right now.');
+    const r = await fetch('/api/reminders', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true, ctx: reminderCtx() }) });
+    toast(r.ok ? 'Test sent: it says what a reminder would say now. It should arrive in a few seconds.' : r.status === 404 ? 'This phone isn’t registered. Turn reminders off and on again.' : 'Couldn’t send a test right now.');
   } catch { toast('Couldn’t reach the server'); }
+}
+
+/* ---------- what a reminder can say ---------- */
+/* The server writes each reminder (api/_nudge.js) but can't run the coach, so the app works out a short brief and
+   saves it on the profile when it changes: the next split day and its first target, a lighter week or a week off,
+   the goal nearest to done, a record in the last session, and the coach's call with the day it's for. */
+function reminderBrief() {
+  const a = coachOn() ? coach() : null, nx = nextSplitDay(), day = nx && nx.sp.days[nx.i];
+  const tg = day ? dayTargets(day).filter(t => t.g) : [], f = tg[0], b = { coach: !!a };
+  if (day) { b.day = (day.type || '').trim().slice(0, 30) || dayLabel(nx.sp.days, nx.i); b.n = day.exercises.length; }
+  if (f) { b.lift = f.e.name.slice(0, 40); b.tgt = f.e.kind === 'bw' && !f.g.next.w ? `${f.g.next.r} reps` : `${fmtW(f.g.next.w)} ${unit()} × ${f.g.next.r}`; }
+  if (a) {
+    const r = a.next; b.call = r.call; b.for = dayKey(Date.now() + (r.when === 'tomorrow' ? 864e5 : 0));
+    if (a.deload.status === 'now') b.deload = a.deload.kind === 'week-off' ? 'off' : 'deload';
+    const g = a.goals.filter(x => x.status !== 'no-data' && x.cur > 0).sort((x, y) => y.progress - x.progress)[0], ex = g && exOf(g.goal.exId);
+    if (g && ex) b.goal = { lift: ex.name.slice(0, 40), kg: `${fmtW(g.goal.kg)} ${unit()}`, left: `${fmtW(Math.max(0, g.goal.kg - g.cur))} ${unit()}`, pct: Math.round(g.progress * 100), ready: g.status === 'ready',
+      wk: g.plan && g.plan.week ? `${g.plan.week.sets}×${g.plan.week.reps} at ${fmtW(g.plan.week.kg)} ${unit()}` : null };
+  }
+  const last = sorted().find(s => s.endedAt && s.items.length);
+  if (last && S.A && Date.now() - last.startedAt < 4 * 864e5) { const pr = bestPerSession(S.A.rec.events.filter(e => e.sid === last.id))[0], ex = pr && exOf(pr.exId); if (ex) b.pr = ex.name.slice(0, 40); }
+  return b;
+}
+/* what the server would know about this week, for a test reminder that reads like a real one */
+function reminderCtx() {
+  const list = sorted().filter(s => s.items.length), now = Date.now(), today = dayKey(now), days = new Set(list.map(s => dayKey(s.startedAt)));
+  const mid = t => { const d = new Date(t); d.setHours(12, 0, 0, 0); return d.getTime(); };
+  const prev = list.find(s => dayKey(s.startedAt) !== today);
+  let streak = 0; while (streak < 8 && days.has(dayKey(now - (streak + 1) * 864e5))) streak++;
+  return { name: S.profile.name || '', day: today, wk: list.filter(s => s.startedAt >= weekStart(now)).length, target: S.profile.target || 3,
+    gap: prev ? Math.round((mid(now) - mid(prev.startedAt)) / 864e5) : null, streak, total: list.length, brief: reminderBrief() };
+}
+/* saved a few seconds after a change, and only when it differs from what was last saved */
+const BRIEF = { t: 0, last: null };
+function briefSoon(ms = 5000) {
+  if (S.local || !S.user || !sb || !S.profile.reminderOn) return;
+  clearTimeout(BRIEF.t); BRIEF.t = setTimeout(sendBrief, ms);
+}
+async function sendBrief() {
+  if (S.local || !S.user || !sb || !S.loaded || !S.profile.reminderOn) return;
+  let b; try { b = reminderBrief(); } catch (e) { return console.error('Reminder brief failed', e); }
+  const j = JSON.stringify(b), uid = S.user.id; if (BRIEF.last === uid + j) return;
+  const { error } = await sb.from('profiles').update({ reminder_brief: b }).eq('id', uid);
+  if (!error) BRIEF.last = uid + j;
 }
 
 const HOW = `<div class="sh-h"><h3>How the numbers work</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="how">
@@ -2591,7 +2664,7 @@ const ACT = {
   signout: signOut,
   'retry-load': () => S.local ? startLocal() : startApp(),
   tour: () => openTour(),
-  'rem-toggle': () => S.profile.reminderOn && Notification.permission !== 'denied' ? reminderOff().then(() => { render(false); toast('Reminders off'); }) : reminderOn(),
+  'rem-toggle': () => S.profile.reminderOn && Notification.permission === 'granted' ? reminderOff().then(() => { render(false); toast('Reminders off'); }) : reminderOn(),
   'rem-day': el => { const m = S.profile.reminderDays ^ (1 << +el.dataset.i); if (!(m & 127)) return toast('Keep at least one day'); S.profile.reminderDays = m; queue('p', 500); buzz(); render(false); },
   'rem-test': () => reminderTest(),
   'guide-dev': el => { S.guideDev = el.dataset.v; render(false); },
@@ -3095,7 +3168,8 @@ async function startApp() {
   try { await loadAll(); }
   catch (e) { console.error(e); S.loadError = navigator.onLine ? (e.message || 'The server didn’t respond.') : 'You’re offline. Connect and try again.'; return render(true); }
   afterLoad();
-  if (S.claim) { S.claim = false; claimDevice(); } else checkDevice(S.profile.activeSession);
+  if (S.claim) { S.claim = false; claimDevice().then(() => pushHeal(true)); } else { checkDevice(S.profile.activeSession); pushHeal(true); }
+  briefSoon(2000);
   const t = S.profile.onboarded && pendingPublic();
   if (t) return go('public', t, { replace: true });
   route(true);
@@ -3104,6 +3178,9 @@ function boot() {
   setSplashHooks({ render, playEnter });
   /* the service worker lets the app open without a connection and receives reminders */
   if ('serviceWorker' in navigator && import.meta.env.PROD) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').then(r => { if (r && r.active) r.active.postMessage('refresh-shell'); }).catch(() => {}));
+  /* a reminder tapped while the app is open: go to the page it's about */
+  navigator.serviceWorker?.addEventListener?.('message', e => { const p = e.data && e.data.open; if (typeof p === 'string' && p.startsWith('/') && p !== location.pathname && S.loaded) { depth++; history.pushState({ d: depth, from: S.view }, '', p); route(true); } });
+  navigator.serviceWorker?.startMessages?.();
   document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);

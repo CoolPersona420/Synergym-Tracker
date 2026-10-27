@@ -10,6 +10,31 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.3-alpha · 27 October 2026
+
+**Reminders that know your training, and that keep arriving**
+
+- **Each reminder is written for you, from your own log,** in wording that changes from day to day. Usually
+  it says what's next ("Up next: Lower · Back Squat 137.5 kg × 5 to start, then 4 more exercises"). Other days
+  it's a first session, coming back after time away (without guilt, and with a note that targets start a
+  little lighter), a goal ready to test, a lighter week, an easy day the coach suggests, one more session to
+  reach your weekly target, or last session's record. Tapping it opens the page it's about: Home, the Coach,
+  Goals or Recovery.
+- **It knows when to stay quiet:** on a day you've trained or marked as rest, when the coach calls rest or a
+  week off, and once your week's target is met. After time away it comes less often (every 3 days after 10
+  days, weekly after 3 weeks, fortnightly after 2 months).
+- **Fixed: reminders could stop arriving while Settings still showed them on.** Phones lose their push
+  registration (iOS after an update or a reinstall, and signing out removes it), and nothing signed them up
+  again. Now each time the app opens, a phone with reminders on and notifications allowed signs up again on
+  its own. A phone that hasn't allowed notifications yet says "On for your account. Turn on to get them on this
+  phone", and a problem with this phone stays visible in Settings.
+- **Send a test reminder** now sends what a real one would say right now, and makes sure this phone is signed
+  up first.
+- Behind the scenes: the app saves a short brief for the server (`profiles.reminder_brief`); the server's new
+  `reminders_next` and `reminders_done` replace `reminders_due` and `reminders_drop`; reminders are only
+  counted as handled for people with a phone signed up, so a phone that signs up within the 45-minute window
+  still gets that day's reminder.
+
 ## 0.1.2-alpha · 27 October 2026
 
 **The Coach card and a full-screen Coach**

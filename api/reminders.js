@@ -1,11 +1,14 @@
 /* Sends workout reminders as web push.
    - The database pings this every 5 minutes (pg_cron + pg_net) with the shared secret. It then asks the
-     database which devices are due (reminders_due), sends to each, and removes devices the push service
-     says no longer exist (reminders_drop).
-   - A signed-in user can ask for a test reminder with their own access token; it goes to their devices only.
+     database who is due and what's going on in their training (reminders_next), writes each person's message
+     (or stays quiet: see _nudge.js), sends it to their devices, and reports back who was reached and which
+     devices the push service says no longer exist (reminders_done).
+   - A signed-in user can ask for a test reminder with their own access token; it goes to their devices only,
+     and says what a reminder would say right now.
    Environment: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, REMINDER_SECRET (all set in Vercel, never in the repo). */
 import crypto from 'node:crypto';
 import webpush from 'web-push';
+import { compose } from './_nudge.js';
 
 const SB_URL = process.env.SUPABASE_URL || 'https://dqpxqinejgovkhwvsqem.supabase.co';
 const SB_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_jTBU_Y-1T3ouNej7YUsCIQ_E5ceELbu';
@@ -51,20 +54,27 @@ export default async function handler(req, res) {
     const r = await sb('/rest/v1/push_subscriptions?select=endpoint,p256dh,auth', { token });
     const subs = r.ok ? await r.json() : [];
     if (!subs.length) return res.status(404).json({ error: 'No devices to remind' });
-    const out = await sendAll(subs, { title: 'Reminders are on', body: 'This is how your workout reminder will look.', tag: 'reminder-test', url: '/' });
+    /* the app sends what it knows (this week, the brief); it only shapes the wording of the user's own test */
+    const c = body.ctx && typeof body.ctx === 'object' ? body.ctx : {};
+    const m = compose({ day: new Date().toISOString().slice(0, 10), ...c, uid: 'test' }, { force: true });
+    const out = await sendAll(subs, { ...m, tag: 'reminder-test' });
     return res.status(200).json({ sent: out.sent });
   }
 
   /* the scheduled run */
   if (!sameSecret(token, REMINDER_SECRET)) return res.status(401).json({ error: 'Forbidden' });
-  const r = await sb('/rest/v1/rpc/reminders_due', { body: { p_secret: REMINDER_SECRET } });
-  if (!r.ok) { console.error('reminders_due failed', r.status, await r.text()); return res.status(502).json({ error: 'Database error' }); }
-  const due = await r.json();
-  let sent = 0; const gone = [];
-  /* each row carries its own message, so send them one group at a time */
-  const groups = new Map();
-  for (const d of due) { const k = d.title + '\n' + d.body; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); }
-  for (const [k, subs] of groups) { const [title, text] = k.split('\n'); const out = await sendAll(subs, { title, body: text, tag: 'reminder', url: '/' }); sent += out.sent; gone.push(...out.gone); }
-  if (gone.length) await sb('/rest/v1/rpc/reminders_drop', { body: { p_secret: REMINDER_SECRET, p_endpoints: gone } });
-  return res.status(200).json({ due: due.length, sent, dropped: gone.length });
+  const r = await sb('/rest/v1/rpc/reminders_next', { body: { p_secret: REMINDER_SECRET } });
+  if (!r.ok) { console.error('reminders_next failed', r.status, await r.text()); return res.status(502).json({ error: 'Database error' }); }
+  /* one row per device; everyone's devices get the same message */
+  const people = new Map();
+  for (const d of await r.json()) { if (!people.has(d.uid)) people.set(d.uid, { ctx: d, subs: [] }); people.get(d.uid).subs.push(d); }
+  let sent = 0, quiet = 0; const gone = [], reached = [];
+  await Promise.all([...people].map(async ([uid, p]) => {
+    const m = compose(p.ctx);
+    if (!m) { quiet++; return; }
+    const out = await sendAll(p.subs, m);
+    sent += out.sent; gone.push(...out.gone); if (out.sent) reached.push(uid);
+  }));
+  if (reached.length || gone.length) await sb('/rest/v1/rpc/reminders_done', { body: { p_secret: REMINDER_SECRET, p_sent: reached, p_gone: gone } });
+  return res.status(200).json({ due: people.size, sent, quiet, dropped: gone.length });
 }

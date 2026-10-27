@@ -384,55 +384,77 @@ begin
   insert into public.push_subscriptions (endpoint, user_id, p256dh, auth) values (p_endpoint, auth.uid(), p_p256dh, p_auth);
 end $$;
 
+-- What the next reminder can say, worked out by the app (it runs the coach) and saved when it changes: the next
+-- split day and its first target, a lighter week, the nearest goal, last session's record, and the coach's call
+-- for a given day. Shape checked by api/_nudge.js. reminder_pushed_on: the last day a reminder was actually sent,
+-- so reminders can thin out after time away.
+alter table public.profiles add column if not exists reminder_brief jsonb check (reminder_brief is null or (jsonb_typeof(reminder_brief) = 'object' and pg_column_size(reminder_brief) < 4000));
+alter table public.profiles add column if not exists reminder_pushed_on date;
+
+-- Replaced by reminders_next and reminders_done
+drop function if exists public.reminders_due(text);
+drop function if exists public.reminders_drop(text, text[]);
+
 -- Called by the reminders function every few minutes with the shared secret (kept in Vault).
--- Returns the devices to remind now and marks those users as reminded for their local day. Users who
--- already trained today are marked but not reminded. The window is 45 minutes so a late run still sends.
-create or replace function public.reminders_due(p_secret text)
-returns table (endpoint text, p256dh text, auth text, title text, body text)
+-- Returns, for each device of each person due now, what's going on in their training: this week's sessions,
+-- days since the last one (or since joining), days trained in a row, whether today is trained or marked as rest,
+-- days since the last reminder sent, and the brief. The function writes the message, or stays quiet. Each person
+-- is marked as handled for their local day. The window is 45 minutes so a late run still sends; people without
+-- a device aren't marked, so a phone registered within the window still gets that day's reminder.
+create or replace function public.reminders_next(p_secret text)
+returns table (endpoint text, p256dh text, auth text, uid uuid, name text, day date, dow int, wk int, target int,
+  gap int, streak int, total int, since int, rest boolean, today boolean, brief jsonb)
 language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
 begin
   if p_secret is null or not exists (select 1 from vault.decrypted_secrets where name = 'reminder_secret' and decrypted_secret = p_secret) then
     raise exception 'forbidden';
   end if;
   return query
   with due as (
-    select p.id, p.tz, coalesce(p.weekly_target, 3) as target, (now() at time zone p.tz) as lt
+    select p.id, p.tz, (now() at time zone p.tz) as lt
     from public.profiles p
     where p.reminder_on and p.tz is not null
+      and exists (select 1 from public.push_subscriptions x where x.user_id = p.id)
       and (p.reminder_days & (1 << (extract(isodow from now() at time zone p.tz)::int - 1))) <> 0
       and ((extract(epoch from (now() at time zone p.tz)::time) - extract(epoch from p.reminder_time))::int + 86400) % 86400 < 2700
       and (p.reminder_sent_on is null or p.reminder_sent_on < (now() at time zone p.tz)::date)
   ), marked as (
     update public.profiles t set reminder_sent_on = d.lt::date from due d where t.id = d.id
-    returning t.id, d.tz, d.target, d.lt
+    returning t.id, d.tz, d.lt, t.display_name, t.weekly_target, t.rest_days, t.reminder_pushed_on, t.reminder_brief, t.created_at
   ), info as (
-    select m.id, m.target,
+    select m.*,
       exists (select 1 from public.sessions s where s.user_id = m.id and (s.started_at at time zone m.tz)::date = m.lt::date) as trained,
       (select count(*) from public.sessions s where s.user_id = m.id and s.items <> '[]'::jsonb
-         and (s.started_at at time zone m.tz) >= date_trunc('week', m.lt)) as wk
+         and (s.started_at at time zone m.tz) >= date_trunc('week', m.lt))::int as n_wk,
+      (select count(*) from public.sessions s where s.user_id = m.id and s.items <> '[]'::jsonb)::int as n_all,
+      (select max((s.started_at at time zone m.tz)::date) from public.sessions s where s.user_id = m.id and s.items <> '[]'::jsonb
+         and (s.started_at at time zone m.tz)::date < m.lt::date) as last_day,
+      (select coalesce(min(g), 9) - 1 from generate_series(1, 8) g where not exists (select 1 from public.sessions s
+         where s.user_id = m.id and s.items <> '[]'::jsonb and (s.started_at at time zone m.tz)::date = m.lt::date - g))::int as run
     from marked m
   )
-  select ps.endpoint, ps.p256dh, ps.auth, 'Time to train'::text,
-    case when i.wk = 0 then 'Start your week strong. Your first session is waiting.'
-         when i.wk < i.target then i.wk || ' of ' || i.target || ' sessions done this week. Keep it going.'
-         else 'Weekly target hit. Up for a bonus session?' end
-  from info i join public.push_subscriptions ps on ps.user_id = i.id
-  where not i.trained;
+  select ps.endpoint, ps.p256dh, ps.auth, i.id, i.display_name, i.lt::date, extract(isodow from i.lt)::int, i.n_wk,
+    coalesce(i.weekly_target, 3), (i.lt::date - coalesce(i.last_day, (i.created_at at time zone i.tz)::date))::int, i.run, i.n_all,
+    (i.lt::date - i.reminder_pushed_on)::int, coalesce(i.rest_days ? to_char(i.lt, 'YYYY-FMMM-FMDD'), false), i.trained, i.reminder_brief
+  from info i join public.push_subscriptions ps on ps.user_id = i.id;
 end $$;
 
--- Devices the push service says are gone (uninstalled, permission revoked)
-create or replace function public.reminders_drop(p_secret text, p_endpoints text[])
+-- After a run: who was reached (for thinning out after time away), and devices the push service says are gone
+-- (uninstalled, permission revoked)
+create or replace function public.reminders_done(p_secret text, p_sent uuid[], p_gone text[])
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if p_secret is null or not exists (select 1 from vault.decrypted_secrets where name = 'reminder_secret' and decrypted_secret = p_secret) then
     raise exception 'forbidden';
   end if;
-  delete from public.push_subscriptions where endpoint = any(p_endpoints);
+  update public.profiles set reminder_pushed_on = (now() at time zone tz)::date where id = any(coalesce(p_sent, '{}')) and tz is not null;
+  delete from public.push_subscriptions where endpoint = any(coalesce(p_gone, '{}'));
 end $$;
 
-revoke execute on function public.save_push_subscription(text, text, text), public.reminders_due(text), public.reminders_drop(text, text[]) from public, anon, authenticated;
+revoke execute on function public.save_push_subscription(text, text, text), public.reminders_next(text), public.reminders_done(text, uuid[], text[]) from public, anon, authenticated;
 grant execute on function public.save_push_subscription(text, text, text) to authenticated;
-grant execute on function public.reminders_due(text), public.reminders_drop(text, text[]) to anon;
+grant execute on function public.reminders_next(text), public.reminders_done(text, uuid[], text[]) to anon;
 
 -- ---------------------------------------------------------------- starter exercise list
 

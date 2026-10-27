@@ -86,7 +86,7 @@ The coach (`src/lib/coach.js`) shipped in v0.0.8-alpha. These make it smarter, i
 | 1.5.5 | **More goal kinds:** reps at a weight (10 pull-ups), bodyweight targets, weekly volume, a total (squat + bench + deadlift). | Not every goal is a one-rep max. | Lift goals. | Planned |
 | 1.5.6 | **Variations when a lift stalls:** suggest a paused, tempo or close-grip version for a 4-week block (with 1.4.2 swaps). | The split check can say "change" but not yet to what. | Split check, exercise library. | Planned |
 | 1.5.7 | **Test-day helper:** warm-up ramp and attempt selection (about 90%, 95%, then the goal) with plates shown (with 1.2.2). | Testing a max well is a skill; this removes the guesswork. | Plate calculator, goal "ready" state. | Planned |
-| 1.5.8 | **Coach nudges:** a push reminder on deload weeks, planned rest days and when a milestone is due. | The advice reaches you without opening the app. | Workout reminders (web push). | Planned |
+| 1.5.8 | **Coach nudges:** a push reminder on deload weeks, planned rest days and when a milestone is due. | The advice reaches you without opening the app. | Workout reminders (web push). Since v0.1.3-alpha they follow the coach: a lighter week, an easy day, a goal ready to test, quiet when it calls rest. | In progress (the milestone nudge is still to do) |
 | 1.5.9 | **Run the coach off the main thread** (a Web Worker) if logs grow far past today's size. | Today it takes milliseconds; this keeps it that way at any size. | Cached coach reading. | Planned |
 
 ## Phase 2

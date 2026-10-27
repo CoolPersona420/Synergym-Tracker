@@ -22,24 +22,44 @@ test('the scheduled run needs the secret', async () => {
   assert.equal(r2.code, 405);
 });
 
-test('the scheduled run sends each due device its message and drops devices that are gone', async () => {
+const ctx = { name: 'Alex', day: '2026-10-27', dow: 2, wk: 1, target: 4, gap: 2, streak: 0, total: 30, since: 1, rest: false, today: false,
+  brief: { coach: true, day: 'Lower', n: 5, lift: 'Back Squat', tgt: '137.5 kg × 5' } };
+test('the scheduled run writes each person’s message, stays quiet when it should, and reports back', async () => {
   globalThis.fetch = async (url, opts) => {
     calls.push({ url, body: opts.body && JSON.parse(opts.body) });
-    if (url.endsWith('/rpc/reminders_due')) return respond(200, [
-      { endpoint: 'e1', p256dh: 'k', auth: 'a', title: 'Time to train', body: '1 of 3 sessions done this week. Keep it going.' },
-      { endpoint: 'e2', p256dh: 'k', auth: 'a', title: 'Time to train', body: 'Start your week strong. Your first session is waiting.' },
-      { endpoint: 'gone', p256dh: 'k', auth: 'a', title: 'Time to train', body: 'Start your week strong. Your first session is waiting.' }
+    if (url.endsWith('/rpc/reminders_next')) return respond(200, [
+      /* two devices for one person: both get the same message */
+      { endpoint: 'e1', p256dh: 'k', auth: 'a', uid: 'u1', ...ctx },
+      { endpoint: 'e2', p256dh: 'k', auth: 'a', uid: 'u1', ...ctx },
+      /* trained today: quiet */
+      { endpoint: 'e3', p256dh: 'k', auth: 'a', uid: 'u2', ...ctx, today: true },
+      /* a device the push service says is gone */
+      { endpoint: 'gone', p256dh: 'k', auth: 'a', uid: 'u3', ...ctx, brief: null }
     ]);
-    if (url.endsWith('/rpc/reminders_drop')) return respond(204, null);
+    if (url.endsWith('/rpc/reminders_done')) return respond(204, null);
     throw new Error('unexpected ' + url);
   };
   pushFails.add('gone');
   const r = res(); await handler({ method: 'POST', headers: { authorization: 'Bearer ' + SECRET }, body: {} }, r);
   assert.equal(r.code, 200);
-  assert.deepEqual(r.body, { due: 3, sent: 2, dropped: 1 });
-  assert.equal(sent.find(s => s.ep === 'e1').msg.body, '1 of 3 sessions done this week. Keep it going.');
-  const drop = calls.find(c => c.url.endsWith('/rpc/reminders_drop'));
-  assert.deepEqual(drop.body, { p_secret: SECRET, p_endpoints: ['gone'] });
+  assert.deepEqual(r.body, { due: 3, sent: 2, quiet: 1, dropped: 1 });
+  const m1 = sent.find(s => s.ep === 'e1').msg, m2 = sent.find(s => s.ep === 'e2').msg;
+  assert.deepEqual(m1, m2);
+  assert.match(m1.title + ' ' + m1.body, /Lower/); assert.match(m1.body, /Back Squat 137\.5 kg × 5/);
+  assert.ok(!sent.some(s => s.ep === 'e3'));
+  const done = calls.find(c => c.url.endsWith('/rpc/reminders_done'));
+  assert.deepEqual(done.body, { p_secret: SECRET, p_sent: ['u1'], p_gone: ['gone'] });
+});
+
+test('a quiet run reports nothing back', async () => {
+  globalThis.fetch = async (url, opts) => {
+    calls.push({ url, body: opts.body && JSON.parse(opts.body) });
+    if (url.endsWith('/rpc/reminders_next')) return respond(200, [{ endpoint: 'e1', p256dh: 'k', auth: 'a', uid: 'u1', ...ctx, rest: true }]);
+    throw new Error('unexpected ' + url);
+  };
+  const r = res(); await handler({ method: 'POST', headers: { authorization: 'Bearer ' + SECRET }, body: {} }, r);
+  assert.deepEqual(r.body, { due: 1, sent: 0, quiet: 1, dropped: 0 });
+  assert.equal(sent.length, 0); assert.equal(calls.length, 1);
 });
 
 test('a test reminder goes only to the signed-in user’s own devices', async () => {
@@ -49,8 +69,10 @@ test('a test reminder goes only to the signed-in user’s own devices', async ()
     if (url.includes('/rest/v1/push_subscriptions')) return respond(200, [{ endpoint: 'mine', p256dh: 'k', auth: 'a' }]);
     throw new Error('unexpected ' + url);
   };
-  const r = res(); await handler({ method: 'POST', headers: { authorization: 'Bearer user-token' }, body: { test: true } }, r);
+  const r = res(); await handler({ method: 'POST', headers: { authorization: 'Bearer user-token' }, body: { test: true, ctx: { ...ctx, today: true } } }, r);
   assert.equal(r.code, 200); assert.equal(sent.length, 1); assert.equal(sent[0].ep, 'mine');
+  /* it reads like a real reminder, even on a day a real one would stay quiet */
+  assert.match(sent[0].msg.body, /Back Squat/); assert.equal(sent[0].msg.tag, 'reminder-test');
 });
 
 test('a test reminder needs a valid sign-in', async () => {

@@ -81,12 +81,14 @@ self.addEventListener('push', e => {
     tag: d.tag || 'reminder', renotify: false, data: { url: d.url || '/' }
   }));
 });
+/* tapping a reminder opens the page it's about (Home, the Coach, a goal). An open app is brought forward and asked
+   to go there itself, which keeps its state and works where a window can't be navigated from here (iOS). */
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const target = new URL((e.notification.data && e.notification.data.url) || '/', location.origin).href;
+  const url = new URL((e.notification.data && e.notification.data.url) || '/', location.origin);
   e.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const w of wins) if (new URL(w.url).origin === location.origin) { await w.focus(); if ('navigate' in w) return w.navigate(target).catch(() => {}); return; }
-    return self.clients.openWindow(target);
+    for (const w of wins) if (new URL(w.url).origin === location.origin) { await w.focus(); w.postMessage({ open: url.pathname }); return; }
+    return self.clients.openWindow(url.href);
   })());
 });
