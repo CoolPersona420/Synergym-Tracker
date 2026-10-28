@@ -5,7 +5,7 @@ import { suggestNext } from './lib/progress.js';
 import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
 import { DEFAULT_EXERCISES } from './data/exercises.js';
-import { reduced, LITE } from './lib/env.js';
+import { reduced, LITE, isIOS } from './lib/env.js';
 import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays } from './lib/sanitize.js';
 import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
@@ -23,7 +23,6 @@ import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
 import { trackErrors, startAnalytics } from './lib/telemetry.js';
-import { pushSupported, isIOS, subscribe as pushSubscribe, unsubscribe as pushUnsubscribe, DAY_LETTERS, DAY_NAMES, daysText, timeText } from './lib/push.js';
 
 /* ================= config ================= */
 // The project URL and publishable key are public by design (every browser receives them; Row Level
@@ -123,7 +122,7 @@ function restoreOutbox() {
 }
 function queue(key, delay = 600) {
   if (!S.user) return;
-  if (!(key.startsWith('s:') && S.sessions.get(key.slice(2))?.endedAt == null)) { DATA_REV++; briefSoon(); }
+  if (!(key.startsWith('s:') && S.sessions.get(key.slice(2))?.endedAt == null)) DATA_REV++;
   OB.pending.add(key); persistOutbox();
   clearTimeout(OB.timers.get(key)); OB.timers.set(key, setTimeout(() => flush(key), delay)); syncUI();
 }
@@ -169,10 +168,8 @@ function saveError(key, e) {
 addEventListener('online', flushAll);
 addEventListener('pagehide', flushAll);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') { flushAll(); return; }
-  if (S.loaded && Date.now() - S.lastFetch > 120000 && !OB.pending.size && !OB.inflight.size) refresh();
-  /* back in the foreground (maybe on a new day): check this phone is still signed up, refresh the brief */
-  pushHeal(); briefSoon(1500);
+  if (document.visibilityState === 'hidden') flushAll();
+  else if (S.loaded && Date.now() - S.lastFetch > 120000 && !OB.pending.size && !OB.inflight.size) refresh();
 });
 const autosaveText = () => OB.pending.has('p') || OB.inflight.has('p') ? 'Saving…' : S.local ? (OB.failing ? 'Couldn’t save on this phone · retrying' : 'Saved on this phone') : OB.failing ? 'Saved on this device · syncs when online' : 'Changes save automatically';
 function syncUI() {
@@ -1944,7 +1941,6 @@ function vPrefs() {
     (coachOn() ? link('Open the coach', 'data-act="nav" data-v="coach"') : ''),
     coachOn() ? 'On: the Coach card is on Home and the coach sets your targets.' : 'Off: the Coach card is hidden and sessions show plain next-set suggestions. Your goals are kept.')}
   ${group('Appearance', `<div class="srow"><span class="k">Theme</span><span class="v">${esc((THEMES.find(t => t.id === themePref()) || THEMES[0]).name)}</span></div><div class="sg-pad">${themePicker()}</div>` + link('Home widgets', 'data-act="edit-home"', plural(homeWidgets().length, 'widget')))}
-  ${remGroup(row, link, group)}
   ${S.local ? group('Account',
     `<div class="srow"><span class="k">Offline<small class="keep">Everything is saved on this phone only</small></span><span class="off-dot" aria-hidden="true"></span></div>` +
     link('Go online', 'data-act="go-online"', 'Sync to an account'),
@@ -1963,127 +1959,6 @@ function vPrefs() {
   <section class="sg rv"><div class="sg-b">${S.local ? link('Delete data on this phone', 'data-act="delete-local"', '', ' center danger') : link('Sign out', 'data-act="signout"', '', ' center') + link('Delete account', 'data-act="delete-account"', '', ' center danger')}</div></section>
   </div>`;
 }
-/* the reminder days (bit 0 = Monday) in the order of the user's week */
-const weekOrder = () => Array.from({ length: 7 }, (_, k) => (weekStartDay() + 6 + k) % 7);
-const remFoot = () => `At ${timeText(S.profile.reminderTime)}, ${daysText(S.profile.reminderDays, weekOrder()).toLowerCase()}. Each one is about a session to finish or your next session, and stays quiet on days you’ve trained or rested and once your week’s target is met.`;
-/* reminders: phones only; they need an account (the server sends them) and a browser that can receive push */
-const localTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
-function remGroup(row, link, group) {
-  if (!coarse.matches) return '';
-  const d = S.profile, note = t => group('Reminders', `<div class="srow"><span class="k">Workout reminders<small class="keep">${t}</small></span></div>`);
-  if (S.local) return note('Reminders need an online account. Go online below to turn them on.');
-  if (!pushSupported()) return note(isIOS() && !standalone() ? 'On iPhone, add Synergym to your Home Screen and open it from there to get reminders.' : 'This browser can’t show reminders. Try the app from your Home Screen.');
-  /* on for the account, and allowed on this phone: a new phone, or one whose app was reinstalled, asks again */
-  const perm = Notification.permission, blocked = perm === 'denied', on = d.reminderOn && perm === 'granted';
-  /* a problem with this phone stays visible on phones, where row hints are otherwise hidden */
-  const fix = blocked ? 'Blocked. Allow notifications for Synergym in your phone’s settings.' : d.reminderOn && !on ? 'On for your account. Turn on to get them on this phone.'
-    : on && PUSH.ok === false ? 'This phone couldn’t sign up for notifications. Send a test to try again.' : '';
-  return group('Reminders',
-    `<div class="srow"><span class="k">Workout reminders<small${fix ? ' class="keep"' : ''}>${fix || 'A short note on your training days'}</small></span><button class="toggle${on ? ' on' : ''}" data-act="rem-toggle" aria-pressed="${on}" aria-label="Workout reminders"></button></div>` +
-    (on ? row('Time', `<input class="field rem-time" type="time" data-f="rem-time" value="${esc(d.reminderTime)}" aria-label="Reminder time">`) +
-      `<div class="srow rem-row"><span class="k">Days<small class="keep" id="rem-days-t">${daysText(d.reminderDays, weekOrder())}</small></span><span class="rem-days" role="group" aria-label="Reminder days">${weekOrder().map(i => `<button class="${d.reminderDays & (1 << i) ? 'on' : ''}" data-act="rem-day" data-i="${i}" aria-pressed="${!!(d.reminderDays & (1 << i))}" aria-label="${DAY_NAMES[i]}">${DAY_LETTERS[i]}</button>`).join('')}</span></div>` +
-      link('Send a test reminder', 'data-act="rem-test"') : ''),
-    on ? `<span id="rem-foot">${remFoot()}</span>` : '');
-}
-async function reminderOn() {
-  if (S.local) return toast('Go online to use reminders');
-  if (!pushSupported()) return toast('This browser can’t show reminders');
-  let perm = Notification.permission;
-  if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; } }
-  if (perm !== 'granted') { render(false); return toast('Notifications are blocked. Allow them for Synergym in your phone’s settings.'); }
-  try {
-    await pushRegister();
-  } catch (e) { console.error(e); return toast(e && /worker/.test(e.message || '') ? e.message : 'Couldn’t turn on reminders. Check your connection and try again.'); }
-  S.profile.reminderOn = true; S.profile.tz = localTz(); queue('p', 0); buzz(); render(false);
-  briefSoon(0);
-  toast(`Reminders on · ${timeText(S.profile.reminderTime)}`);
-}
-/* this phone's push subscription, saved for the signed-in account (a phone used by someone else before moves over) */
-async function pushRegister() {
-  const sub = await pushSubscribe();
-  const { error } = await sb.rpc('save_push_subscription', { p_endpoint: sub.endpoint, p_p256dh: sub.keys.p256dh, p_auth: sub.keys.auth });
-  if (error) throw error;
-  PUSH.ok = true; PUSH.at = Date.now();
-}
-/* A reminder reaches a phone only while its subscription is on the server, and phones lose theirs: iOS after an
-   update or a reinstall, any browser now and then, and signing out removes it. So whenever the app opens (and at
-   most every few hours while it stays open), a phone with reminders on and notifications allowed quietly checks
-   in again. Nothing is asked of the user. */
-const PUSH = { ok: null, at: 0 };
-async function pushHeal(force = false) {
-  if (S.local || !S.user || !sb || !S.loaded || !coarse.matches || !pushSupported() || !S.profile.reminderOn || Notification.permission !== 'granted') return false;
-  /* the account is open on another device: this one is about to sign itself out */
-  if (S.profile.activeSession && DEV.sid && S.profile.activeSession !== DEV.sid) return false;
-  if (!force && Date.now() - PUSH.at < 4 * 36e5) return PUSH.ok;
-  PUSH.at = Date.now();
-  const was = PUSH.ok;
-  try { await pushRegister(); } catch (e) { console.error('Push registration failed', e); PUSH.ok = false; }
-  if (was !== PUSH.ok && S.view === 'prefs') render(false);
-  return PUSH.ok;
-}
-/* stop reminders on this device (and for the account, which uses one device at a time) */
-async function reminderOff() {
-  const ep = await pushUnsubscribe().catch(() => null);
-  if (S.local || !S.user || !sb) return;
-  if (ep) await sb.from('push_subscriptions').delete().eq('endpoint', ep).then(() => {}, () => {});
-  if (S.profile.reminderOn) { S.profile.reminderOn = false; queue('p', 0); await flushNow('p'); }
-}
-async function reminderTest() {
-  const { data } = await sb.auth.getSession(), t = data.session && data.session.access_token;
-  if (!t) return toast('Log in again to send a test');
-  /* make sure this phone is signed up first: that's usually why a test doesn't arrive */
-  if (!(await pushHeal(true))) return toast('This phone couldn’t sign up for notifications. Check your connection, then try again.');
-  try {
-    const r = await fetch('/api/reminders', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true, ctx: reminderCtx() }) });
-    toast(r.ok ? 'Test sent: it says what a reminder would say now. It should arrive in a few seconds.' : r.status === 404 ? 'This phone isn’t registered. Turn reminders off and on again.' : 'Couldn’t send a test right now.');
-  } catch { toast('Couldn’t reach the server'); }
-}
-
-/* ---------- what a reminder can say ---------- */
-/* The server writes each reminder (api/_nudge.js) but can't run the coach, so the app works out a short brief and
-   saves it on the profile when it changes: the next split day and its first three targets, a lighter week or a
-   week off, and the coach's call with the day it's for. */
-function reminderBrief() {
-  const a = coachOn() ? coach() : null, nx = nextSplitDay(), day = nx && nx.sp.days[nx.i];
-  const tg = day ? dayTargets(day).filter(t => t.g) : [], b = { coach: !!a };
-  if (day) { b.day = (day.type || '').trim().slice(0, 30) || dayLabel(nx.sp.days, nx.i); b.n = day.exercises.length; }
-  if (tg.length) b.list = tg.slice(0, 3).map(t => ({ lift: t.e.name.slice(0, 40), tgt: t.e.kind === 'bw' && !t.g.next.w ? `${t.g.next.r} reps` : `${fmtW(t.g.next.w)} ${unit()} × ${t.g.next.r}` }));
-  if (a) {
-    const r = a.next; b.call = r.call; b.for = dayKey(Date.now() + (r.when === 'tomorrow' ? 864e5 : 0));
-    if (a.deload.status === 'now') b.deload = a.deload.kind === 'week-off' ? 'off' : 'deload';
-  }
-  return b;
-}
-/* what the server would know about this week, for a test reminder that reads like a real one */
-function reminderCtx() {
-  const list = sorted().filter(s => s.items.length), now = Date.now(), today = dayKey(now), days = new Set(list.map(s => dayKey(s.startedAt)));
-  const mid = t => { const d = new Date(t); d.setHours(12, 0, 0, 0); return d.getTime(); };
-  const prev = list.find(s => dayKey(s.startedAt) !== today);
-  let streak = 0; while (streak < 8 && days.has(dayKey(now - (streak + 1) * 864e5))) streak++;
-  return { name: S.profile.name || '', day: today, wk: list.filter(s => s.startedAt >= weekStart(now)).length, target: S.profile.target || 3,
-    gap: prev ? Math.round((mid(now) - mid(prev.startedAt)) / 864e5) : null, streak, total: list.length, brief: reminderBrief(), open: openCtx(now) };
-}
-/* a session still open, as the server sees it */
-function openCtx(now) {
-  const a = activeSession(); if (!a) return null;
-  const q = S.A && S.A.sess.get(a.id);
-  return { id: a.id, name: a.name || (a.splitId && S.splits.get(a.splitId)?.days[a.splitDay]?.type) || null, mins: Math.round((now - a.startedAt) / 6e4),
-    days: Math.round((new Date(now).setHours(12, 0, 0, 0) - new Date(a.startedAt).setHours(12, 0, 0, 0)) / 864e5), sets: q ? q.sets : 0 };
-}
-/* saved a few seconds after a change, and only when it differs from what was last saved */
-const BRIEF = { t: 0, last: null };
-function briefSoon(ms = 5000) {
-  if (S.local || !S.user || !sb || !S.profile.reminderOn) return;
-  clearTimeout(BRIEF.t); BRIEF.t = setTimeout(sendBrief, ms);
-}
-async function sendBrief() {
-  if (S.local || !S.user || !sb || !S.loaded || !S.profile.reminderOn) return;
-  let b; try { b = reminderBrief(); } catch (e) { return console.error('Reminder brief failed', e); }
-  const j = JSON.stringify(b), uid = S.user.id; if (BRIEF.last === uid + j) return;
-  const { error } = await sb.from('profiles').update({ reminder_brief: b }).eq('id', uid);
-  if (!error) BRIEF.last = uid + j;
-}
-
 const HOW = `<div class="sh-h"><h3>How the numbers work</h3>${xBtn()}</div><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
@@ -2632,7 +2507,6 @@ async function signOut() {
   while ((OB.pending.size || OB.inflight.size) && Date.now() - t0 < 5000) await sleep(150);
   if (OB.pending.size && !confirmLeave) { confirmLeave = true; return toast('Some changes haven’t saved yet. They’ll sync when you sign back in. Tap Sign out again to leave.'); }
   confirmLeave = false;
-  const ep = await pushUnsubscribe().catch(() => null); if (ep) await sb.from('push_subscriptions').delete().eq('endpoint', ep).then(() => {}, () => {});
   await sb.auth.signOut();
 }
 let confirmLeave = false;
@@ -2673,9 +2547,6 @@ const ACT = {
   signout: signOut,
   'retry-load': () => S.local ? startLocal() : startApp(),
   tour: () => openTour(),
-  'rem-toggle': () => S.profile.reminderOn && Notification.permission === 'granted' ? reminderOff().then(() => { render(false); toast('Reminders off'); }) : reminderOn(),
-  'rem-day': el => { const m = S.profile.reminderDays ^ (1 << +el.dataset.i); if (!(m & 127)) return toast('Keep at least one day'); S.profile.reminderDays = m; queue('p', 500); buzz(); render(false); },
-  'rem-test': () => reminderTest(),
   'guide-dev': el => { S.guideDev = el.dataset.v; render(false); },
   'guide-jump': el => { const d = $('#g-' + el.dataset.id); if (!d) return; d.open = true; d.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); },
   'go-local-new': () => startOfflineNew(),
@@ -2844,7 +2715,6 @@ document.addEventListener('input', e => {
     case 'notes': if (s) { s.notes = el.value.slice(0, 4000); queue('s:' + s.id, 1200); } break;
     case 'q': S.q = el.value; $('#hlist').innerHTML = historyList(); break;
     case 'exq': S.exq = el.value; $('#exlist').innerHTML = exList(); break;
-    case 'rem-time': if (/^\d{2}:\d{2}$/.test(el.value)) { S.profile.reminderTime = el.value; queue('p', 800); const f = $('#rem-foot'); if (f) f.textContent = remFoot(); } break;
     case 'd-bw': { const v = parseFloat(el.value.replace(',', '.')), kg = unit() === 'lb' ? v / KG_LB : v; const ok = isFinite(kg) && kg >= 30 && kg <= 300; el.classList.toggle('bad', !ok && el.value.trim() !== ''); if (ok) { S.profile.bw = kg; S.profile.bwLog = logBw(S.profile.bwLog, kg); queue('p', 900); } break; }
     case 'pw': { const v = el.value; let sc = 0; if (v.length >= 8) sc++; if (v.length >= 12) sc++; if (/[a-z]/.test(v) && /[A-Z]/.test(v)) sc++; if (/\d/.test(v)) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
       const m = $('#pwm'), t = $('#pwt'); if (m) { m.style.width = (sc * 20) + '%'; m.style.background = sc <= 1 ? 'var(--bad)' : sc <= 3 ? 'var(--accent)' : 'var(--good)'; }
@@ -2994,7 +2864,6 @@ function afterLoad() {
   S.loaded = true; flushAll();
   if (S.profile.theme) applyTheme(S.profile.theme);
   const p = S.profile; setWeekStart(p.weekStart);
-  if (!S.local && p.reminderOn && localTz() && p.tz !== localTz()) { p.tz = localTz(); queue('p', 3000); }
   S.ob = { step: (S.local ? p.name : p.username) ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null, theme: themePref() };
 }
 async function startLocal() {
@@ -3023,7 +2892,7 @@ function goOfflineSheet() {
   openSheet(`<div class="sh-h"><h3>Use Synergym offline?</h3>${xBtn()}</div>
   <div class="off-pts"><p><b>Everything stays on this phone.</b> Your sessions, exercises, splits and settings are copied here, and new workouts are saved here only.</p>
   <p><b>Nothing syncs until you go online.</b> Then you log in, and this phone’s changes are uploaded to your account.</p>
-  <p><b>Some things wait for online:</b> sharing splits, reminders and changing your username.</p></div>
+  <p><b>Some things wait for online:</b> sharing splits and changing your username.</p></div>
   <div class="btns"><button class="btn ghost" data-act="close">Cancel</button><button class="btn" id="off-go">Go offline</button></div>`, r => {
     r.querySelector('#off-go').onclick = async ev => {
       const b = ev.currentTarget; b.disabled = true; b.textContent = 'Copying…';
@@ -3031,7 +2900,6 @@ function goOfflineSheet() {
       try { await navigator.storage?.persist?.(); } catch {}
       flushAll(); for (const end = Date.now() + 6000; (OB.pending.size || OB.inflight.size) && navigator.onLine && Date.now() < end;) await sleep(150);
       const carry = [...OB.pending, ...OB.inflight], linked = { id: S.user.id, email: S.user.email || null }, oldKey = obKey();
-      await reminderOff().catch(() => {});
       try { await ldb.replaceAll({ profile: clone(S.profile), exercises: clone(S.library), sessions: clone([...S.sessions.values()]), splits: clone([...S.splits.values()]), dirty: carry }); }
       catch { b.disabled = false; b.textContent = 'Go offline'; return toast('Couldn’t copy your data to this phone. Nothing changed.'); }
       for (const t of OB.timers.values()) clearTimeout(t); OB.timers.clear(); OB.pending.clear(); OB.failing = false;
@@ -3178,19 +3046,17 @@ async function startApp() {
   try { await loadAll(); }
   catch (e) { console.error(e); S.loadError = navigator.onLine ? (e.message || 'The server didn’t respond.') : 'You’re offline. Connect and try again.'; return render(true); }
   afterLoad();
-  if (S.claim) { S.claim = false; claimDevice().then(() => pushHeal(true)); } else { checkDevice(S.profile.activeSession); pushHeal(true); }
-  briefSoon(2000);
+  if (S.claim) { S.claim = false; claimDevice(); } else checkDevice(S.profile.activeSession);
   const t = S.profile.onboarded && pendingPublic();
   if (t) return go('public', t, { replace: true });
   route(true);
 }
 function boot() {
   setSplashHooks({ render, playEnter });
-  /* the service worker lets the app open without a connection and receives reminders */
+  /* the service worker lets the app open without a connection */
   if ('serviceWorker' in navigator && import.meta.env.PROD) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').then(r => { if (r && r.active) r.active.postMessage('refresh-shell'); }).catch(() => {}));
-  /* a reminder tapped while the app is open: go to the page it's about */
-  navigator.serviceWorker?.addEventListener?.('message', e => { const p = e.data && e.data.open; if (typeof p === 'string' && p.startsWith('/') && p !== location.pathname && S.loaded) { depth++; history.pushState({ d: depth, from: S.view }, '', p); route(true); } });
-  navigator.serviceWorker?.startMessages?.();
+  /* reminders were removed in 0.1.7: a phone that had signed up for them stops listening */
+  navigator.serviceWorker?.getRegistration?.().then(r => r && r.pushManager && r.pushManager.getSubscription()).then(sub => sub && sub.unsubscribe()).catch(() => {});
   document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);

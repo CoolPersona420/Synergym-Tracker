@@ -18,11 +18,11 @@ for (const [w, h] of [[320, 568], [390, 844], [844, 390]]) {
     test.skip(info.project.name !== 'phone', 'phone sizes');
     test.setTimeout(180000);
     const opts = { viewport: { width: w, height: h }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
-    /* signed in as the installed app, so app-only parts (Use offline, reminders) are checked too */
+    /* signed in as the installed app, so app-only parts (Use offline) are checked too */
     const page = await (await browser.newContext(opts)).newPage();
-    await page.addInitScript(() => { Object.defineProperty(navigator, 'standalone', { get: () => true }); window.PushManager = function PushManager() {}; window.Notification = { permission: 'granted', requestPermission: async () => 'granted' }; });
+    await page.addInitScript(() => { Object.defineProperty(navigator, 'standalone', { get: () => true }); });
     const hist = benchHistory();
-    const fake = new FakeSupabase({ ...hist, profile: { reminder_on: true }, splits: [{ id: crypto.randomUUID(), name: 'A split with a fairly long name', days: [{ id: 'd1', type: 'Push', exercises: [{ id: 'x1', exId: hist.exercises[0].id, name: 'Bench Press', muscle: 'Chest', kind: 'w', sets: 3, reps: '8-12' }] }] }] });
+    const fake = new FakeSupabase({ ...hist, splits: [{ id: crypto.randomUUID(), name: 'A split with a fairly long name', days: [{ id: 'd1', type: 'Push', exercises: [{ id: 'x1', exId: hist.exercises[0].id, name: 'Bench Press', muscle: 'Chest', kind: 'w', sets: 3, reps: '8-12' }] }] }] });
     await login(page, fake, 'A');
     const check = async name => { await page.waitForTimeout(500); expect(await page.evaluate(audit), name).toEqual(clean); };
     await check('home');

@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.6, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.7, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.6-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.7-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -47,12 +47,11 @@ The version lives in `package.json` (`0.1.6-alpha`) and shows in Settings › Ab
   muscle groups.
 - **Themes:** Auto (follows the device) plus eleven named palettes.
 - **Week start:** weeks start on Monday, Sunday or Saturday (**Settings › Training**), for the weekly
-  target, streaks, charts, the today panel and reminders.
+  target, streaks, charts and the today panel.
 - **Phone app:** install it to the Home Screen. It opens without a connection, has a floating dock and a
   quick opening splash, never zooms, and the page stretches and springs back at the top and bottom like
   iOS (native on iPhone, recreated on Android). Installed on an iPhone, which has no browser back, you swipe
   in from the left edge to go back, as in other iPhone apps (`src/ui/edgeback.js`).
-  - **Reminders** at a chosen time on chosen days, written from your own log (see below).
   - **Offline mode:** use it without an account, or take an account offline; going online merges and
     uploads (see below).
 - **Accounts:** email and password; a six-step setup (account, name, body and units, goal and days, a
@@ -65,8 +64,8 @@ progression, more set types, warm-ups, muscle balance and more.
 
 ## How it's built
 
-- **Frontend:** plain JavaScript and Vite, deployed on Vercel (with one serverless function for reminders).
-- **Backend:** Supabase (Postgres, email and password auth, pg_cron for reminders).
+- **Frontend:** plain JavaScript and Vite, deployed on Vercel.
+- **Backend:** Supabase (Postgres, email and password auth).
 - **Security:** Row Level Security on every table. Each account can only read and write its own rows.
   Splits are shared only through checked database functions. Strict security headers (CSP, HSTS, no
   framing) come from `vercel.json`.
@@ -135,9 +134,8 @@ auth and database calls in memory.
 | Path | What's in it |
 |---|---|
 | `src/main.js` | app state, screens, actions, saving and sync |
-| `src/lib/` | logic with no UI: the coach, progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, push reminders, error reports and stats |
-| `api/` | the reminders function (Vercel) and `_nudge.js`, which writes each reminder |
-| `public/sw.js` | the service worker: offline app shell and reminder notifications |
+| `src/lib/` | logic with no UI: the coach, progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, error reports and stats |
+| `public/sw.js` | the service worker: the offline app shell |
 | `src/ui/` | brand and icons, themes, the login and open splashes, the user guide |
 | `src/data/` | starter split templates, quotes |
 
@@ -153,49 +151,6 @@ rejected record or a closed app leaves it in place and the next attempt picks up
 to the installed phone app because browsers may clear a website's storage, but not a Home Screen app's.
 
 The service worker (`public/sw.js`) caches the app so it opens without a connection, for everyone.
-
-## Workout reminders
-
-Phones can get a push notification at a chosen time on chosen days (**Settings › Reminders**). Each one is
-written for the person, from their own log, and reads like a note from a coach rather than an app chasing
-them:
-
-- **What it says:** one of two things, in wording that changes from day to day.
-  - **A session to finish:** one started 3+ hours ago and never finished ("Push is still open · You started
-    it earlier today and logged 9 sets. Finish it to save them and keep your next targets right."). Tapping
-    it opens that session. This one comes even on a day already trained or marked as rest.
-  - **Otherwise, your next session:** the split day and its first targets ("Next up: Lower · Back Squat
-    137.5 kg × 5, Romanian Deadlift 100 kg × 8, Leg Press 180 kg × 10, then 2 more."), with at most one line
-    of context: a first session, coming back after time away (no guilt, and a mention that targets start
-    lighter), a lighter week, an easy day, one more for the weekly target, or the week so far. Tapping it
-    opens Home.
-- **When it stays quiet:** while a session is under way (started under 3 hours ago), a day already trained,
-  a day marked as rest, a day the coach called rest, a planned week off, and once the week's target is met.
-  After time away it thins out: every 3 days after 10 days, weekly after 3 weeks, fortnightly after 2 months.
-  A session left open for days comes up every 3 days.
-- **How it's written:** the server can't run the coach, so the app saves a short brief on the profile when
-  it changes (`profiles.reminder_brief`: the next split day and its first three targets, a lighter week or a
-  week off, and the coach's call with the day it's for). The words are put
-  together in `api/_nudge.js`, a pure function with its own tests.
-- **Staying registered:** browsers drop push subscriptions now and then (iOS after an update or a
-  reinstall), and signing out removes the phone's. So each time the app opens, a phone with reminders on and
-  notifications allowed quietly signs up again. A new phone shows "On for your account. Turn on to get them on
-  this phone." Send a test reminder in Settings to see what a real one would say now.
-
-How it runs:
-
-- `push_subscriptions` holds each device's push endpoint; `profiles` holds the time, days, time zone and
-  brief.
-- Every 5 minutes `pg_cron` calls `api/reminders.js` (a Vercel function) with a shared secret. It asks the
-  database who is due and what's going on in their training (`reminders_next`: this week's sessions, days
-  since the last one, whether today is trained or a rest day, days since the last reminder, the session left
-  open if any, the brief),
-  writes each message or stays quiet, sends it, and reports back who was reached and which devices are gone
-  (`reminders_done`).
-- Setup (once): `supabase/reminders-cron.sql`. Vercel needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
-  `REMINDER_SECRET`; the secret also lives in Supabase Vault as `reminder_secret`.
-
-On iPhone, notifications only work in the app added to the Home Screen (iOS 16.4 or later).
 
 ## User guide
 
@@ -266,13 +221,12 @@ database transaction (`import_replace`), so a failed import changes nothing.
 
 | Table | Holds | Who can see it |
 |---|---|---|
-| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account), deleted splits that sessions still point at (`split_archive`), lift goals (`lift_goals`), whether the coach is on (`coach_on`), reminder settings and the brief reminders are written from (`reminder_brief`), the day weeks start on (`week_start`) | owner |
+| `profiles` | username, name, units, rest timer, bodyweight, experience, goal, theme, muscle groups, home widgets, bodyweight log, active device (one signed-in device per account), deleted splits that sessions still point at (`split_archive`), lift goals (`lift_goals`), whether the coach is on (`coach_on`), the day weeks start on (`week_start`) | owner |
 | `exercises` | each user's own exercise list (seeded from `default_exercises`) | owner |
 | `sessions` | one row per workout; sets are stored as JSON inside it | owner |
 | `splits` | training plans: days, session types, exercises with sets × reps; at most 6 per account (`splits_limit` trigger) | owner |
 | `split_shares` | which user a split was shared with | sender and recipient |
 | `client_errors` | errors reported by the app | nobody through the API (SQL editor only) |
-| `push_subscriptions` | each device that gets reminders | owner |
 
 The functions `share_split`, `unshare_split`, `split_recipients`, `shared_with_me`,
 `get_public_split`, `restore_default_exercises`, `delete_account`, `import_replace` and `report_error` handle the

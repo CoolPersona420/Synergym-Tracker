@@ -2,7 +2,6 @@
    - Opens the app without a connection: pages are network-first with the last good copy as a fallback;
      hashed build files are cache-first (their names change whenever their contents do).
    - Fonts and icons are served from cache and refreshed in the background.
-   - Shows workout reminders sent as web push.
    Database and auth requests (Supabase) are never cached. */
 const SHELL = 'sg-shell-v1', ASSETS = 'sg-assets-v1', STATIC = 'sg-static-v1';
 const KEEP = [SHELL, ASSETS, STATIC];
@@ -70,25 +69,4 @@ self.addEventListener('fetch', e => {
       return hit || net;
     })());
   }
-});
-
-/* ---------- reminders ---------- */
-self.addEventListener('push', e => {
-  let d = {}; try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
-  const title = d.title || 'Time to train';
-  e.waitUntil(self.registration.showNotification(title, {
-    body: d.body || 'Your next session is waiting.', icon: '/icon-192.png', badge: '/icon-192.png',
-    tag: d.tag || 'reminder', renotify: false, data: { url: d.url || '/' }
-  }));
-});
-/* tapping a reminder opens the page it's about (Home, the Coach, a goal). An open app is brought forward and asked
-   to go there itself, which keeps its state and works where a window can't be navigated from here (iOS). */
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  const url = new URL((e.notification.data && e.notification.data.url) || '/', location.origin);
-  e.waitUntil((async () => {
-    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const w of wins) if (new URL(w.url).origin === location.origin) { await w.focus(); w.postMessage({ open: url.pathname }); return; }
-    return self.clients.openWindow(url.href);
-  })());
 });

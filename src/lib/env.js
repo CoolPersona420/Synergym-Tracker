@@ -1,5 +1,7 @@
 /* What the device and browser can do; read once at startup. */
 export const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* iPhone and iPad (an iPad says it's a Mac with touch) */
+export const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 /* low-end devices (few cores, little memory, data saver) get the same motion with cheaper effects */
 export const LITE = (() => { try {
   const n = navigator, c = n.connection;

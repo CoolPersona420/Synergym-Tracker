@@ -10,11 +10,23 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.7-alpha · 28 October 2026
+
+**Reminders removed**
+
+- Workout reminders are removed: **Settings › Reminders**, the push notifications, the server function that
+  sent them and the schedule behind it. A phone that had signed up for them stops listening the next time the
+  app opens, and nothing more is sent.
+- In the database: the reminder settings on profiles (`reminder_on`, `reminder_time`, `reminder_days`, `tz`,
+  `reminder_sent_on`, `reminder_brief`, `reminder_pushed_on`), the `push_subscriptions` table, the reminder
+  functions and the schedule are deleted. No workouts or other data were touched.
+- Unchanged: the start of the week, the close button and everything else from 0.1.6.
+
 ## 0.1.6-alpha · 28 October 2026
 
 **Reminders about your sessions, and one close button everywhere**
 
-- **Reminders are now about your sessions:**
+- *(Removed in 0.1.7)* **Reminders are now about your sessions:**
   - **A session to finish:** one you started 3+ hours ago and never finished: "Push is still open · You
     started it earlier today and logged 9 sets. Finish it to save them and keep your next targets right."
     Tapping it opens that session. This one comes even on a day you've trained or marked as rest; one left
@@ -60,7 +72,7 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ## 0.1.3-alpha · 27 October 2026
 
-**Reminders that know your training, and that keep arriving**
+**Reminders that know your training, and that keep arriving** *(removed in 0.1.7)*
 
 - **Each reminder is written for you, from your own log,** in wording that changes from day to day. Usually
   it says what's next ("Up next: Lower · Back Squat 137.5 kg × 5 to start, then 4 more exercises"). Other days
@@ -242,7 +254,7 @@ when your data changes (about 3 ms for three years of logs).
   Up next picker on Home.
 - **Home:** a greeting, a quote and widgets you choose and size, each opening full screen.
 - **Phone app:** install it to the Home Screen; it opens offline, can be used without an account (sync
-  later), sends workout reminders, never zooms, and has a floating dock and a quick opening splash.
+  later), sends workout reminders *(removed in 0.1.7)*, never zooms, and has a floating dock and a quick opening splash.
 - **Accounts:** email and password with a six-step setup and a short tour; one signed-in device per
   account; export as JSON or CSV, and import that replaces everything in one step.
 - **Look:** a monochrome design that follows your device, plus eleven named themes; the wolf mascot as logo

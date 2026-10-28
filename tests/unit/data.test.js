@@ -91,19 +91,8 @@ test('the browser prefix is stripped and repeats are reported once', () => {
   });
 });
 
-test('reminder days and times read naturally', async () => {
-  const { daysText, timeText } = await import('../../src/lib/push.js');
-  assert.equal(daysText(127), 'Every day');
-  assert.equal(daysText(31), 'Weekdays');
-  assert.equal(daysText(96), 'Weekends');
-  assert.equal(daysText(0b10101), 'Mon, Wed, Fri');
-  assert.equal(timeText('18:05'), '6:05 pm');
-  assert.equal(timeText('00:30'), '12:30 am');
-  assert.equal(timeText('12:00'), '12:00 pm');
-});
-
 test('the week can start on Monday, Sunday or Saturday', async () => {
-  const { weekStart, shiftWeek, setWeekStart } = await import('../../src/lib/util.js'), { daysText } = await import('../../src/lib/push.js');
+  const { weekStart, shiftWeek, setWeekStart } = await import('../../src/lib/util.js');
   const wed = new Date(2026, 9, 28, 15).getTime(), day = t => new Date(t).getDay();
   assert.equal(day(weekStart(wed)), 1, 'Monday by default');
   setWeekStart(0); assert.equal(day(weekStart(wed)), 0); assert.equal(new Date(weekStart(wed)).getDate(), 25);
@@ -115,5 +104,4 @@ test('the week can start on Monday, Sunday or Saturday', async () => {
   assert.equal(profFromDb({ week_start: 0 }).weekStart, 0);
   assert.equal(profFromDb({ week_start: 3 }).weekStart, 1);
   assert.equal(profToDb({ ...DEFAULT_PROFILE, weekStart: 6 }).week_start, 6);
-  assert.equal(daysText(0b1000001, [6, 0, 1, 2, 3, 4, 5]), 'Sun, Mon', 'listed in the order the week runs');
 });

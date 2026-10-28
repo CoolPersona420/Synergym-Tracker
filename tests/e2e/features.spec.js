@@ -46,37 +46,6 @@ test('the user guide opens from Settings and switches between phone and desktop'
   await expect(page.locator('.tour')).toBeVisible();
 });
 
-test('reminders: turn on, set time and days, send a test, turn off', async ({ page }, info) => {
-  phoneOnly(info);
-  await page.addInitScript(() => {
-    let has = false;
-    const sub = { endpoint: 'https://push.example/device-1', toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'p256', auth: 'au' } }; }, unsubscribe: async () => { has = false; return true; } };
-    const pm = { getSubscription: async () => (has ? sub : null), subscribe: async () => { has = true; return sub; } };
-    const reg = { pushManager: pm, active: null };
-    Object.defineProperty(navigator, 'serviceWorker', { value: { ready: Promise.resolve(reg), getRegistration: async () => reg, register: async () => reg, addEventListener() {} } });
-    window.PushManager = function PushManager() {};
-    window.Notification = { permission: 'default', requestPermission: async () => { window.Notification.permission = 'granted'; return 'granted'; } };
-  });
-  const fake = new FakeSupabase(benchHistory());
-  await page.route('**/api/reminders', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"sent":1}' }));
-  await login(page, fake, 'A');
-  await page.goto('/settings');
-  await page.click('[data-act="rem-toggle"]');
-  await expect.poll(() => fake.pushSubs.map(s => s.endpoint)).toEqual(['https://push.example/device-1']);
-  await expect.poll(() => fake.profiles[0].reminder_on).toBe(true);
-  expect(fake.profiles[0].tz).toBeTruthy();
-  await page.fill('[data-f="rem-time"]', '07:30');
-  await expect.poll(() => fake.profiles[0].reminder_time).toBe('07:30');
-  await page.click('[data-act="rem-day"][data-i="6"]');
-  await expect.poll(() => fake.profiles[0].reminder_days).toBe(63);
-  await expect(page.locator('#rem-foot')).toContainText('7:30 am');
-  await page.click('[data-act="rem-test"]');
-  await expect(page.locator('#toast')).toContainText('Test sent');
-  await page.click('[data-act="rem-toggle"]');
-  await expect.poll(() => fake.pushSubs.length).toBe(0);
-  await expect.poll(() => fake.profiles[0].reminder_on).toBe(false);
-});
-
 test('phone: floating dock, and the session button animates away on Settings', async ({ page }, info) => {
   phoneOnly(info);
   const fake = new FakeSupabase(benchHistory());
