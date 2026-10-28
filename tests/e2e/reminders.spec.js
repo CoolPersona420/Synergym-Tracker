@@ -31,8 +31,9 @@ test('a phone with reminders on signs up again by itself, and saves what the nex
   await expect.poll(() => fake.pushSubs.map(s => s.endpoint)).toEqual(['https://push.example/device-1']);
   await expect.poll(() => fake.profiles[0].reminder_brief?.day).toBe('Push');
   const b = fake.profiles[0].reminder_brief;
-  expect(b.lift).toBe('Bench Press');
-  expect(b.tgt).toMatch(/^\d+(\.\d)? kg × \d+$/);
+  expect(b.list[0].lift).toBe('Bench Press');
+  expect(b.list[0].tgt).toMatch(/^\d+(\.\d)? kg × \d+$/);
+  expect(b.goal).toBeUndefined();
   expect(b.coach).toBe(true);
   expect(['train', 'easy', 'rest']).toContain(b.call);
   await page.goto('/settings');
@@ -66,7 +67,7 @@ test('a test reminder sends what a real one would say', async ({ page }, info) =
   await page.click('[data-act="rem-test"]');
   await expect(page.locator('#toast')).toContainText('Test sent');
   expect(sent.test).toBe(true);
-  expect(sent.ctx).toMatchObject({ name: 'Test', target: 3, total: 2, gap: 3, brief: { day: 'Push', lift: 'Bench Press' } });
+  expect(sent.ctx).toMatchObject({ name: 'Test', target: 3, total: 2, gap: 3, open: null, brief: { day: 'Push', list: [{ lift: 'Bench Press' }] } });
 });
 
 test('tapping a reminder while the app is open goes to its page', async ({ page }, info) => {

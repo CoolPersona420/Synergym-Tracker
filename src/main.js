@@ -301,7 +301,7 @@ function maybePromptOneRm(s, it, st) {
   const val = roundW(v); if (val <= base) return;
   if ((declined1rm.get(ex.id) || 0) >= val) return;
   const u = unit(), single = (+st.r || 0) === 1;
-  openSheet(`<div class="sh-h"><h3>New 1RM PR?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>New 1RM PR?</h3>${xBtn()}</div>
   <div class="pr-hero"><span class="lbl">${esc(ex.name)}</span><div class="bignum md"><span class="n">${fmtW(val)}</span><span class="pr-u">${u}</span></div>
   <p class="muted">${single ? 'A true single' : `Estimated from ${fmtW(loadOf(st, ex))} ${u} × ${st.r}`}. Your ${ex.oneRm > 0 ? 'saved 1RM is' : 'best estimate so far is'} ${fmtW(roundW(base))} ${u} (+${fmtW(val - roundW(base)) || 0} ${u}).</p></div>
   <div class="btns"><button class="btn ghost" id="orm-no">Not now</button><button class="btn" id="orm-yes">Update my 1RM</button></div>`, r => {
@@ -311,7 +311,7 @@ function maybePromptOneRm(s, it, st) {
 }
 function editOneRm(id) {
   const ex = exOf(id); if (!ex) return; const est = prevBestE1rm(id), u = unit();
-  openSheet(`<div class="sh-h"><h3>${esc(ex.name)} 1RM</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="form">
+  openSheet(`<div class="sh-h"><h3>${esc(ex.name)} 1RM</h3>${xBtn()}</div><div class="form">
   <label>One-rep max (${u})<input class="field" id="orm-v" inputmode="decimal" value="${ex.oneRm > 0 ? fmtW(ex.oneRm) : ''}" placeholder="${est ? fmtW(roundW(est)) : '0'}"></label>
   <p class="muted" style="font-size:13px">${est ? `Your best estimate from logged sets is ${fmtW(roundW(est))} ${u}.` : 'Log a few sets and Synergym will estimate it for you.'} Synergym asks to update this whenever a set beats it.</p></div>
   <div class="btns">${ex.oneRm > 0 ? '<button class="btn line" id="orm-clear" style="margin-right:auto">Use estimate instead</button>' : ''}${est ? `<button class="btn ghost" id="orm-est">Use ${fmtW(roundW(est))}</button>` : ''}<button class="btn" id="orm-save">Save</button></div>`, r => {
@@ -326,7 +326,7 @@ function editMuscles() {
   const rows = muscles().map(m => ({ orig: m, name: m }));
   const count = m => S.library.filter(e => !e.archived && e.muscle === m).length;
   const draw = () => {
-    $('#sheet-body').innerHTML = `<div class="sh-h"><h3>Muscle groups</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+    $('#sheet-body').innerHTML = `<div class="sh-h"><h3>Muscle groups</h3>${xBtn()}</div>
     <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">Rename a group and its exercises move with it. A group can be removed once no exercises use it.</p>
     <div class="share-row" style="margin-bottom:var(--s0)"><input class="field" id="mg-new" placeholder="New muscle group, e.g. Forearms" maxlength="30"><button class="btn ghost" id="mg-add">Add</button></div>
     <div class="mg-list">${rows.map((r, i) => `<div class="mg-row"><input class="field" data-mg="${i}" value="${esc(r.name)}" maxlength="30" aria-label="Muscle group name"><span class="lbl mg-n">${r.orig ? count(r.orig) : 0} ex</span>
@@ -408,6 +408,9 @@ const snapW = kg => fromU(Math.round(toU(kg) / loadStep()) * loadStep());
 /* what the split planned for an exercise in a session started from a split day */
 const dayPlan = (s, exId) => { const sp = s.splitId && S.splits.get(s.splitId), d = sp && sp.days[s.splitDay]; return d ? d.exercises.find(x => x.exId === exId) || null : null; };
 const suggestFor = (s, it) => { const x = dayPlan(s, it.exId); return planFor(it.exId, { reps: x ? x.reps : null, sets: x ? x.sets : it.sets.length || 3, excludeSid: s.id }); };
+
+/* the one close button: every sheet, the today panel, the Coach and full-screen widgets show this ✕, top right */
+const xBtn = (act = 'close', label = 'Close', cls = '') => `<button class="xbtn${cls}" data-act="${act}" aria-label="${label}">${ICON.x}</button>`;
 
 /* ================= coach ================= */
 /* The coach (src/lib/coach.js) reads finished sessions only, so its reading is worked out again only when they,
@@ -991,7 +994,7 @@ function todayContent() {
   const wkBar = `<div class="ts-week"><span class="lbl">This week</span><b>${wk} of ${tgt}</b><span class="ts-bar"><i style="width:${Math.min(100, wk / tgt * 100).toFixed(0)}%"></i></span></div>`;
   const co = coachOn() && coach().next, cc = co && callOf(co);
   if (co) today += `<button class="ts-coach" data-act="ts-go" data-to="coach"><span class="co-call-t co-${cc}">${co.when === 'tomorrow' ? 'Tomorrow: ' : ''}${CALL[cc][0]}</span><span class="muted">${esc(callReason(co))}</span>${ICON.coach}</button>`;
-  return { html: `<div class="sh-h"><div><span class="lbl">${DAYS[new Date(now).getDay()]} · ${fmtDate(now)}</span><h3 id="tsh-title">${dayDone() ? 'Today’s summary' : 'Today’s plan'}</h3></div><button class="btn ghost sm tsh-x" data-act="top-close">Close</button></div>
+  return { html: `<div class="sh-h"><div><span class="lbl">${DAYS[new Date(now).getDay()]} · ${fmtDate(now)}</span><h3 id="tsh-title">${dayDone() ? 'Today’s summary' : 'Today’s plan'}</h3></div>${xBtn('top-close', 'Close', ' tsh-x')}</div>
   <section class="ts-sec">${today}</section>${wkBar}
   <section class="ts-sec ts-next">${nextBlock(nx, done, a)}</section>` };
 }
@@ -1058,7 +1061,7 @@ function coachMood(a) {
   return null;
 }
 function vCoach() {
-  if (!coachOn()) return `<header class="co-top rv"><span class="co-tt">Coach</span><button class="iconbtn" data-act="coach-close" aria-label="Close the coach">${ICON.x}</button></header>` + pageTop('Coach') + `<div class="co"><section class="card rv co-offc"><h2 class="co-call-t">Coach is off</h2><p class="co-lead">Turn it on for targets in every session, a call each day to train, go easy or rest, deload and split checks, and goals with a plan. Your goals are kept while it’s off.</p><div class="co-acts"><button class="btn" data-act="coach-switch">${roll('Turn the coach on')}</button></div></section></div>`;
+  if (!coachOn()) return `<header class="co-top rv"><span class="co-tt">Coach</span>${xBtn('coach-close', 'Close the coach')}</header>` + pageTop('Coach') + `<div class="co"><section class="card rv co-offc"><h2 class="co-call-t">Coach is off</h2><p class="co-lead">Turn it on for targets in every session, a call each day to train, go easy or rest, deload and split checks, and goals with a plan. Your goals are kept while it’s off.</p><div class="co-acts"><button class="btn" data-act="coach-switch">${roll('Turn the coach on')}</button></div></section></div>`;
   const a = coach(), r = a.next, c = callOf(r), nx = nextSplitDay(), act = activeSession(), wk = sorted().filter(s => s.endedAt && Date.now() - s.startedAt < 7 * 864e5).length;
   if (COACH_TABS.some(t => t[0] === S.arg)) S.coachTab = S.arg;
   const tab = S.coachTab || 'plan', today = r.when === 'today';
@@ -1077,7 +1080,7 @@ function vCoach() {
   const tabs = `<div class="seg co-tabs rv" role="tablist" aria-label="Coach">${COACH_TABS.map(([id, t]) => `<button role="tab" aria-selected="${tab === id}" class="${tab === id ? 'on' : ''}" data-act="coach-tab" data-t="${id}">${t}${id === 'goals' && a.goals.length ? ` <span class="co-n">${a.goals.length}</span>` : ''}${id === 'recovery' && recWarn ? ' <i class="co-dot" aria-label="needs a look"></i>' : ''}</button>`).join('')}</div>`;
   const body = tab === 'goals' ? coachGoals(a) : tab === 'recovery' ? coachRecovery(a, nx) : coachPlan(a, nx);
   /* on phones and tablets the Coach opens full screen (as a widget does), so it has its own close button */
-  return `<header class="co-top rv"><span class="co-tt">Coach</span><button class="iconbtn" data-act="coach-close" aria-label="Close the coach">${ICON.x}</button></header>`
+  return `<header class="co-top rv"><span class="co-tt">Coach</span>${xBtn('coach-close', 'Close the coach')}</header>`
     + pageTop('Coach') + `<div class="co">${hero}${tabs}<div class="co-panel" role="tabpanel">${body}</div>
     <p class="muted co-foot rv">The coach reads your log: estimated maxes, rep ranges, training load and recovery. It’s guidance, not medical advice: if something hurts, stop. <button class="linkbtn" data-act="how">How it works</button></p></div>`;
 }
@@ -1165,7 +1168,7 @@ function goalSheet(exId = null) {
   const lifts = S.library.filter(e => e.kind !== 'bw' && (!e.archived || e.id === exId)).sort((x, y) => (use.get(y.id) || 0) - (use.get(x.id) || 0) || x.name.localeCompare(y.name));
   if (!lifts.length) return toast('Add a weighted exercise first');
   const goals = S.profile.liftGoals || [], g0 = exId && goals.find(g => g.exId === exId), u = unit(), first = exId || (lifts.find(e => !goals.some(g => g.exId === e.id)) || lifts[0]).id;
-  openSheet(`<div class="sh-h"><h3>${g0 ? 'Edit goal' : 'New goal'}</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="form">
+  openSheet(`<div class="sh-h"><h3>${g0 ? 'Edit goal' : 'New goal'}</h3>${xBtn()}</div><div class="form">
     <label>Lift<select class="field" id="gl-ex">${lifts.map(e => `<option value="${e.id}"${e.id === first ? ' selected' : ''}>${esc(e.name)}${goals.some(g => g.exId === e.id) && e.id !== exId ? ' (has a goal)' : ''}</option>`).join('')}</select></label>
     <label>Target one-rep max (${u})<input class="field" id="gl-kg" inputmode="decimal" autocomplete="off" value="${g0 ? fmtW(g0.kg) : ''}"></label>
     <label>Deadline, if you have one<input class="field" id="gl-by" type="date" min="${isoDay(Date.now() + 864e5)}" value="${g0 && g0.by ? isoDay(g0.by) : ''}"></label>
@@ -1249,7 +1252,7 @@ function vWidget() {
   const id = S.arg, W = WIDGETS[id]; if (!W || !W.full) return vMissing('That widget doesn’t exist.');
   const o = wopt(id), ent = homeEntries().find(e => e.id === id);
   return `<div class="wfull" style="view-transition-name:wfocus">
-    <header class="wf-top"><div><span class="lbl">${esc(W.desc)}</span><h1 class="h1">${esc(W.title)}</h1></div><button class="iconbtn" data-act="w-close" aria-label="Close">${ICON.x}</button></header>
+    <header class="wf-top"><div><span class="lbl">${esc(W.desc)}</span><h1 class="h1">${esc(W.title)}</h1></div>${xBtn('w-close')}</header>
     <div class="wf-opts">${W.opts ? `<span class="seg" role="group" aria-label="Range">${W.opts.map(([v, l]) => `<button class="${o === v ? 'on' : ''}" data-act="w-opt" data-id="${id}" data-v="${v}">${l}</button>`).join('')}</span>` : ''}
     ${ent && !phoneDash() ? `<span class="wf-size"><span class="lbl">Size on home</span><span class="seg" role="group" aria-label="Size on home">${WSIZES.map(([z, l, t]) => `<button class="${ent.size === z ? 'on' : ''}" data-act="w-size" data-id="${id}" data-v="${z}" aria-label="${t}">${l}</button>`).join('')}</span></span>` : ''}</div>
     <div class="wf-body">${W.full(o)}</div></div>`;
@@ -1477,7 +1480,7 @@ function editHome() {
   const draw = () => {
     const rects = new Map($$('.wrow', body).map(r => [r.dataset.id, r.getBoundingClientRect().top])), prev = fluidCapture(body);
     const ents = homeEntries(), on = ents.map(e => e.id), sizes = new Map(ents.map(e => [e.id, e.size])), all = [...on, ...Object.keys(WIDGETS).filter(id => !on.includes(id) && (id !== 'coach' || coachOn()))];
-    body.innerHTML = `<div class="sh-h"><h3>Edit home</h3><button class="btn sm" data-act="close">Done</button></div>
+    body.innerHTML = `<div class="sh-h"><h3>Edit home</h3>${xBtn()}</div>
     <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">${phoneDash() ? 'Choose your widgets and their order. On a phone they’re all one size and fill the screen.' : 'Choose your widgets, their order and size (S, M, L). Home fits them to your screen.'} Tap a widget on Home to open it full screen. Changes save automatically.</p>
     <div class="sg-b wlist">${all.map(id => { const W = WIDGETS[id], i = on.indexOf(id), shown = i >= 0;
       /* phones show every widget at one size, so sizes are only offered on wider screens */
@@ -1656,7 +1659,7 @@ function hfSheet(k) {
     const draw = q => { const ql = (q || '').trim().toLowerCase(), rs = rows.filter(r => !ql || r.label.toLowerCase().includes(ql));
       return `<button class="row hf-o${cur == null ? ' on' : ''}" data-hfv=""><span class="row-m"><span class="t">Any</span></span>${cur == null ? ICON.check : ''}</button>` +
         (rs.map(r => `<button class="row hf-o${r.v === cur ? ' on' : ''}" data-hfv="${esc(r.v)}"><span class="row-m"><span class="t">${esc(r.label)}</span>${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span>${r.v === cur ? ICON.check : ''}</button>`).join('') || `<div class="empty">Nothing matches.</div>`); };
-    openSheet(`<div class="sh-h"><h3>${title}</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+    openSheet(`<div class="sh-h"><h3>${title}</h3>${xBtn()}</div>
     ${search ? `<input class="search" id="hf-q" placeholder="Search" autocomplete="off" style="margin-bottom:10px">` : ''}<div class="list hf-list" id="hf-l">${draw('')}</div>`, r => {
       const l = r.querySelector('#hf-l');
       l.addEventListener('click', e => { const b = e.target.closest('[data-hfv]'); if (!b) return; set(b.dataset.hfv || null); closeSheet(); hfRefresh(); });
@@ -1681,7 +1684,7 @@ function hfSheet(k) {
   }
   /* dates: a preset, or any range */
   const iso = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-  openSheet(`<div class="sh-h"><h3>Filter by date</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Filter by date</h3>${xBtn()}</div>
   <div class="list hf-list">${[['', 'Any time'], ...DATE_RANGES].map(([v, label]) => { const cur = (f.range || '') === v && (v || !f.from && !f.to); return `<button class="row hf-o${cur ? ' on' : ''}" data-hfd="${v}"><span class="row-m"><span class="t">${label}</span></span>${cur ? ICON.check : ''}</button>`; }).join('')}</div>
   <span class="lbl" style="display:block;margin:16px 0 8px">Or choose dates</span>
   <div class="hf-dates"><label><span class="lbl">From</span><input class="field" type="date" id="hf-from" value="${f.from && !f.range ? iso(f.from) : ''}"></label><label><span class="lbl">To</span><input class="field" type="date" id="hf-to" value="${f.to && !f.range ? iso(f.to - 864e5) : ''}"></label></div>
@@ -1904,7 +1907,7 @@ function openTour() {
   let i = 0;
   const draw = body => {
     const x = slides[i], last = i === slides.length - 1;
-    body.innerHTML = `<div class="tour" aria-live="polite"><div class="tour-art" aria-hidden="true"><span>${x.icon}</span></div>
+    body.innerHTML = `<div class="tour" aria-live="polite">${xBtn('close', 'Close the tour', ' tour-x')}<div class="tour-art" aria-hidden="true"><span>${x.icon}</span></div>
       <span class="lbl">${i + 1} of ${slides.length}</span><h3>${esc(x.t)}</h3><p>${esc(x.b)}</p>
       <div class="tour-dots" aria-hidden="true">${slides.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
       <div class="btns">${last ? `<button class="btn line" id="tour-guide">Open the guide</button><button class="btn" data-act="close">Start training</button>` : `<button class="btn ghost" data-act="close">Skip</button><button class="btn" id="tour-next">Next</button>`}</div></div>`;
@@ -1962,7 +1965,7 @@ function vPrefs() {
 }
 /* the reminder days (bit 0 = Monday) in the order of the user's week */
 const weekOrder = () => Array.from({ length: 7 }, (_, k) => (weekStartDay() + 6 + k) % 7);
-const remFoot = () => `At ${timeText(S.profile.reminderTime)}, ${daysText(S.profile.reminderDays, weekOrder()).toLowerCase()}. Each one says what’s next for you, and stays quiet on days you’ve trained or rested and once your week’s target is met.`;
+const remFoot = () => `At ${timeText(S.profile.reminderTime)}, ${daysText(S.profile.reminderDays, weekOrder()).toLowerCase()}. Each one is about a session to finish or your next session, and stays quiet on days you’ve trained or rested and once your week’s target is met.`;
 /* reminders: phones only; they need an account (the server sends them) and a browser that can receive push */
 const localTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 function remGroup(row, link, group) {
@@ -2038,22 +2041,17 @@ async function reminderTest() {
 
 /* ---------- what a reminder can say ---------- */
 /* The server writes each reminder (api/_nudge.js) but can't run the coach, so the app works out a short brief and
-   saves it on the profile when it changes: the next split day and its first target, a lighter week or a week off,
-   the goal nearest to done, a record in the last session, and the coach's call with the day it's for. */
+   saves it on the profile when it changes: the next split day and its first three targets, a lighter week or a
+   week off, and the coach's call with the day it's for. */
 function reminderBrief() {
   const a = coachOn() ? coach() : null, nx = nextSplitDay(), day = nx && nx.sp.days[nx.i];
-  const tg = day ? dayTargets(day).filter(t => t.g) : [], f = tg[0], b = { coach: !!a };
+  const tg = day ? dayTargets(day).filter(t => t.g) : [], b = { coach: !!a };
   if (day) { b.day = (day.type || '').trim().slice(0, 30) || dayLabel(nx.sp.days, nx.i); b.n = day.exercises.length; }
-  if (f) { b.lift = f.e.name.slice(0, 40); b.tgt = f.e.kind === 'bw' && !f.g.next.w ? `${f.g.next.r} reps` : `${fmtW(f.g.next.w)} ${unit()} × ${f.g.next.r}`; }
+  if (tg.length) b.list = tg.slice(0, 3).map(t => ({ lift: t.e.name.slice(0, 40), tgt: t.e.kind === 'bw' && !t.g.next.w ? `${t.g.next.r} reps` : `${fmtW(t.g.next.w)} ${unit()} × ${t.g.next.r}` }));
   if (a) {
     const r = a.next; b.call = r.call; b.for = dayKey(Date.now() + (r.when === 'tomorrow' ? 864e5 : 0));
     if (a.deload.status === 'now') b.deload = a.deload.kind === 'week-off' ? 'off' : 'deload';
-    const g = a.goals.filter(x => x.status !== 'no-data' && x.cur > 0).sort((x, y) => y.progress - x.progress)[0], ex = g && exOf(g.goal.exId);
-    if (g && ex) b.goal = { lift: ex.name.slice(0, 40), kg: `${fmtW(g.goal.kg)} ${unit()}`, left: `${fmtW(Math.max(0, g.goal.kg - g.cur))} ${unit()}`, pct: Math.round(g.progress * 100), ready: g.status === 'ready',
-      wk: g.plan && g.plan.week ? `${g.plan.week.sets}×${g.plan.week.reps} at ${fmtW(g.plan.week.kg)} ${unit()}` : null };
   }
-  const last = sorted().find(s => s.endedAt && s.items.length);
-  if (last && S.A && Date.now() - last.startedAt < 4 * 864e5) { const pr = bestPerSession(S.A.rec.events.filter(e => e.sid === last.id))[0], ex = pr && exOf(pr.exId); if (ex) b.pr = ex.name.slice(0, 40); }
   return b;
 }
 /* what the server would know about this week, for a test reminder that reads like a real one */
@@ -2063,7 +2061,14 @@ function reminderCtx() {
   const prev = list.find(s => dayKey(s.startedAt) !== today);
   let streak = 0; while (streak < 8 && days.has(dayKey(now - (streak + 1) * 864e5))) streak++;
   return { name: S.profile.name || '', day: today, wk: list.filter(s => s.startedAt >= weekStart(now)).length, target: S.profile.target || 3,
-    gap: prev ? Math.round((mid(now) - mid(prev.startedAt)) / 864e5) : null, streak, total: list.length, brief: reminderBrief() };
+    gap: prev ? Math.round((mid(now) - mid(prev.startedAt)) / 864e5) : null, streak, total: list.length, brief: reminderBrief(), open: openCtx(now) };
+}
+/* a session still open, as the server sees it */
+function openCtx(now) {
+  const a = activeSession(); if (!a) return null;
+  const q = S.A && S.A.sess.get(a.id);
+  return { id: a.id, name: a.name || (a.splitId && S.splits.get(a.splitId)?.days[a.splitDay]?.type) || null, mins: Math.round((now - a.startedAt) / 6e4),
+    days: Math.round((new Date(now).setHours(12, 0, 0, 0) - new Date(a.startedAt).setHours(12, 0, 0, 0)) / 864e5), sets: q ? q.sets : 0 };
 }
 /* saved a few seconds after a change, and only when it differs from what was last saved */
 const BRIEF = { t: 0, last: null };
@@ -2079,7 +2084,7 @@ async function sendBrief() {
   if (!error) BRIEF.last = uid + j;
 }
 
-const HOW = `<div class="sh-h"><h3>How the numbers work</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="how">
+const HOW = `<div class="sh-h"><h3>How the numbers work</h3>${xBtn()}</div><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
     <p><b>One-rep max.</b> Each exercise shows your saved one-rep max, or the best estimate from your sets. When a completed set beats it, Synergym asks whether to save the new one.</p>
@@ -2123,15 +2128,15 @@ document.addEventListener('keydown', e => {
   const el = e.target; if ((e.key === 'Enter' || e.key === ' ') && el.getAttribute && el.getAttribute('role') === 'button' && el.dataset.act) { e.preventDefault(); el.click(); }
 });
 function confirmSheet(title, body, yes, fn, no = 'Cancel') {
-  openSheet(`<div class="sh-h"><h3>${esc(title)}</h3></div><p class="muted">${esc(body)}</p><div class="btns"><button class="btn ghost" data-act="close">${esc(no)}</button><button class="btn danger" id="cf-yes">${esc(yes)}</button></div>`, r => { r.querySelector('#cf-yes').onclick = () => { closeSheet(); fn(); }; });
+  openSheet(`<div class="sh-h"><h3>${esc(title)}</h3>${xBtn()}</div><p class="muted">${esc(body)}</p><div class="btns"><button class="btn ghost" data-act="close">${esc(no)}</button><button class="btn danger" id="cf-yes">${esc(yes)}</button></div>`, r => { r.querySelector('#cf-yes').onclick = () => { closeSheet(); fn(); }; });
 }
 function menuSheet(title, items) {
-  openSheet(`<div class="sh-h"><h3>${esc(title)}</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="menu">${items.map((it, i) => `<button data-mi="${i}" class="${it.warn ? 'warn' : ''}">${esc(it.label)}<span class="muted" style="font-size:13px">${esc(it.hint || '')}</span></button>`).join('')}</div>`,
+  openSheet(`<div class="sh-h"><h3>${esc(title)}</h3>${xBtn()}</div><div class="menu">${items.map((it, i) => `<button data-mi="${i}" class="${it.warn ? 'warn' : ''}">${esc(it.label)}<span class="muted" style="font-size:13px">${esc(it.hint || '')}</span></button>`).join('')}</div>`,
     r => r.querySelectorAll('[data-mi]').forEach(b => b.onclick = () => { const it = items[+b.dataset.mi]; closeSheet(); it.fn(); }));
 }
 function exerciseForm(title, ex, onSave, extra = '') {
   let m = ex.muscle || '', k = ex.kind || 'w';
-  openSheet(`<div class="sh-h"><h3>${esc(title)}</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="form">
+  openSheet(`<div class="sh-h"><h3>${esc(title)}</h3>${xBtn()}</div><div class="form">
   <label>Name<input class="field" id="ef-n" value="${esc(ex.name || '')}" maxlength="60" autocomplete="off"></label>
   <div><span class="lbl">Muscle group</span><div class="chips" id="ef-m" style="margin-top:8px">${muscles().map(x => `<button class="chip${x === m ? ' on' : ''}" data-m="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>
   <div><span class="lbl">Type</span><div class="chips" id="ef-k" style="margin-top:8px"><button class="chip${k === 'w' ? ' on' : ''}" data-k="w">Weighted</button><button class="chip${k === 'bw' ? ' on' : ''}" data-k="bw">Bodyweight</button></div></div></div>
@@ -2171,7 +2176,7 @@ function removeExercise(id) {
 /* exercise picker (session / split) */
 function openPicker(mode, extra = {}) {
   S.pk = { mode, m: '', q: '', added: 0, ...extra };
-  openSheet(`<div class="sh-h"><h3>${mode === 'session' ? 'Add exercise' : `Add to ${dayLabel(S.splits.get(extra.split)?.days, extra.day)}`}</h3><button class="btn ghost sm" data-act="close">${mode === 'split' ? 'Done' : 'Close'}</button></div>
+  openSheet(`<div class="sh-h"><h3>${mode === 'session' ? 'Add exercise' : `Add to ${dayLabel(S.splits.get(extra.split)?.days, extra.day)}`}</h3>${xBtn()}</div>
   <input class="search" id="pkq" placeholder="Search your exercises" autocomplete="off" maxlength="60">
   <div class="hscroll" id="pkm" style="margin-top:12px"></div><div id="pkl" class="pk-list"></div>`, r => {
     r.querySelector('#pkq').addEventListener('input', e => { S.pk.q = e.target.value; pickerList(); });
@@ -2217,7 +2222,7 @@ function startSession(force = false) {
 /* today is marked as a rest day: no session until it's undone. Says so, offers to undo it and carry on, returns true */
 function restBlock(proceed) {
   if (!isRestToday()) return false;
-  openSheet(`<div class="sh-h"><h3>Today is a rest day</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Today is a rest day</h3>${xBtn()}</div>
   <div class="sec-done"><span class="dt-check rest" aria-hidden="true">${ICON.moon}</span><span><b>Rest day logged</b><span class="muted">Recovery is part of the plan.</span></span></div>
   <p class="muted" style="margin:12px 0 4px">To log a session today, undo the rest day first.</p>
   <div class="btns"><button class="btn ghost" data-act="close">Keep resting</button><button class="btn" id="rest-go">Undo rest day</button></div>`, r => {
@@ -2228,7 +2233,7 @@ function restBlock(proceed) {
 /* two sessions done today: that's the day's limit. Says so and returns true. */
 function dayFull() {
   const done = doneToday(); if (done.length < DAY_MAX) return false;
-  openSheet(`<div class="sh-h"><h3>Done for today</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Done for today</h3>${xBtn()}</div>
   <div class="list today-list">${done.slice().reverse().map(sessRowToday).join('')}</div>
   <p class="muted" style="margin:12px 0 4px">You’ve logged ${DAY_MAX} sessions today, the most for one day. Recover well; your next session can start tomorrow.</p>
   <div class="btns"><button class="btn" data-act="close">Got it</button></div>`);
@@ -2239,7 +2244,7 @@ const sessRowToday = s => rowSession(s).replace('data-act="open"', 'data-act="op
 function todaySessions() {
   const done = doneToday();
   if (done.length === 1) return go('session', done[0].id);
-  openSheet(`<div class="sh-h"><h3>Today’s sessions</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Today’s sessions</h3>${xBtn()}</div>
   <div class="list today-list">${done.slice().reverse().map(sessRowToday).join('')}</div>`);
 }
 /* after a finished session today, starting another is a second session: say so and ask first.
@@ -2247,7 +2252,7 @@ function todaySessions() {
 function askSecond(proceed) {
   const done = doneToday(); if (!done.length) return false;
   const last = done[0], n = done.length + 1;
-  openSheet(`<div class="sh-h"><h3>You’ve trained today</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>You’ve trained today</h3>${xBtn()}</div>
   <div class="sec-done"><span class="dt-check" aria-hidden="true">${ICON.check}</span><span><b>${esc(sessName(last))}</b><span class="muted">Finished at ${fmtTime(last.endedAt)}${done.length > 1 ? ` · ${plural(done.length, 'session')} today` : ''}</span></span></div>
   <p class="muted" style="margin:12px 0 4px">Starting again logs a ${ord(n)} session for today, the last one the day can hold. To plan training twice a day, mark a day in your split as “Same day as” the day before.</p>
   <div class="btns"><button class="btn ghost" data-act="close">Not now</button><button class="btn" id="sec-go">Start a ${ord(n)} session</button></div>`, r => {
@@ -2261,7 +2266,7 @@ function dayPicker({ title, note, onPick, foot = [] }) {
   const doneIds = new Set(doneToday().map(s => s.splitId + ':' + s.splitDay)), body = $('#sheet-body');
   const draw = () => {
     const prev = fluidCapture(body), sp = S.splits.get(sel);
-    body.innerHTML = `<div class="sh-h"><h3>${esc(title)}</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+    body.innerHTML = `<div class="sh-h"><h3>${esc(title)}</h3>${xBtn()}</div>
     ${sp ? `${splits.length > 1 ? `<span class="lbl">Split</span><div class="hscroll st-splits">${splits.map(x => `<button class="chip${x.id === sel ? ' on' : ''}" data-st-sp="${x.id}">${esc(x.name)}</button>`).join('')}</div>` : `<span class="lbl">${esc(sp.name)}</span>`}
       <span class="lbl st-q">Which day?</span>
       <div class="st-days">${sp.days.map((d, i) => { if (isRestDay(d)) return ''; const isNext = nx && nx.sp.id === sp.id && nx.i === i, g = dayGroups(d).size, dn = doneIds.has(sp.id + ':' + i);
@@ -2377,7 +2382,7 @@ function delSession(id) { S.sessions.delete(id); queue('s:' + id, 0); S.rest = n
 function editDate() {
   const s = cur(); if (!s) return; const d = new Date(s.startedAt);
   const v = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  openSheet(`<div class="sh-h"><h3>Session date</h3><button class="btn ghost sm" data-act="close">Close</button></div><div class="form">
+  openSheet(`<div class="sh-h"><h3>Session date</h3>${xBtn()}</div><div class="form">
   <label>Date and time<input class="field" type="datetime-local" id="ed-start" value="${v}"></label>
   <p class="muted" style="font-size:13px">Use this to back-date a session you forgot to log live.</p></div><div class="btns"><button class="btn" id="ed-save">Save</button></div>`, r => {
     r.querySelector('#ed-save').onclick = () => { const t = new Date(r.querySelector('#ed-start').value).getTime(); if (!isFinite(t)) return toast('Pick a valid date');
@@ -2406,7 +2411,7 @@ function barbellSVG(side, plates) {
 function plateSheet(kg) {
   const u = unit(), key = 'sg-bar-' + u; let bar = BARS[u][0]; try { const v = localStorage.getItem(key), b = +v; if (v !== null && v !== '' && BARS[u].includes(b)) bar = b; } catch {}
   const start = kg > 0 ? Math.round(toU(kg) * 100) / 100 : '';
-  openSheet(`<div class="sh-h"><h3>Plate calculator</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Plate calculator</h3>${xBtn()}</div>
   <div class="pl-in"><label>Target<span class="unitin"><input class="field" id="pl-w" inputmode="decimal" value="${start}" placeholder="0" aria-label="Target weight"><span class="lbl">${u}</span></span></label>
   <div><span class="lbl">Bar</span><span class="seg" role="group" aria-label="Bar weight">${BARS[u].map(b => `<button class="${b === bar ? 'on' : ''}" data-bar="${b}">${b ? b + ' ' + u : 'None'}</button>`).join('')}</span></div></div>
   <div id="pl-out" aria-live="polite"></div>`, root => {
@@ -2455,7 +2460,7 @@ function sessMenu() {
 function splitRoom() {
   if (S.splits.size < SPLIT_MAX) return true;
   const list = [...S.splits.values()].sort((a, b) => b.updatedAt - a.updatedAt);
-  openSheet(`<div class="sh-h"><h3>${SPLIT_MAX} splits is the limit</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>${SPLIT_MAX} splits is the limit</h3>${xBtn()}</div>
   <p class="muted" style="margin-bottom:12px">Delete one to make room for a new split. Sessions you logged with it stay in your history, under its name.</p>
   <div class="list sp-full">${list.map(sp => `<div class="row"><span class="row-m"><span class="t">${esc(sp.name)}</span><span class="sub">${plural(sp.days.length, 'day')} · ${plural(S.A.splitUse.get(sp.id) || 0, 'session')} logged</span></span><button class="btn line sm" data-act="split-del" data-id="${sp.id}">Delete</button></div>`).join('')}</div>`);
   return false;
@@ -2501,7 +2506,7 @@ function dupSplit(id) {
 }
 function templateSheet(tid) {
   const t = TEMPLATES.find(x => x.id === tid); if (!t) return;
-  openSheet(`<div class="sh-h"><h3>${esc(t.name)}</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>${esc(t.name)}</h3>${xBtn()}</div>
     <p class="muted" style="font-size:13px;margin-bottom:var(--s0)">${esc(t.desc)} Using it makes your own copy that you can rename, re-order and edit freely.</p>
     <div class="tpl-days">${t.plan.map(([ty, exs], i) => `<div class="pd${exs ? '' : ' rest'}"><span class="lbl">Day ${i + 1}</span><b>${esc(ty)}</b>${exs ? `<span class="sub">${exs.map(e => `${esc(e[0])} ${e[1]}×${esc(e[2])}`).join(' · ')}</span>` : ''}</div>`).join('')}</div>
     <div class="btns" style="margin-top:var(--s0)"><button class="btn lg" id="tpl-use">Use this template</button></div>`, r => {
@@ -2535,7 +2540,7 @@ async function shareSheet(id) {
   const sp = S.splits.get(id); if (!sp) return;
   const draw = () => {
     const rec = S.recipients.get(id) || [], link = sp.shareToken ? `${location.origin}/s/${sp.shareToken}` : '';
-    $('#sheet-body').innerHTML = `<div class="sh-h"><h3>Share ${esc(sp.name)}</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+    $('#sheet-body').innerHTML = `<div class="sh-h"><h3>Share ${esc(sp.name)}</h3>${xBtn()}</div>
     <div class="form">
       <div><span class="lbl">Send to a Synergym user</span>
       <form id="sh-form" class="share-row" style="margin-top:8px"><input class="field" id="sh-u" placeholder="@username" autocapitalize="none" spellcheck="false" maxlength="21" autocomplete="off"><button class="btn" type="submit">Share</button></form>
@@ -2588,10 +2593,10 @@ $('#imp').addEventListener('change', async e => {
   if (f.size > 20e6) return toast('That file is too large');
   let d = null; try { d = parseImport(JSON.parse(await f.text()), S.profile.bw); } catch {}
   if (!d) return toast('That file isn’t a valid Synergym export');
-  if (d.error) return openSheet(`<div class="sh-h"><h3>Can’t import this file</h3><button class="btn ghost sm" data-act="close">Close</button></div><p class="muted">${esc(d.error)}</p><div class="btns"><button class="btn" data-act="close">OK</button></div>`);
+  if (d.error) return openSheet(`<div class="sh-h"><h3>Can’t import this file</h3>${xBtn()}</div><p class="muted">${esc(d.error)}</p><div class="btns"><button class="btn" data-act="close">OK</button></div>`);
   const now = [plural(S.sessions.size, 'session'), plural(S.library.length, 'exercise'), plural(S.splits.size, 'split')];
   const incoming = [plural(d.sessions.length, 'session'), plural(d.library.length, 'exercise'), plural(d.splits.length, 'split')];
-  openSheet(`<div class="sh-h"><h3>Replace all your data?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Replace all your data?</h3>${xBtn()}</div>
   <div class="imp-warn"><b>This overwrites everything ${S.local ? 'on this phone' : 'in your account'}.</b> Your current ${now.join(', ')} will be permanently deleted and replaced by the file. This can’t be undone.</div>
   <p class="muted" style="margin-top:12px">The file${d.exportedAt ? ` from ${esc(fmtDate(d.exportedAt))}` : ''} has ${incoming.join(', ')}. Your username and login stay the same. Splits you had shared by link stop working.</p>
   <div class="btns" style="flex-wrap:wrap"><button class="btn line" id="imp-backup" style="margin-right:auto">Export current data first</button><button class="btn ghost" data-act="close">Cancel</button><button class="btn danger" id="imp-go">Replace my data</button></div>`, r => {
@@ -2633,7 +2638,7 @@ async function signOut() {
 let confirmLeave = false;
 function deleteAccount() {
   if (S.local) return deleteLocalSheet();
-  openSheet(`<div class="sh-h"><h3>Delete your account?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Delete your account?</h3>${xBtn()}</div>
   <p class="muted">This permanently deletes your sessions, exercises, splits and shares. Export your data first if you want a copy. Type DELETE to confirm.</p>
   <div class="form" style="margin-top:14px"><input class="field" id="del-c" autocomplete="off" placeholder="DELETE"></div>
   <div class="btns"><button class="btn danger" id="del-go">Delete account</button></div>`, r => {
@@ -2646,7 +2651,7 @@ function deleteAccount() {
 }
 function changeUsername(intro = false) {
   if (S.local) return toast('Go online to pick a username');
-  openSheet(`<div class="sh-h"><h3>${intro ? 'Pick a username' : 'Change username'}</h3><button class="btn ghost sm" data-act="close">${intro ? 'Later' : 'Close'}</button></div>${intro ? '<p class="muted" style="margin-bottom:12px">You’re online. A username lets other lifters share splits with you. You can do this later in Settings.</p>' : ''}
+  openSheet(`<div class="sh-h"><h3>${intro ? 'Pick a username' : 'Change username'}</h3>${xBtn()}</div>${intro ? '<p class="muted" style="margin-bottom:12px">You’re online. A username lets other lifters share splits with you. You can do this later in Settings.</p>' : ''}
   <div class="form"><label>New username<input class="field" id="un" value="${esc(S.profile.username)}" autocapitalize="none" spellcheck="false" maxlength="20"></label><p class="muted" style="font-size:12px">Splits already shared with you stay. People will need the new name to share with you.</p></div>
   <div class="btns"><button class="btn" id="un-save">Save</button></div>`, r => {
     r.querySelector('#un-save').onclick = async () => { if (await setUsername(r.querySelector('#un').value)) { closeSheet(); render(false); toast('Username updated'); } };
@@ -3015,7 +3020,7 @@ async function startOfflineNew() {
 /* online → offline: copy everything to the phone; anything not yet uploaded goes with it */
 function goOfflineSheet() {
   if (!canGoLocal()) return toast('Offline use is for the app on your phone’s Home Screen');
-  openSheet(`<div class="sh-h"><h3>Use Synergym offline?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Use Synergym offline?</h3>${xBtn()}</div>
   <div class="off-pts"><p><b>Everything stays on this phone.</b> Your sessions, exercises, splits and settings are copied here, and new workouts are saved here only.</p>
   <p><b>Nothing syncs until you go online.</b> Then you log in, and this phone’s changes are uploaded to your account.</p>
   <p><b>Some things wait for online:</b> sharing splits, reminders and changing your username.</p></div>
@@ -3129,7 +3134,7 @@ function restoreDefaultsLocal() {
   render(false); toast(n ? `Restored ${plural(n, 'exercise')}` : 'Your default list is complete');
 }
 function deleteLocalSheet() {
-  openSheet(`<div class="sh-h"><h3>Delete the data on this phone?</h3><button class="btn ghost sm" data-act="close">Close</button></div>
+  openSheet(`<div class="sh-h"><h3>Delete the data on this phone?</h3>${xBtn()}</div>
   <p class="muted">This permanently deletes every session, exercise, split and setting stored on this phone. ${readMode()?.linked ? 'Your online account keeps what it had before you went offline.' : 'You have no online account, so nothing else has a copy.'} Export first if you want one. Type DELETE to confirm.</p>
   <div class="form" style="margin-top:14px"><input class="field" id="del-c" autocomplete="off" placeholder="DELETE"></div>
   <div class="btns"><button class="btn line" data-act="export" data-f="json" style="margin-right:auto">Export first</button><button class="btn danger" id="del-go">Delete</button></div>`, r => {

@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.5, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.6, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.5-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.6-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -160,17 +160,22 @@ Phones can get a push notification at a chosen time on chosen days (**Settings �
 written for the person, from their own log, and reads like a note from a coach rather than an app chasing
 them:
 
-- **What it says:** the most useful thing that day, in wording that changes from day to day. Usually what's
-  next ("Up next: Lower · Back Squat 137.5 kg × 5 to start, then 4 more exercises"); otherwise a first
-  session, coming back after time away (no guilt, and a mention that targets start lighter), a goal ready to
-  test, a lighter week, an easy day, one more session for the week, or last session's record. Tapping it opens
-  the page it's about (Home, the Coach, Goals or Recovery).
-- **When it stays quiet:** a day already trained (or started), a day marked as rest, a day the coach called
-  rest, a planned week off, and once the week's target is met. After time away it thins out: every 3 days
-  after 10 days, weekly after 3 weeks, fortnightly after 2 months.
+- **What it says:** one of two things, in wording that changes from day to day.
+  - **A session to finish:** one started 3+ hours ago and never finished ("Push is still open · You started
+    it earlier today and logged 9 sets. Finish it to save them and keep your next targets right."). Tapping
+    it opens that session. This one comes even on a day already trained or marked as rest.
+  - **Otherwise, your next session:** the split day and its first targets ("Next up: Lower · Back Squat
+    137.5 kg × 5, Romanian Deadlift 100 kg × 8, Leg Press 180 kg × 10, then 2 more."), with at most one line
+    of context: a first session, coming back after time away (no guilt, and a mention that targets start
+    lighter), a lighter week, an easy day, one more for the weekly target, or the week so far. Tapping it
+    opens Home.
+- **When it stays quiet:** while a session is under way (started under 3 hours ago), a day already trained,
+  a day marked as rest, a day the coach called rest, a planned week off, and once the week's target is met.
+  After time away it thins out: every 3 days after 10 days, weekly after 3 weeks, fortnightly after 2 months.
+  A session left open for days comes up every 3 days.
 - **How it's written:** the server can't run the coach, so the app saves a short brief on the profile when
-  it changes (`profiles.reminder_brief`: the next split day and its first target, a lighter week, the goal
-  nearest to done, last session's record, and the coach's call with the day it's for). The words are put
+  it changes (`profiles.reminder_brief`: the next split day and its first three targets, a lighter week or a
+  week off, and the coach's call with the day it's for). The words are put
   together in `api/_nudge.js`, a pure function with its own tests.
 - **Staying registered:** browsers drop push subscriptions now and then (iOS after an update or a
   reinstall), and signing out removes the phone's. So each time the app opens, a phone with reminders on and
@@ -183,7 +188,8 @@ How it runs:
   brief.
 - Every 5 minutes `pg_cron` calls `api/reminders.js` (a Vercel function) with a shared secret. It asks the
   database who is due and what's going on in their training (`reminders_next`: this week's sessions, days
-  since the last one, whether today is trained or a rest day, days since the last reminder, the brief),
+  since the last one, whether today is trained or a rest day, days since the last reminder, the session left
+  open if any, the brief),
   writes each message or stays quiet, sends it, and reports back who was reached and which devices are gone
   (`reminders_done`).
 - Setup (once): `supabase/reminders-cron.sql`. Vercel needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and

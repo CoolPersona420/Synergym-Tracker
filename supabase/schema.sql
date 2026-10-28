@@ -397,16 +397,20 @@ alter table public.profiles add column if not exists reminder_pushed_on date;
 -- Replaced by reminders_next and reminders_done
 drop function if exists public.reminders_due(text);
 drop function if exists public.reminders_drop(text, text[]);
+-- Its columns change between versions, and a function's columns can't be changed in place
+drop function if exists public.reminders_next(text);
 
 -- Called by the reminders function every few minutes with the shared secret (kept in Vault).
 -- Returns, for each device of each person due now, what's going on in their training: this week's sessions (the
 -- week starts on their chosen day), days since the last one (or since joining), days trained in a row, whether
--- today is trained or marked as rest, days since the last reminder sent, and the brief. The function writes the message, or stays quiet. Each person
+-- today is trained or marked as rest, days since the last reminder sent, the session left open (if any) and the
+-- brief. The function writes the message, or stays quiet. Each person
 -- is marked as handled for their local day. The window is 45 minutes so a late run still sends; people without
 -- a device aren't marked, so a phone registered within the window still gets that day's reminder.
 create or replace function public.reminders_next(p_secret text)
 returns table (endpoint text, p256dh text, auth text, uid uuid, name text, day date, dow int, wk int, target int,
-  gap int, streak int, total int, since int, rest boolean, today boolean, brief jsonb)
+  gap int, streak int, total int, since int, rest boolean, today boolean, brief jsonb,
+  open_id uuid, open_name text, open_mins int, open_days int, open_sets int)
 language plpgsql security definer set search_path = public as $$
 #variable_conflict use_column
 begin
@@ -435,11 +439,22 @@ begin
          and (s.started_at at time zone m.tz)::date < m.lt::date) as last_day,
       (select coalesce(min(g), 9) - 1 from generate_series(1, 8) g where not exists (select 1 from public.sessions s
          where s.user_id = m.id and s.items <> '[]'::jsonb and (s.started_at at time zone m.tz)::date = m.lt::date - g))::int as run
+      , o.sid as o_id, o.nm as o_name, o.mins as o_mins, o.days as o_days, o.sets as o_sets
     from marked m
+    /* the newest session never finished: its name (or its split day's), how long ago it started, and sets logged */
+    left join lateral (
+      select s.id as sid, coalesce(nullif(btrim(s.name), ''), (select sp.days -> s.split_day ->> 'type' from public.splits sp where sp.id = s.split_id)) as nm,
+        (extract(epoch from now() - s.started_at) / 60)::int as mins, (m.lt::date - (s.started_at at time zone m.tz)::date) as days,
+        (select count(*) from jsonb_array_elements(case when jsonb_typeof(s.items) = 'array' then s.items else '[]'::jsonb end) it,
+           jsonb_array_elements(case when jsonb_typeof(it -> 'sets') = 'array' then it -> 'sets' else '[]'::jsonb end) st
+         where coalesce(st ->> 'r', '') ~ '^[0-9]+(\.[0-9]+)?$' and (st ->> 'r')::numeric > 0)::int as sets
+      from public.sessions s where s.user_id = m.id and s.ended_at is null order by s.started_at desc limit 1
+    ) o on true
   )
   select ps.endpoint, ps.p256dh, ps.auth, i.id, i.display_name, i.lt::date, extract(isodow from i.lt)::int, i.n_wk,
     coalesce(i.weekly_target, 3), (i.lt::date - coalesce(i.last_day, (i.created_at at time zone i.tz)::date))::int, i.run, i.n_all,
-    (i.lt::date - i.reminder_pushed_on)::int, coalesce(i.rest_days ? to_char(i.lt, 'YYYY-FMMM-FMDD'), false), i.trained, i.reminder_brief
+    (i.lt::date - i.reminder_pushed_on)::int, coalesce(i.rest_days ? to_char(i.lt, 'YYYY-FMMM-FMDD'), false), i.trained, i.reminder_brief,
+    i.o_id, i.o_name, i.o_mins, i.o_days, i.o_sets
   from info i join public.push_subscriptions ps on ps.user_id = i.id;
 end $$;
 

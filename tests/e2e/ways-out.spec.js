@@ -34,3 +34,31 @@ test('the today panel has a Close button on phones too', async ({ page }) => {
   await close.click();
   await expect(page.locator('#tsheet')).toBeHidden();
 });
+
+test('one close button everywhere: the same round ✕, top right, named Close', async ({ page }, info) => {
+  const fake = new FakeSupabase(benchHistory());
+  await login(page, fake, 'A');
+  const same = async (sel, what) => {
+    const x = page.locator(sel);
+    await expect(x, what).toBeVisible();
+    await expect(x, what).toHaveClass(/\bxbtn\b/);
+    expect(await x.getAttribute('aria-label'), what).toMatch(/^Close/);
+    const b = await x.boundingBox();
+    expect(Math.round(b.width), what).toBe(40); expect(Math.round(b.height), what).toBe(40);
+    return x;
+  };
+  await page.goto('/settings');
+  await page.click('[data-act="how"]');
+  await (await same('#sheet-body .sh-h [data-act="close"]', 'a sheet')).click();
+  await page.click('[data-act="tour"]');
+  await (await same('#sheet-body .tour-x', 'the tour')).click();
+  await expect(page.locator('#sheet')).toBeHidden();
+  await page.goto('/w/week');
+  await same('[data-act="w-close"]', 'a full-screen widget');
+  await page.goto('/');
+  await page.locator('.ts-open').click();
+  await same('#tsheet .tsh-x', 'the today panel');
+  if (info.project.name === 'phone') { await page.goto('/coach'); await same('.co-top [data-act="coach-close"]', 'the Coach'); }
+  /* no sheet header still has a text Close, Done or Later button */
+  expect(await page.evaluate(() => [...document.querySelectorAll('.sh-h .btn')].map(b => b.textContent.trim()))).toEqual([]);
+});

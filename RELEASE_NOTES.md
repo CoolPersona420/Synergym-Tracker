@@ -10,6 +10,26 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.6-alpha · 28 October 2026
+
+**Reminders about your sessions, and one close button everywhere**
+
+- **Reminders are now about your sessions:**
+  - **A session to finish:** one you started 3+ hours ago and never finished: "Push is still open · You
+    started it earlier today and logged 9 sets. Finish it to save them and keep your next targets right."
+    Tapping it opens that session. This one comes even on a day you've trained or marked as rest; one left
+    open for days comes up every 3 days.
+  - **Otherwise, your next session:** the day of your split and its first targets, like "Next up: Lower ·
+    Back Squat 137.5 kg × 5, Romanian Deadlift 100 kg × 8, Leg Press 180 kg × 10, then 2 more." At most one
+    short line comes first: your first session, coming back after a break, a lighter week, an easy day, one
+    more for your weekly target, or the week so far.
+  - Reminders about goals and records are gone. They stay quiet while you're training (a session started under
+    3 hours ago), and the other quiet rules are unchanged.
+- **One close button across the app:** every sheet, the today panel, the Coach, full-screen widgets and the
+  tour now close with the same round ✕ in the top right corner, with a larger touch area. Sheets that said
+  Close, Done or Later in that corner use it too, and confirmation sheets get one as well. Buttons that do
+  something (Cancel, Skip, Got it) stay as they were.
+
 ## 0.1.5-alpha · 28 October 2026
 
 **App icon options removed**

@@ -525,6 +525,15 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 @keyframes fade{from{opacity:0}}
 @keyframes sheetup{from{transform:translateY(2.6rem);opacity:0}}
 .sh-h{display:flex;justify-content:space-between;align-items:center;gap:var(--s-1);margin-bottom:var(--s0)}
+/* the one close button (xBtn in main.js): a ✕ in a round chip, top right of every sheet, the today panel, the
+   Coach and full-screen widgets. 40px, with a 48px touch area. */
+.xbtn{position:relative;width:2.5rem;height:2.5rem;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--surface-2);color:var(--ink);transition:background .2s,transform .2s var(--ease)}
+.xbtn::after{content:'';position:absolute;inset:-4px}
+.xbtn .ico{width:18px;height:18px;stroke-width:2.2}
+.xbtn:active{transform:scale(.92)}
+@media (hover:hover){.xbtn:hover{background:var(--line)}}
+.tour{position:relative}
+.tour-x{position:absolute;top:0;right:0}
 .sh-h h3{font-size:var(--t1)}
 .menu{display:flex;flex-direction:column}
 .menu button{padding:var(--s0) 4px;border-bottom:1px solid var(--line);font-size:1rem;font-weight:500;display:flex;justify-content:space-between;align-items:center}
