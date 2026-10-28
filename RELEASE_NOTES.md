@@ -10,11 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.5-alpha · 28 October 2026
+
+**App icon options removed**
+
+- The app icon options from 0.1.4 are removed: the light, dark and theme-coloured icons, **Settings › App
+  icon**, and Android's one-colour themed icon. The icon is the original white wolf on black again, on every
+  phone. An icon already on a Home Screen stays as it is until Synergym is added again.
+- The start of the week (**Settings › Training**) stays.
+
 ## 0.1.4-alpha · 27 October 2026
 
 **An app icon in your colours, and your own start of the week**
 
-- **The Home Screen icon matches the app.** The wolf now comes white on black, black on white, and in each
+- *(Removed in 0.1.5)* **The Home Screen icon matches the app.** The wolf now comes white on black, black on white, and in each
   theme's colours. By default the icon follows the app: your theme, or with Auto your phone's light mode
   (white) or dark mode (black). **Settings › App icon** can keep it light or dark instead, and your app's theme
   never changes with it.

@@ -551,11 +551,6 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;margin-le
 .theme-card:hover{transform:translateY(-2px)}
 .theme-card.on{border-color:var(--accent)}
 .theme-card small{display:block;font-weight:400;color:var(--muted);font-size:.72rem}
-/* Settings › App icon: three icons to pick from, shaped like a Home Screen icon */
-.ic-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s-1);padding:var(--s0)}
-.ic-opt{display:flex;flex-direction:column;align-items:center;gap:8px;padding:var(--s-1) 4px;border-radius:var(--r-md);background:var(--surface-2);border:1.5px solid transparent;font-size:.8rem;font-weight:600;transition:border-color .2s}
-.ic-opt.on{border-color:var(--accent)}
-.ic-opt img{width:56px;height:56px;border-radius:13px;box-shadow:0 0 0 1px rgba(127,127,127,.3)}
 .tp{position:relative;height:3.6rem;border-radius:var(--r-sm);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(127,127,127,.25)}
 .tp b{position:absolute;left:8px;top:8px;width:55%;height:20px;border-radius:5px}
 .tp i{position:absolute;left:8px;bottom:8px;width:35%;height:5px;border-radius:3px}

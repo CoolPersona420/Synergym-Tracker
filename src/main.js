@@ -1941,7 +1941,6 @@ function vPrefs() {
     (coachOn() ? link('Open the coach', 'data-act="nav" data-v="coach"') : ''),
     coachOn() ? 'On: the Coach card is on Home and the coach sets your targets.' : 'Off: the Coach card is hidden and sessions show plain next-set suggestions. Your goals are kept.')}
   ${group('Appearance', `<div class="srow"><span class="k">Theme</span><span class="v">${esc((THEMES.find(t => t.id === themePref()) || THEMES[0]).name)}</span></div><div class="sg-pad">${themePicker()}</div>` + link('Home widgets', 'data-act="edit-home"', plural(homeWidgets().length, 'widget')))}
-  ${iconGroup(group)}
   ${remGroup(row, link, group)}
   ${S.local ? group('Account',
     `<div class="srow"><span class="k">Offline<small class="keep">Everything is saved on this phone only</small></span><span class="off-dot" aria-hidden="true"></span></div>` +
@@ -1960,30 +1959,6 @@ function vPrefs() {
     `${VER_PRE && /alpha/.test(VER_PRE) ? 'This is an early alpha: features may change and you may meet the odd bug. ' : ''}Synergym is open source. Read the code, report a problem or suggest something on GitHub.`)}
   <section class="sg rv"><div class="sg-b">${S.local ? link('Delete data on this phone', 'data-act="delete-local"', '', ' center danger') : link('Sign out', 'data-act="signout"', '', ' center') + link('Delete account', 'data-act="delete-account"', '', ' center danger')}</div></section>
   </div>`;
-}
-/* the Home Screen icon (phones): it matches the app by default (the theme, or with Auto the phone's light or dark
-   mode), or stays light or dark. Picking one never changes the app's theme. public/theme.js points the page's icon
-   links at it; a phone reads them when the app is added. */
-const ICON_CHOICES = [['app', 'Match the app'], ['light', 'Light'], ['dark', 'Dark']];
-const iconChoice = () => { try { const c = localStorage.getItem('sg-icon'); return c === 'light' || c === 'dark' ? c : 'app'; } catch { return 'app'; } };
-const iconVariant = () => (window.sgAppIcon && window.sgAppIcon()) || 'dark';
-function iconGroup(group) {
-  if (!coarse.matches) return '';
-  const c = iconChoice(), v = iconVariant(), ios = isIOS(), inApp = standalone();
-  const pick = ICON_CHOICES.map(([k, t]) => { const img = k === 'app' ? v : k;
-    return `<button class="ic-opt${c === k ? ' on' : ''}" data-act="app-icon" data-v="${k}" aria-pressed="${c === k}"><img src="/icons/${img}-180.png" alt="" width="60" height="60"><span>${t}</span></button>`; }).join('');
-  const note = ios && inApp ? 'iPhone keeps the icon Synergym had when it was added. To show this one, add Synergym again from Safari, then remove the old icon.'
-    : ios ? 'Add Synergym to your Home Screen from Safari’s Share menu and it gets this icon.'
-    : inApp ? 'Android swaps the installed icon by itself, usually within a day of opening the app, and may ask first. For an icon that follows light and dark mode, turn on Themed icons in your phone’s wallpaper and style settings.'
-    : 'Install Synergym and it gets this icon. For one that follows light and dark mode, turn on Themed icons in your phone’s wallpaper and style settings.';
-  const again = ios && inApp ? `<button class="srow link" data-act="icon-safari"><span class="k">Copy the link for Safari<small class="keep">Paste it in Safari, then Share › Add to Home Screen</small></span><span class="chev" aria-hidden="true"></span></button>` : '';
-  return group('App icon', `<div class="ic-pick" role="group" aria-label="App icon">${pick}</div>${again}`,
-    `${note} Your app’s theme stays as it is.${ios && inApp && S.local ? ' Your offline workouts stay in this copy of the app, so go online first: the new one picks them up when you log in.' : ios && inApp ? ' In the new one you log in again; everything in your account is there.' : ''}`);
-}
-async function iconSafari() {
-  const url = `${location.origin}/?icon=${iconVariant()}`;
-  try { await navigator.clipboard.writeText(url); toast('Link copied. Paste it in Safari, then Share › Add to Home Screen.'); }
-  catch { toast(url); }
 }
 /* the reminder days (bit 0 = Monday) in the order of the user's week */
 const weekOrder = () => Array.from({ length: 7 }, (_, k) => (weekStartDay() + 6 + k) % 7);
@@ -2817,8 +2792,6 @@ const ACT = {
   'd-theme': el => { const t = el.dataset.t; applyTheme(t); S.profile.theme = t; queue('p', 300); render(false); },
   'd-set': el => { S.profile[el.dataset.k] = el.dataset.v; queue('p', 300); render(false); },
   'd-week': el => { S.profile.weekStart = +el.dataset.v; setWeekStart(S.profile.weekStart); queue('p', 300); render(false); },
-  'app-icon': el => { const v = el.dataset.v; try { v === 'app' ? localStorage.removeItem('sg-icon') : localStorage.setItem('sg-icon', v); } catch {} iconVariant(); buzz(); render(false); },
-  'icon-safari': () => iconSafari(),
   'd-step': el => { const k = el.dataset.k, d = +el.dataset.d, p = S.profile; p[k] = k === 'target' ? Math.min(7, Math.max(1, p.target + d)) : Math.min(600, Math.max(15, p.rest + d)); queue('p', 600); render(false); },
   'd-toggle': el => { const k = el.dataset.k; S.profile[k] = !S.profile[k]; queue('p', 300); render(false); },
   resend: async () => { if (!S.pendingEmail) return; const { error } = await sb.auth.resend({ type: 'signup', email: S.pendingEmail, options: { emailRedirectTo: location.origin } }); S.authMsg = error ? { text: authErr(error), err: true } : { text: 'Sent again. It can take a minute to arrive.', err: false }; render(false); },

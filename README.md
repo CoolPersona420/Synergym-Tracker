@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.4, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.5, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.4-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.5-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -46,10 +46,6 @@ The version lives in `package.json` (`0.1.4-alpha`) and shows in Settings › Ab
 - **Bodyweight log**, **History** with search, and an **exercise library** of your own with editable
   muscle groups.
 - **Themes:** Auto (follows the device) plus eleven named palettes.
-- **App icon (phones):** the wolf in the app's colours. By default the Home Screen icon matches the app: its
-  theme, or with Auto the phone's light mode (white) or dark mode (black). **Settings › App icon** can fix it
-  to light or dark; the app's theme never changes with it. See [App icon](#app-icon) for what each platform
-  allows.
 - **Week start:** weeks start on Monday, Sunday or Saturday (**Settings › Training**), for the weekly
   target, streaks, charts, the today panel and reminders.
 - **Phone app:** install it to the Home Screen. It opens without a connection, has a floating dock and a
@@ -142,8 +138,6 @@ auth and database calls in memory.
 | `src/lib/` | logic with no UI: the coach, progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, push reminders, error reports and stats |
 | `api/` | the reminders function (Vercel) and `_nudge.js`, which writes each reminder |
 | `public/sw.js` | the service worker: offline app shell and reminder notifications |
-| `public/theme.js` | runs before the first paint: the saved theme, and which app icon the page offers |
-| `public/icons/`, `public/manifests/` | the app icon in every colour, and a manifest for each (made by `scripts/icons.mjs`) |
 | `src/ui/` | brand and icons, themes, the login and open splashes, the user guide |
 | `src/data/` | starter split templates, quotes |
 
@@ -196,26 +190,6 @@ How it runs:
   `REMINDER_SECRET`; the secret also lives in Supabase Vault as `reminder_secret`.
 
 On iPhone, notifications only work in the app added to the Home Screen (iOS 16.4 or later).
-
-## App icon
-
-The wolf comes in light (white behind it), dark (black) and each theme's colours: `scripts/icons.mjs` makes
-every PNG and a manifest per variant (`public/icons/`, `public/manifests/`), plus a one-colour wolf for
-Android's themed icons. `public/theme.js` runs before the first paint and points the page's
-`apple-touch-icon` and manifest links at the icon that fits: the app's theme, the phone's light or dark mode
-under Auto, or the fixed choice from **Settings › App icon** (kept on the device as `sg-icon`). It follows the
-phone's mode as it changes.
-
-What each platform allows (honestly):
-
-- **iPhone:** a Home Screen web app keeps the icon it had when it was added. iOS has no dark or tinted icon
-  for web apps and no way to change one afterwards. So the icon is right at the moment it's added, and to
-  change it you add Synergym again from Safari: Settings copies a link (`/?icon=<variant>`) that sets the
-  icon there. (In iOS's Tinted Home Screen mode, the system may still tint it.)
-- **Android:** Chrome takes the icon from the manifest at install, and updates an installed app's icon by
-  itself when it changes (usually within a day of opening the app, sometimes asking first). With
-  **Themed icons** on (Android 13+), the one-colour wolf follows the phone's colours and light or dark mode
-  live.
 
 ## User guide
 
