@@ -1758,3 +1758,5 @@ html[data-nav="swipe"]::view-transition-old(root){animation:none;opacity:0}
 html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cubic-bezier(.2,.8,.2,1) both}
 @keyframes vt-swipe-in{from{transform:translateX(-28%);filter:brightness(.85)}}
 @media (prefers-reduced-motion:reduce){html[data-nav="swipe"]::view-transition-new(root){animation:none}}
+/* History: the next page of sessions */
+.h-more{display:flex;justify-content:center;padding:var(--s0) 0}

@@ -69,7 +69,8 @@ const unit = () => S.profile.unit === 'lb' ? 'lb' : 'kg';
 const toU = kg => S.profile.unit === 'lb' ? kg * KG_LB : kg;
 const fromU = v => S.profile.unit === 'lb' ? v / KG_LB : v;
 const fmtW = kg => { if (kg == null || !isFinite(kg)) return ''; return String(Math.round(toU(kg) * 10) / 10); };
-const fmtVol = kg => { const v = toU(kg || 0); if (v >= 10000) return (v / 1000).toFixed(1) + (unit() === 'lb' ? 'k lb' : ' t'); return Math.round(v).toLocaleString('en-US') + ' ' + unit(); };
+const NUM = new Intl.NumberFormat('en-US');
+const fmtVol = kg => { const v = toU(kg || 0); if (v >= 10000) return (v / 1000).toFixed(1) + (unit() === 'lb' ? 'k lb' : ' t'); return NUM.format(Math.round(v)) + ' ' + unit(); };
 
 /* ================= themes ================= */
 function flipTheme() {
@@ -122,6 +123,7 @@ function restoreOutbox() {
 }
 function queue(key, delay = 600) {
   if (!S.user) return;
+  EDITS++;
   if (!(key.startsWith('s:') && S.sessions.get(key.slice(2))?.endedAt == null)) DATA_REV++;
   OB.pending.add(key); persistOutbox();
   clearTimeout(OB.timers.get(key)); OB.timers.set(key, setTimeout(() => flush(key), delay)); syncUI();
@@ -230,13 +232,24 @@ async function refresh() { if (S.local || S.syncing) return; try { await loadAll
 async function reloadLibrary() { if (S.local) return render(false); try { const ex = await fetchAll(() => sb.from('exercises').select('*').order('name')); S.library = ex.map(exFromDb); render(false); } catch {} }
 
 /* ================= metrics ================= */
-const exOf = id => S.library.find(e => e.id === id);
+/* Derived data is worked out again only when the data changes: every edit goes through queue(), which bumps EDITS,
+   and loads swap in new Maps and arrays (or change their size). */
+let EDITS = 0;
+const same = (a, b) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
+const EXM = { k: null, m: new Map() };
+const exOf = id => { const k = [S.library, S.library.length]; if (!same(EXM.k, k)) { EXM.k = k; EXM.m = new Map(S.library.map(e => [e.id, e])); } return EXM.m.get(id); };
 const loadOf = (st, ex) => { const w = +st.w || 0; return ex?.kind === 'bw' ? (+S.profile.bw || 75) + w : w; };
 const e1rm = (l, r) => (!(l > 0) || !(r > 0)) ? 0 : r === 1 ? l : l * (1 + r / 30);
-const sorted = () => [...S.sessions.values()].sort((a, b) => b.startedAt - a.startedAt);
+/* sessions, newest first (shared: callers copy it before changing its order) */
+const SORT = { k: null, v: [] };
+const sorted = () => { const k = [S.sessions, S.sessions.size, EDITS]; if (!same(SORT.k, k)) { SORT.k = k; SORT.v = [...S.sessions.values()].sort((a, b) => b.startedAt - a.startedAt); } return SORT.v; };
 const activeSession = () => sorted().find(s => !s.endedAt);
 const cur = () => S.sessions.get(S.arg);
+const CMP = { k: null };
 function compute() {
+  const ck = [S.sessions, S.sessions.size, S.library, S.library.length, EDITS];
+  if (S.A && same(CMP.k, ck)) return S.A;
+  CMP.k = ck;
   const exMap = new Map(S.library.map(e => [e.id, e]));
   const list = [...S.sessions.values()].sort((a, b) => a.startedAt - b.startedAt);
   const best = new Map(), seen = new Map(), A = { sess: new Map(), set: new Map(), ex: new Map() };
@@ -262,8 +275,10 @@ function compute() {
     }
     for (const [ex, top] of sb_) {
       if (!(top > 0)) continue; seen.set(ex, (seen.get(ex) || 0) + 1);
-      let e = A.ex.get(ex); if (!e) { e = { pts: [], best: 0, bestSet: null, bestT: 0, last: 0, n: 0, vol: 0 }; A.ex.set(ex, e); }
+      let e = A.ex.get(ex); if (!e) { e = { pts: [], best: 0, bestSet: null, bestT: 0, last: 0, n: 0, vol: 0, top1: 0, top1Sid: null, top2: 0 }; A.ex.set(ex, e); }
       e.pts.push({ t: s.startedAt, sid: s.id, v: top, pr: prs.includes(ex) });
+      /* the two best sessions, for "best estimate apart from this session" without going through them all */
+      if (top > e.top1) { e.top2 = e.top1; e.top1 = top; e.top1Sid = s.id; } else if (top > e.top2) e.top2 = top;
       if (top > e.best) { e.best = top; e.bestSet = sbSet.get(ex); e.bestT = s.startedAt; }
       e.last = s.startedAt; e.n++; e.vol += exVol.get(ex) || 0;
     }
@@ -273,9 +288,8 @@ function compute() {
 }
 /* 1RM: the confirmed value if the user saved one, otherwise the best estimate from finished sessions */
 function prevBestE1rm(exId, excludeSid) {
-  const ex = exOf(exId); let b = 0;
-  for (const s of S.sessions.values()) { if (s.id === excludeSid) continue; for (const it of s.items) if (it.exId === exId) for (const st of it.sets) { const v = e1rm(loadOf(st, ex), +st.r || 0); if (v > b) b = v; } }
-  return b;
+  const e = compute().ex.get(exId); if (!e) return 0;
+  return e.top1Sid && e.top1Sid === excludeSid ? e.top2 : e.top1;
 }
 const oneRmOf = (exId, excludeSid) => { const ex = exOf(exId); return ex && ex.oneRm > 0 ? ex.oneRm : prevBestE1rm(exId, excludeSid); };
 const roundW = kg => { const st = unit() === 'lb' ? 1 : 0.5; return fromU(Math.round(toU(kg) / st) * st); };
@@ -646,12 +660,13 @@ let rvObs = null;
 function playEnter(v) {
   if (rvObs) { rvObs.disconnect(); rvObs = null; }
   const vh = innerHeight, late = [], io = 'IntersectionObserver' in window && !reduced;
+  /* every position is read before anything is changed: reading after a change makes the browser lay the page out
+     again, once per element, which on a long list took most of a second */
+  const rvs = $$('.rv', v), rows = io ? $$('.list > .row, .exrow', v) : [];
+  const top = el => el.getBoundingClientRect().top, rvTop = io ? rvs.map(top) : [], rowTop = rows.map(top);
   let i = 0;
-  for (const el of $$('.rv', v)) {
-    if (io && el.getBoundingClientRect().top > vh * .9) { el.classList.add('rv-wait'); late.push(el); }
-    else el.style.setProperty('--i', Math.min(i++, LITE ? 5 : 10));
-  }
-  if (io) for (const el of $$('.list > .row, .exrow', v)) if (!el.closest('.rv-wait') && el.getBoundingClientRect().top > vh) { el.classList.add('rv-wait'); late.push(el); }
+  rvs.forEach((el, k) => { if (io && rvTop[k] > vh * .9) { el.classList.add('rv-wait'); late.push(el); } else el.style.setProperty('--i', Math.min(i++, LITE ? 5 : 10)); });
+  rows.forEach((el, k) => { if (rowTop[k] > vh && !el.closest('.rv-wait')) { el.classList.add('rv-wait'); late.push(el); } });
   v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); countUp(v);
   if (!late.length) return;
   rvObs = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { e.target.classList.replace('rv-wait', 'rv-in'); rvObs.unobserve(e.target); } }, { rootMargin: '0px 0px -6% 0px' });
@@ -689,6 +704,7 @@ function afterRender(entered) {
     if (n < 3)
     setTimeout(() => { document.body.classList.add('fab-hint'); setTimeout(() => document.body.classList.remove('fab-hint'), 2400); }, SPL.el ? 2300 : 800);
   }
+  if (S.view === 'history') wireHMore(); else if (hObs) { hObs.disconnect(); hObs = null; }
   if (S.view === 'split' && S.splits.has(S.arg) && !S.recipients.has(S.arg)) loadRecipients(S.arg);
   if (S.view === 'public' && (!S.pub || S.pub.token !== S.arg)) loadPublic(S.arg);
   if (S.view === 'splits' && S.loaded && entered && Date.now() - (S.sharedAt || 0) > 3000) loadShared();
@@ -1584,7 +1600,11 @@ function transport(s) {
   ${live ? `<button class="tfin" data-act="finish"><i></i>Finish</button>` : `<button class="tfin" data-act="back">Done</button>`}</div>`;
 }
 function previewGroup(s, ids) { const m = []; s.items.forEach((it, ii) => it.sets.forEach((st, si) => { if (ids.includes(st.id)) m.push({ it, st, ii, si }); })); m.sort((a, b) => a.ii - b.ii || a.si - b.si); return classify(m); }
+/* typing a weight or reps saves at once; the numbers worked out from it (intensity, records) follow when typing pauses */
+let liveT = 0;
+const liveSoon = () => { clearTimeout(liveT); liveT = setTimeout(liveRefresh, 120); };
 function liveRefresh() {
+  clearTimeout(liveT);
   const s = cur(); if (!s || S.view !== 'session') return; compute(); const a = S.A.sess.get(s.id);
   const si = $('#sint'); if (si) { const n = si.querySelector('.n'); if (n) n.textContent = Math.round(a.int); }
   const t = $('#stier'); if (t) t.innerHTML = tierText(a);
@@ -1640,18 +1660,39 @@ function hfMatch(s, f) {
   if (f.to && s.startedAt >= f.to) return false;
   return true;
 }
+/* History shows the newest sessions first, a page at a time: the next page loads as the end of the list comes into
+   view (or with the button). Searching or filtering starts again from the first page. */
+const H_PAGE = 60;
+let hShown = H_PAGE, hKey = '';
 function historyList() {
   const q = S.q.trim().toLowerCase(), f = S.hf, on = hfOn(f); let list = sorted();
+  const key = q + '|' + JSON.stringify(f); if (key !== hKey) { hKey = key; hShown = H_PAGE; }
   if (q) list = list.filter(s => sessName(s).toLowerCase().includes(q) || s.items.some(it => (exOf(it.exId)?.name || '').toLowerCase().includes(q)) || (s.notes || '').toLowerCase().includes(q));
   if (on) list = list.filter(s => hfMatch(s, f));
   if (!list.length) return `<div class="empty"><b>${q || on ? 'No sessions match.' : 'Nothing logged yet.'}</b>${on ? 'Try fewer filters, or a wider date range.' : q ? 'Try an exercise name, like “squat”.' : 'Your sessions will collect here, grouped by month.'}</div>`;
-  const by = new Map(); for (const s of list) { const d = new Date(s.startedAt), k = d.getFullYear() * 12 + d.getMonth(); if (!by.has(k)) by.set(k, []); by.get(k).push(s); }
+  /* months are totalled over everything that matched, so a month split across pages still shows its whole count */
+  const mk = s => { const d = new Date(s.startedAt); return d.getFullYear() * 12 + d.getMonth(); }, tot = new Map();
+  for (const s of list) { const k = mk(s), t = tot.get(k) || { n: 0, vol: 0 }; t.n++; t.vol += S.A.sess.get(s.id)?.vol || 0; tot.set(k, t); }
+  const by = new Map(); for (const s of list.slice(0, hShown)) { const k = mk(s); if (!by.has(k)) by.set(k, []); by.get(k).push(s); }
   let h = q || on ? `<div class="hf-n lbl">${plural(list.length, 'session')} found</div>` : '';
-  for (const [k, ss] of by) { const vol = ss.reduce((x, s) => x + (S.A.sess.get(s.id)?.vol || 0), 0);
-    h += `<div class="month"><span class="lbl">${MONTHS[k % 12]} ${Math.floor(k / 12)}</span><span class="lbl">${plural(ss.length, 'session')} · ${fmtVol(vol)}</span></div><div class="list">${ss.map(rowSession).join('')}</div>`; }
+  for (const [k, ss] of by) { const t = tot.get(k);
+    h += `<div class="month"><span class="lbl">${MONTHS[k % 12]} ${Math.floor(k / 12)}</span><span class="lbl">${plural(t.n, 'session')} · ${fmtVol(t.vol)}</span></div><div class="list">${ss.map(rowSession).join('')}</div>`; }
+  if (list.length > hShown) h += `<div class="h-more"><button class="btn ghost sm" data-act="h-more">${roll(`Show older sessions (${list.length - hShown})`)}</button></div>`;
   return h;
 }
-const hfRefresh = () => { const a = $('#hfil'), b = $('#hlist'), t = $('.hf-tog'); if (a) a.innerHTML = hfHTML(); if (b) b.innerHTML = historyList(); if (t) { const on = S.hf.open || hfOn(S.hf); t.classList.toggle('on', on); t.setAttribute('aria-expanded', on); } };
+/* draw the list again, and load the next page by itself when its end scrolls into view */
+let hObs = null;
+function drawHList() {
+  const b = $('#hlist'); if (b) b.innerHTML = historyList();
+  wireHMore();
+}
+function wireHMore() {
+  if (hObs) { hObs.disconnect(); hObs = null; }
+  const m = $('#hlist .h-more'); if (!m || !('IntersectionObserver' in window)) return;
+  hObs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { hObs.disconnect(); hObs = null; hShown += H_PAGE; drawHList(); } }, { rootMargin: '0px 0px 600px 0px' });
+  hObs.observe(m);
+}
+const hfRefresh = () => { const a = $('#hfil'), t = $('.hf-tog'); if (a) a.innerHTML = hfHTML(); drawHList(); if (t) { const on = S.hf.open || hfOn(S.hf); t.classList.toggle('on', on); t.setAttribute('aria-expanded', on); } };
 /* one filter's choices in a sheet: "Any" first, then each option with how many sessions it has */
 function hfSheet(k) {
   const f = S.hf, all = sorted(), count = fn => all.filter(fn).length;
@@ -2459,7 +2500,7 @@ function exportData(fmt) {
   const stamp = new Date().toISOString().slice(0, 10);
   if (fmt === 'csv') {
     const rows = [['date', 'session', 'exercise', 'muscle', 'set', 'weight_' + unit(), 'reps', 'e1rm_' + unit(), 'intensity', 'group']];
-    for (const s of sorted().reverse()) { const gm = new Map(); for (const g of groupsOf(s)) for (const x of g.m) gm.set(x.st.id, g.type);
+    for (const s of [...sorted()].reverse()) { const gm = new Map(); for (const g of groupsOf(s)) for (const x of g.m) gm.set(x.st.id, g.type);
       for (const it of s.items) { const ex = exOf(it.exId); it.sets.forEach((st, i) => { if (!(+st.r > 0)) return; rows.push([new Date(s.startedAt).toISOString().slice(0, 16), sessName(s), ex?.name || '', ex?.muscle || '', i + 1, fmtW(+st.w || 0), st.r, fmtW(e1rm(loadOf(st, ex), st.r)), Math.round(S.A.set.get(st.id) || 0), gm.get(st.id) || '']); }); } }
     const csv = rows.map(r => r.map(c => { c = String(c); if (/^[=+\-@]/.test(c)) c = "'" + c; return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(',')).join('\n');
     return download(`synergym-${stamp}.csv`, csv, 'text/csv');
@@ -2598,6 +2639,7 @@ const ACT = {
   'add-set': el => addSet(el.dataset.item),
   'add-drop': el => addDrop(el.dataset.set),
   done: el => toggleDone(el.dataset.set),
+  'h-more': () => { hShown += H_PAGE; drawHList(); },
   'set-menu': el => setMenu(el.dataset.set),
   'sugg-use': el => useSuggestion(el.dataset.item),
   plates: el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); const st = it && [...it.sets].reverse().find(x => (x.w ?? x.pw) > 0); plateSheet(st ? st.w ?? st.pw : (el.dataset.w ? +el.dataset.w : null)); },
@@ -2713,10 +2755,10 @@ document.addEventListener('input', e => {
     case 'w': case 'r': { if (!s) return; const x = findSet(s, el.dataset.set); if (!x) return; const raw = el.value.trim().replace(',', '.');
       if (f === 'w') { const v = parseFloat(raw); x.st.w = raw === '' || !isFinite(v) ? null : Math.min(2000, Math.max(0, fromU(v))); }
       else { const v = parseInt(raw, 10); x.st.r = raw === '' || !isFinite(v) ? null : Math.min(999, Math.max(0, v)); }
-      queue('s:' + s.id); liveRefresh(); break; }
+      queue('s:' + s.id); liveSoon(); break; }
     case 'sname': if (s) { s.name = el.value.trim() ? el.value.slice(0, 80) : null; queue('s:' + s.id, 900); } break;
     case 'notes': if (s) { s.notes = el.value.slice(0, 4000); queue('s:' + s.id, 1200); } break;
-    case 'q': S.q = el.value; $('#hlist').innerHTML = historyList(); break;
+    case 'q': S.q = el.value; drawHList(); break;
     case 'exq': S.exq = el.value; $('#exlist').innerHTML = exList(); break;
     case 'd-bw': { const v = parseFloat(el.value.replace(',', '.')), kg = unit() === 'lb' ? v / KG_LB : v; const ok = isFinite(kg) && kg >= 30 && kg <= 300; el.classList.toggle('bad', !ok && el.value.trim() !== ''); if (ok) { S.profile.bw = kg; S.profile.bwLog = logBw(S.profile.bwLog, kg); queue('p', 900); } break; }
     case 'pw': { const v = el.value; let sc = 0; if (v.length >= 8) sc++; if (v.length >= 12) sc++; if (/[a-z]/.test(v) && /[A-Z]/.test(v)) sc++; if (/\d/.test(v)) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
@@ -2747,7 +2789,8 @@ function tick() {
   const tr = $('#trest');
   if (S.rest && !s.endedAt) {
     const left = S.rest.end - now;
-    if (left <= 0 && !S.rest.beeped) { S.rest.beeped = true; beep(); try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch {} setTimeout(() => { S.rest = null; tick(); }, 2200); }
+    /* the "go" shows for a moment, then clears, unless a new rest has started in the meantime */
+    if (left <= 0 && !S.rest.beeped) { const r = S.rest; r.beeped = true; beep(); try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch {} setTimeout(() => { if (S.rest === r) { S.rest = null; tick(); } }, 2200); }
     ts.className = 'tsum rest'; ts.title = 'Tap to skip rest'; ts.innerHTML = `<small>${left > 0 ? 'rest' : 'go'}</small>${mmss(left)}`; if (tr) tr.hidden = false;
   } else {
     const a = S.A?.sess.get(s.id); ts.className = 'tsum'; ts.innerHTML = a ? `${a.sets} set${a.sets === 1 ? '' : 's'} · ${fmtVol(a.vol)}` : ''; if (tr) tr.hidden = true;

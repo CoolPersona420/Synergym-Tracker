@@ -10,13 +10,23 @@ export const PR_LABEL = { w: 'Weight PR', r: 'Rep PR', wr: 'Weight + rep PR' };
 /* strongest first, for picking one record to show per exercise per session */
 export const PR_RANK = { wr: 3, w: 2, r: 1 };
 
-const fresh = () => ({ w: -1, wr: 0, wt: 0, wsid: null, maxR: 0, maxRw: 0, maxRt: 0, reps: new Map() });
+/* reps: the most reps done at each weight (for the rep records table). front: the sets nothing beats on both
+   weight and reps, heaviest first, so their reps rise as the weight falls; it stays a handful long and answers
+   "most reps at this weight or heavier" without going through every weight ever done. */
+const fresh = () => ({ w: -1, wr: 0, wt: 0, wsid: null, maxR: 0, maxRw: 0, maxRt: 0, reps: new Map(), front: [] });
 const key = w => Math.round(w * 100) / 100;
 
-/* most reps done at weight w or heavier */
+/* most reps done at weight w or heavier: the lightest frontier point at or above w */
 export function repsAtOrAbove(rec, w) {
-  let best = 0; for (const [k, r] of rec.reps) if (k >= w - EPS && r > best) best = r;
+  let best = 0; for (const p of rec.front) { if (p.w >= w - EPS) best = p.r; else break; }
   return best;
+}
+/* add (w, r) to the frontier unless something heavier-or-equal already has as many reps, dropping what it beats */
+function addFront(front, w, r) {
+  for (const p of front) if (p.w >= w - EPS && p.r >= r) return;
+  let i = 0; while (i < front.length && front[i].w > w + EPS) i++;
+  let j = i; while (j < front.length && front[j].r <= r) j++;
+  front.splice(i, j - i, { w, r });
 }
 export function classify(rec, w, r) {
   if (!(r > 0) || rec.w < 0) return null;
@@ -25,7 +35,7 @@ export function classify(rec, w, r) {
   return best > 0 && r > best ? 'r' : null;
 }
 function add(rec, w, r, s) {
-  const k = key(w); if (r > (rec.reps.get(k) || 0)) rec.reps.set(k, r);
+  const k = key(w); if (r > (rec.reps.get(k) || 0)) { rec.reps.set(k, r); addFront(rec.front, k, r); }
   if (w > rec.w + EPS || (Math.abs(w - rec.w) <= EPS && r > rec.wr)) { rec.w = w; rec.wr = r; rec.wt = s.startedAt; rec.wsid = s.id; }
   if (r > rec.maxR) { rec.maxR = r; rec.maxRw = w; rec.maxRt = s.startedAt; }
 }
