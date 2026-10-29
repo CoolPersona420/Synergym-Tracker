@@ -82,9 +82,12 @@ export function topPanel({ content, canPull, hintText, reduced = false, buzz = (
       stop(); drag = { kind: 'shut', base: y, ...at };
     } else if (canPull(e)) drag = { kind: 'pull', ...at };
     else drag = null;
+    /* only a touch that can move the panel holds up the page's scrolling (see rubber.js) */
+    removeEventListener('touchmove', move);
+    if (drag) addEventListener('touchmove', move, { passive: false });
   }, { passive: true });
 
-  addEventListener('touchmove', e => {
+  function move(e) {
     if (!drag || e.touches.length !== 1) return;
     const p = e.touches[0], dy = p.clientY - drag.y, dx = p.clientX - drag.x;
     drag.s.push({ y: p.clientY, t: performance.now() }); if (drag.s.length > 12) drag.s.shift();
@@ -110,7 +113,7 @@ export function topPanel({ content, canPull, hintText, reduced = false, buzz = (
       if (on !== armed) { armed = on; hint.classList.toggle('armed', on); if (on) buzz(10); }
     }
     paint();
-  }, { passive: false });
+  }
 
   const end = () => {
     const d = drag; drag = null; if (!d || !d.on) return;

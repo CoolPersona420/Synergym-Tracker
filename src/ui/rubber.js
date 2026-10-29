@@ -44,10 +44,15 @@ export function rubberBand(view, { ios = false, reduced = false, held = () => fa
     const p = e.touches[0];
     touch = { x: p.clientX, y: p.clientY, lastY: p.clientY, axis: 0, dir: 0, anchor: 0 };
     /* caught while springing back: carry on from where it is */
-    if (raf && x) { stop(); v = 0; touch.axis = 1; touch.dir = Math.sign(x); touch.anchor = p.clientY - touch.dir * unband(Math.abs(x)); }
+    const caught = !!(raf && x);
+    if (caught) { stop(); v = 0; touch.axis = 1; touch.dir = Math.sign(x); touch.anchor = p.clientY - touch.dir * unband(Math.abs(x)); }
+    /* only a touch that starts at an end (or catches a bounce) may need to hold the page still, so only then does
+       the browser wait for this listener; every other scroll goes ahead without asking the page first */
+    removeEventListener('touchmove', move);
+    addEventListener('touchmove', move, { passive: !(caught || atTop() || atEnd()) });
   }, { passive: true });
 
-  addEventListener('touchmove', e => {
+  function move(e) {
     if (!touch) return;
     if (held()) { if (x) { x = 0; paint(); } touch = null; return; }
     if (e.touches.length !== 1) { if (x) spring(); touch = null; return; }
@@ -71,7 +76,7 @@ export function rubberBand(view, { ios = false, reduced = false, held = () => fa
     if (!e.cancelable && (y - touch.lastY) * touch.dir < 0) { spring(); touch = null; return; }
     if (e.cancelable) e.preventDefault();
     x = band(d) * touch.dir; touch.lastY = y; paint();
-  }, { passive: false });
+  }
 
   const end = e => { if (touch && x) { v = 0; spring(); } touch = null; down = e.touches.length > 0; ended = performance.now(); };
   addEventListener('touchend', end, { passive: true });

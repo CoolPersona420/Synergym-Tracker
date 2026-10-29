@@ -10,6 +10,38 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.9-alpha · 29 October 2026
+
+**Fast with a big log, and a round of fixes**
+
+Measured on a phone slowed to mid-range speed, with three years of training (about 620 sessions):
+
+- **Exercises opens in about 0.13 s instead of 1.6 s,** and History in about 0.13 s instead of up to 0.8 s.
+  Typing in History's search no longer stutters (from about 0.5 s per key to under 0.06 s). Home, Splits and
+  Settings open about three times faster.
+- **Records (PRs) are worked out far faster** as the log grows, and the numbers behind every screen are worked
+  out again only when your data changes, not on every screen.
+- **History shows 60 sessions at a time** and loads the next ones as you scroll; each month still shows its full
+  count and volume.
+- **During a workout,** a weight or reps you type saves at once, and the intensity and record lines update when
+  you pause, so typing stays smooth.
+- **Smoother scrolling on Android:** scrolling no longer waits for the app between movements, except for a
+  swipe that starts at the very top or bottom (where the stretch and the today panel need it).
+
+Fixed:
+
+- An empty set in a live session became 0 kg × 0 after the app reopened or refreshed, so its hints vanished and
+  ticking it asked for reps. Empty sets stay empty, and sets already saved as zeros read as empty again.
+- Swapping two muscle group names (A to B and B to A) merged the two groups.
+- A rest timer started within two seconds of the previous one ending was cleared straight away.
+- Reordering a split's days left the day picked as up next pointing at a different day.
+- Dragging a sheet closed could close a sheet opened just after it; a drag interrupted by the phone left the
+  sheet half-way down.
+- Logging in or signing up said nothing when the connection failed.
+- Exports were stamped with the UTC date, and the CSV's times were in UTC; both now use your local date and time.
+- A session holds up to 60 exercises: adding more now says so, instead of the extra ones going missing on the
+  next load.
+
 ## 0.1.8-alpha · 29 October 2026
 
 **Widgets first on phones, and an Ocean theme that holds together**

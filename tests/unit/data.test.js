@@ -105,3 +105,14 @@ test('the week can start on Monday, Sunday or Saturday', async () => {
   assert.equal(profFromDb({ week_start: 3 }).weekStart, 1);
   assert.equal(profToDb({ ...DEFAULT_PROFILE, weekStart: 6 }).week_start, 6);
 });
+
+test('an empty set stays empty when a session is loaded, and one saved as zeros is empty again', async () => {
+  const { num } = await import('../../src/lib/sanitize.js');
+  assert.equal(num(null), null); assert.equal(num(''), null); assert.equal(num(undefined), null); assert.equal(num('0'), 0); assert.equal(num(2.5), 2.5); assert.equal(num('x'), null);
+  const set = o => cleanSession({ id: 'a', startedAt: 1, items: [{ id: 'i', exId: 'e', sets: [{ id: 's', ...o }] }] }).items[0].sets[0];
+  assert.deepEqual([set({ w: null, r: null, pw: 80, pr: 8 }).w, set({ w: null, r: null, pw: 80, pr: 8 }).r], [null, null]);
+  assert.deepEqual([set({ w: 0, r: 0, pw: 80, pr: 8 }).w, set({ w: 0, r: 0, pw: 80, pr: 8 }).r], [null, null]);
+  /* a done set, and a bodyweight set with reps, keep their numbers */
+  assert.deepEqual([set({ w: 0, r: 12, done: true }).w, set({ w: 0, r: 12, done: true }).r], [0, 12]);
+  assert.deepEqual([set({ w: 80, r: 0 }).w, set({ w: 80, r: 0 }).r], [80, null]);
+});

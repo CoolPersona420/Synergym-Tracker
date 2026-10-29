@@ -354,12 +354,11 @@ function editMuscles() {
       const names = rows.map(x => x.name.trim().slice(0, 30));
       if (names.some(n => !n)) return toast('Muscle groups need a name');
       if (new Set(names.map(n => n.toLowerCase())).size !== names.length) return toast('Two groups have the same name');
+      /* every rename at once, so swapping two names (A → B and B → A) doesn't merge the groups */
+      const ren = new Map(rows.filter(x => x.orig && x.orig !== x.name.trim()).map(x => [x.orig, x.name.trim()]));
       let moved = 0;
-      for (const row of rows) if (row.orig && row.orig !== row.name.trim()) {
-        const to = row.name.trim();
-        for (const e of S.library) if (e.muscle === row.orig) { e.muscle = to; queue('x:' + e.id, 200); moved++; }
-        for (const sp of S.splits.values()) { let ch = false; for (const d of sp.days) for (const x of d.exercises) if (x.muscle === row.orig) { x.muscle = to; ch = true; } if (ch) queue('sp:' + sp.id, 400); }
-      }
+      for (const e of S.library) if (ren.has(e.muscle)) { e.muscle = ren.get(e.muscle); queue('x:' + e.id, 200); moved++; }
+      for (const sp of S.splits.values()) { let ch = false; for (const d of sp.days) for (const x of d.exercises) if (ren.has(x.muscle)) { x.muscle = ren.get(x.muscle); ch = true; } if (ch) queue('sp:' + sp.id, 400); }
       S.profile.muscles = names; queue('p', 0); closeSheet(); render(false);
       toast(moved ? `Muscle groups saved · ${plural(moved, 'exercise')} moved` : 'Muscle groups saved');
     };
@@ -573,17 +572,18 @@ function fluidCapture(root) {
 const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
 function wireScrollers(root) {
   for (const t of $$('textarea.autosize', root)) { grow(t); if (!t._ag) { t._ag = 1; t.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } }); } }
-  for (const el of $$('.hscroll, .types', root)) {
-    const upd = () => { const max = el.scrollWidth - el.clientWidth; el.classList.toggle('more-l', el.scrollLeft > 4); el.classList.toggle('more-r', max - el.scrollLeft > 4); };
-    upd(); if (!el._sw) { el._sw = 1; el.addEventListener('scroll', upd, { passive: true }); }
-  }
+  /* fade hints at the edges that have more to scroll to: all measured first, then marked (one layout, not one each) */
+  const sc = $$('.hscroll, .types', root), mark = (el, m) => { el.classList.toggle('more-l', m[0] > 4); el.classList.toggle('more-r', m[1] - m[0] > 4); };
+  const ms = sc.map(el => [el.scrollLeft, el.scrollWidth - el.clientWidth]);
+  sc.forEach((el, i) => { mark(el, ms[i]); if (!el._sw) { el._sw = 1; el.addEventListener('scroll', () => mark(el, [el.scrollLeft, el.scrollWidth - el.clientWidth]), { passive: true }); } });
 }
 function fluidApply(root, prev) {
   wireScrollers(root);
-  $$('.seg, .auth-tabs', root).forEach((s, i) => {
-    const b = s.querySelector('button.on'); s.classList.add('pill');
-    if (!b) { s.style.setProperty('--w', '0px'); return; }
-    const x = b.offsetLeft, w = b.offsetWidth, p = prev && prev.seg[i];
+  const segs = $$('.seg, .auth-tabs', root), at = segs.map(s => { const b = s.querySelector('button.on'); return b ? [b.offsetLeft, b.offsetWidth] : null; });
+  segs.forEach((s, i) => {
+    s.classList.add('pill');
+    if (!at[i]) { s.style.setProperty('--w', '0px'); return; }
+    const [x, w] = at[i], p = prev && prev.seg[i];
     if (p && (p[0] !== x || p[1] !== w)) { s.classList.add('nt'); s.style.setProperty('--x', p[0] + 'px'); s.style.setProperty('--w', p[1] + 'px'); void s.offsetWidth; s.classList.remove('nt'); }
     s.style.setProperty('--x', x + 'px'); s.style.setProperty('--w', w + 'px');
   });
@@ -903,6 +903,9 @@ document.addEventListener('submit', async e => {
       if (error) return done('Couldn’t save your name. Try again.', true);
       S.authMsg = null; S.ob.step = 3; render(true);
     }
+  } catch (err) {
+    /* the request itself failed (offline, or the connection dropped): say so rather than nothing */
+    console.error(err); done(navigator.onLine ? 'Couldn’t reach the server. Try again in a moment.' : 'You’re offline. Connect and try again.', true);
   } finally { btn.disabled = false; btn.style.opacity = ''; }
 });
 async function setUsername(raw) {
@@ -2022,7 +2025,8 @@ const HOW = `<div class="sh-h"><h3>How the numbers work</h3>${xBtn()}</div><div 
   </div><button class="btn lg wide" data-act="close" style="margin-top:16px">Done</button>`;
 
 /* ================= sheets ================= */
-function openSheet(html, mount) { const sh = $('#sheet'); $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); fluidApply($('#sheet-body'), null); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
+let sheetGen = 0;
+function openSheet(html, mount) { sheetGen++; const sh = $('#sheet'), sp0 = $('#sheet .sp'); sp0.style.transform = sp0.style.transition = sp0.style.animation = ''; $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); fluidApply($('#sheet-body'), null); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
 function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.remove('open'); w.setAttribute('aria-expanded', 'false'); } $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; const sp = $('#sheet .sp'); sp.style.transform = sp.style.transition = sp.style.animation = ''; }
 /* drag a sheet down from its top to dismiss it, like a native bottom sheet */
 (() => {
@@ -2036,9 +2040,12 @@ function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.rem
   sp.addEventListener('touchend', () => {
     if (y0 == null) return; const v = dy / Math.max(1, performance.now() - t0); y0 = null;
     sp.style.transition = 'transform .32s var(--ease)';
-    if (dy > 120 || (dy > 40 && v > .6)) { sp.style.transform = 'translateY(105%)'; setTimeout(closeSheet, 260); }
+    /* closes this sheet once it has slid away, not one opened in the meantime */
+    if (dy > 120 || (dy > 40 && v > .6)) { const g = sheetGen; sp.style.transform = 'translateY(105%)'; setTimeout(() => { if (g === sheetGen) closeSheet(); }, 260); }
     else sp.style.transform = '';
   });
+  /* a drag the system interrupts (a call, a notification) settles back */
+  sp.addEventListener('touchcancel', () => { if (y0 == null) return; y0 = null; sp.style.transition = 'transform .32s var(--ease)'; sp.style.transform = ''; });
 })();
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#sheet').hidden) return closeSheet();
@@ -2251,7 +2258,10 @@ function repeatSession(id, force = false) {
   toast('Last time’s numbers are filled in as hints');
 }
 function addExercise(exId) {
-  const s = cur(); if (!s) return; const last = lastSetsFor(exId, s.id);
+  const s = cur(); if (!s) return;
+  /* what a saved session keeps; more would be dropped the next time it loads */
+  if (s.items.length >= 60) return toast('A session holds up to 60 exercises');
+  const last = lastSetsFor(exId, s.id);
   const sets = last ? last.slice(0, 8).map(st => ({ id: sid(), w: null, r: null, pw: st.w ?? null, pr: st.r ?? null, done: false, g: null })) : [{ id: sid(), w: null, r: null, pw: null, pr: null, done: false, g: null }];
   const it = { id: sid(), exId, sets }; s.items.push(it); queue('s:' + s.id, 0); render(false);
   requestAnimationFrame(() => { const el = $(`[data-item="${it.id}"]`); if (el) el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); });
@@ -2414,6 +2424,8 @@ function moveDay(i, dir) {
   const before = new Map($$('.day[data-did]').map(el => [el.dataset.did, el.getBoundingClientRect().top]));
   [sp.days[i], sp.days[j]] = [sp.days[j], sp.days[i]];
   for (const s of S.sessions.values()) if (s.splitId === sp.id && (s.splitDay === i || s.splitDay === j)) { s.splitDay = s.splitDay === i ? j : i; queue('s:' + s.id, 1500); }
+  /* a day picked as up next moves with it */
+  const pk = S.profile.nextDay; if (pk && pk.sp === sp.id && (pk.i === i || pk.i === j)) { S.profile.nextDay = { ...pk, i: pk.i === i ? j : i }; queue('p', 400); }
   S.spLink = null; touchSplit(sp, 400); render(false);
   for (const el of $$('.day[data-did]')) { const y = before.get(el.dataset.did); if (y == null) continue; const dy = y - el.getBoundingClientRect().top; if (!dy || reduced) continue;
     el.style.transition = 'none'; el.style.transform = `translateY(${dy}px)`; requestAnimationFrame(() => { el.style.transition = 'transform .55s var(--spring)'; el.style.transform = ''; }); }
@@ -2497,11 +2509,12 @@ function copySplit(src, from) {
 /* ================= export / import ================= */
 function download(name, data, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
 function exportData(fmt) {
-  const stamp = new Date().toISOString().slice(0, 10);
+  /* local dates and times: the day you trained, as your clock showed it (toISOString would give UTC) */
+  const local = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }, stamp = local(Date.now());
   if (fmt === 'csv') {
     const rows = [['date', 'session', 'exercise', 'muscle', 'set', 'weight_' + unit(), 'reps', 'e1rm_' + unit(), 'intensity', 'group']];
     for (const s of [...sorted()].reverse()) { const gm = new Map(); for (const g of groupsOf(s)) for (const x of g.m) gm.set(x.st.id, g.type);
-      for (const it of s.items) { const ex = exOf(it.exId); it.sets.forEach((st, i) => { if (!(+st.r > 0)) return; rows.push([new Date(s.startedAt).toISOString().slice(0, 16), sessName(s), ex?.name || '', ex?.muscle || '', i + 1, fmtW(+st.w || 0), st.r, fmtW(e1rm(loadOf(st, ex), st.r)), Math.round(S.A.set.get(st.id) || 0), gm.get(st.id) || '']); }); } }
+      for (const it of s.items) { const ex = exOf(it.exId); it.sets.forEach((st, i) => { if (!(+st.r > 0)) return; rows.push([`${local(s.startedAt)} ${fmtTime(s.startedAt).replace('.', ':')}`, sessName(s), ex?.name || '', ex?.muscle || '', i + 1, fmtW(+st.w || 0), st.r, fmtW(e1rm(loadOf(st, ex), st.r)), Math.round(S.A.set.get(st.id) || 0), gm.get(st.id) || '']); }); } }
     const csv = rows.map(r => r.map(c => { c = String(c); if (/^[=+\-@]/.test(c)) c = "'" + c; return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(',')).join('\n');
     return download(`synergym-${stamp}.csv`, csv, 'text/csv');
   }

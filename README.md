@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.8, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.9, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.8-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.9-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -128,6 +128,13 @@ npm run e2e    # browser tests on phone and desktop sizes, with Supabase faked i
 so a change that breaks them never goes live. GitHub Actions (`.github/workflows/test.yml`) also runs
 the browser tests on every push. They need no secrets: `tests/e2e/fake-supabase.js` answers the app's
 auth and database calls in memory.
+`tests/e2e/smoke.spec.js` opens every screen and runs the common actions on both sizes, failing on any script
+or console error.
+
+**Speed.** Derived numbers (records, intensity, the sessions in order, exercise lookups) are cached and worked out
+again only when data changes: every edit goes through `queue()`, which bumps an edit counter. Records use a small
+frontier per exercise rather than scanning every weight. History renders 60 sessions at a time. To profile, build
+without minifying (`npx vite build --minify false && npx vite preview`) and record a CPU profile on a large account.
 
 ## Code layout
 
