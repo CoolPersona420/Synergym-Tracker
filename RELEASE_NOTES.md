@@ -10,6 +10,23 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.8-alpha · 29 October 2026
+
+**Widgets first on phones, and an Ocean theme that holds together**
+
+- **A compact greeting on phones.** The welcome text is about two thirds of its old size, in the same bold type,
+  and the quote and spacing are tighter, so your widgets start about a third of the way down the screen instead
+  of halfway (or lower on small phones). The first widget is taller for it. On short phones (iPhone SE and
+  smaller) the quote steps aside for the widgets.
+- **Edit home sits on the left on phones,** clear of the Start session button floating bottom right, and the
+  widgets now stop above that button rather than running under it.
+- **Ocean (the blue theme) looks the same everywhere:**
+  - a widget opened full screen sits on the page's own blue gradient, instead of a flat navy block with the
+    gradient showing round its edges;
+  - its opening and closing animation, the today panel, the strip under the status bar and the opening splash
+    use the same gradient, lined up with the page, instead of a flat colour.
+  Other themes are one colour, so nothing changes for them.
+
 ## 0.1.7-alpha · 28 October 2026
 
 **Reminders removed**

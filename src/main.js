@@ -672,9 +672,12 @@ const phoneDash = () => matchMedia('(max-width:47.99rem)').matches;
 function sizeDash() {
   const d = $('#dash'); if (!d) return;
   if (!phoneDash()) return d.style.removeProperty('--dash-h');
-  const dots = $('#dash-dots'), edit = $('#view .home-edit'), nav = $('#nav');
+  const dots = $('#dash-dots'), edit = $('#view .home-edit'), nav = $('#nav'), fab = nav && $('.nav-train', nav);
   const below = (dots ? dots.offsetHeight + 14 : 0) + (edit ? edit.offsetHeight + 22 : 0);
-  const dock = nav && !nav.hidden ? innerHeight - nav.getBoundingClientRect().top + 12 : 24;
+  /* the dock and the new-session button floating above it (from layout, not its entrance animation), so Edit home
+     never ends up under the button */
+  const top = nav && !nav.hidden ? nav.getBoundingClientRect().top + Math.min(0, fab && fab.offsetParent === nav ? fab.offsetTop : 0) : innerHeight;
+  const dock = nav && !nav.hidden ? innerHeight - top + 12 : 24;
   d.style.setProperty('--dash-h', Math.max(15 * 16, Math.floor(innerHeight - (d.getBoundingClientRect().top + scrollY) - below - dock)) + 'px');
 }
 addEventListener('resize', () => { if (S.view === 'today') sizeDash(); });

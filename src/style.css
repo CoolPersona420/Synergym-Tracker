@@ -127,6 +127,11 @@ html::after{content:"";position:fixed;left:0;right:0;top:-10vh;bottom:-10vh;z-in
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 body{margin:0;min-height:100vh;background:transparent;color:var(--ink);font-family:var(--font-ui);font-size:var(--t0);line-height:1.55;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+/* Surfaces that are the page itself (the strip under the status bar, the splash, the today panel, a widget opening
+   full screen) draw the page's background laid out exactly as on the page layer above: full width, from 10vh above
+   the screen to 10vh below. In Ocean, the one theme with a gradient, it then lines up with what's around them
+   instead of showing a flat block; other themes are one colour, so nothing changes for them. */
+body::before{background-image:var(--page);background-size:100vw 120vh;background-position:0 -10vh;background-repeat:no-repeat}
 img{max-width:100%}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
 input,textarea,select{font:inherit;color:inherit}
@@ -273,8 +278,17 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .hero .fab{background:var(--hero-ink);color:var(--hero-deep)}
 .hero .btn.line{color:var(--hero-ink);box-shadow:inset 0 0 0 1px var(--hero-line)}
 @media (max-width:47.99rem){
-  .hero{margin-left:calc(var(--gl) * -1);margin-right:calc(var(--gr) * -1);border-radius:0 0 var(--r-lg) var(--r-lg);padding:var(--s2) var(--gr) var(--s1) var(--gl);margin-top:calc(var(--s-1) * -1)}
+  .hero{margin-left:calc(var(--gl) * -1);margin-right:calc(var(--gr) * -1);border-radius:0 0 var(--r-lg) var(--r-lg);padding:var(--s0) var(--gr) var(--s-1) var(--gl);margin-top:calc(var(--s-1) * -1)}
+  /* a compact greeting, so the widgets show at first glance: still the bold display type, about two thirds the size */
+  .hero .display{font-size:clamp(1.65rem,7.4vw,2.15rem);margin-top:var(--s-2)}
+  .hero .hero-top{gap:var(--s-1)}
+  .hero .quote{padding-left:var(--s-1)}
+  .hero .quote blockquote{font-size:.92rem;line-height:1.38}
+  .hero .quote figcaption{margin-top:3px}
+  .hero .hero-cta{margin-top:var(--s-1);padding-top:var(--s-1)}
 }
+/* short phones (iPhone SE and smaller): the quote gives way to the widgets */
+@media (max-width:47.99rem) and (max-height:740px){.hero .quote{display:none}}
 @media (min-width:48rem){
   .hero{display:grid;grid-template-columns:1.618fr 1fr;column-gap:var(--s2);padding:var(--s2)}
   .hero .statgrid{margin-top:0;align-self:end}
@@ -922,6 +936,8 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
 .card.w[data-act]:active{transform:scale(.985)}
 .home-edit{display:flex;justify-content:center;margin:var(--s1) 0 var(--s0)}
 .home-edit .btn .ico{width:15px;height:15px}
+/* phones: on the left, clear of the new-session button floating bottom right */
+@media (max-width:47.99rem){.home-edit{justify-content:flex-start}}
 .heat.dense{gap:2px}.heat.dense i{border-radius:2px}
 .chart .vb{fill:var(--ink);opacity:.85}.chart .vb.now{fill:var(--accent);opacity:1}.chart .vb0{fill:var(--line)}
 .hbars{display:grid;gap:10px}
@@ -939,7 +955,7 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
 .plan.full{grid-template-columns:minmax(0,1fr)}.plan.full .pd{padding:var(--s0)}.plan.full .sub{font-size:.85rem;color:var(--muted);white-space:normal}.plan.full .pd.next .sub{color:inherit;opacity:.8}
 
 /* full-screen widget */
-.wfull{min-height:calc(100vh - 2rem);padding-bottom:var(--s3);background:var(--bg)}
+.wfull{min-height:calc(100vh - 2rem);padding-bottom:var(--s3)}
 .wf-top{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s0);padding-top:var(--s0)}
 .wf-top .h1{margin-top:4px}
 .wf-top .iconbtn{width:3rem;height:3rem;flex:none}
@@ -989,7 +1005,8 @@ html[data-nav="tab-back"]::view-transition-new(root){animation:tab-in-l .55s var
 @keyframes tab-in-l{from{opacity:0;transform:translateX(-5%)}}
 html[data-nav="widget"]::view-transition-old(root){animation:fade-out .35s var(--ease) both}
 html[data-nav="widget"]::view-transition-new(root){animation:fade .45s var(--ease) .1s both}
-::view-transition-group(wfocus){animation-duration:.6s;animation-timing-function:var(--ease-io);overflow:clip;border-radius:var(--r-lg)}
+::view-transition-group(wfocus){animation-duration:.6s;animation-timing-function:var(--ease-io);overflow:clip;border-radius:var(--r-lg);
+  background:var(--bg);background-image:var(--page);background-size:100vw 120vh;background-position:0 -10vh;background-repeat:no-repeat}
 ::view-transition-old(wfocus),::view-transition-new(wfocus){height:100%;object-fit:none;object-position:0 0;animation-duration:.45s}
 .no-vt #view.enter{animation:fade .35s var(--ease) both}
 @media (prefers-reduced-motion:reduce){
@@ -1099,7 +1116,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 @media (max-width:47.99rem){
   header.top{display:none!important}
   body:not(.bare):not(.in-session) #view{padding-top:var(--s1)}
-  html::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30;pointer-events:none}
+  html::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);background-image:var(--page);background-size:100vw 120vh;background-position:0 -10vh;background-repeat:no-repeat;z-index:30;pointer-events:none}
 }
 .daybar span{display:block;line-height:2.1rem;text-align:center;padding:0 3px}
 
@@ -1165,7 +1182,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 /* ---------- splash: eyes open, then the wolf swallows the screen ---------- */
 #splash{background:transparent}
 #splash .spl-bg{position:absolute;inset:0;width:100%;height:100%;display:block}
-#splash .spl-stage{position:absolute;inset:0;background:var(--bg)}
+#splash .spl-stage{position:absolute;inset:0;background:var(--bg);background-image:var(--page);background-size:100vw 120vh;background-position:0 -10vh;background-repeat:no-repeat}
 #splash .spl-hot{opacity:0}
 #splash .spl-in{position:relative}
 /* login only: the lockup rises quickly (or glides in from the login page), then the eyes flare */
@@ -1464,7 +1481,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 }
 
 /* ---------- quick splash when the app opens on a phone ---------- */
-#qsplash{position:fixed;inset:0;z-index:101;display:grid;place-items:center;background:var(--bg)}
+#qsplash{position:fixed;inset:0;z-index:101;display:grid;place-items:center;background:var(--bg);background-image:var(--page);background-size:100vw 120vh;background-position:0 -10vh;background-repeat:no-repeat}
 #qsplash .qs-in{display:flex;flex-direction:column;align-items:center;gap:var(--s-1);animation:qs-in .55s var(--spring) both}
 #qsplash .wolf{width:6.6rem;height:6.6rem}
 #qsplash .wordmark{font-size:var(--t2);animation:qs-word .5s var(--ease) .12s both}
@@ -1600,7 +1617,7 @@ a.srow{color:inherit;text-decoration:none}
 #tsheet[hidden]{display:none}
 .tsh-scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);opacity:0;will-change:opacity}
 .tsh-panel{position:absolute;left:0;right:0;top:-64px;margin:0 auto;width:min(40rem,100%);max-height:calc(88vh + 64px);display:flex;flex-direction:column;
-  padding-top:calc(64px + env(safe-area-inset-top,0px));background:var(--bg);border-radius:0 0 var(--r-lg) var(--r-lg);
+  padding-top:calc(64px + env(safe-area-inset-top,0px));background:var(--bg);background-image:var(--page);background-size:100vw 120vh;background-position:50% calc(64px - 10vh);background-repeat:no-repeat;border-radius:0 0 var(--r-lg) var(--r-lg);
   box-shadow:0 1.2rem 3rem rgba(0,0,0,.35),inset 0 -1px 0 var(--line);outline:none;overflow:hidden;will-change:transform;transform:translate3d(0,-100%,0);touch-action:pan-y}
 .tsh-body{min-height:0;overflow:auto;will-change:transform,opacity;overscroll-behavior:contain;padding:var(--s0) var(--gr) var(--s-1) var(--gl);-webkit-overflow-scrolling:touch}
 .tsh-body .sh-h{align-items:flex-start}

@@ -65,16 +65,18 @@ test('phone: floating dock, and the session button animates away on Settings', a
   expect(await page.locator('.nav-train').evaluate(el => getComputedStyle(el).opacity)).toBe('1');
 });
 
-test('phone: Home widgets are all the same size and fill down to the dock', async ({ page }, info) => {
+test('phone: Home widgets are all the same size and fill down to the dock and its floating button', async ({ page }, info) => {
   phoneOnly(info);
   const fake = new FakeSupabase({ ...benchHistory(), profile: { widgets: ['week:s', 'intensity:l', 'recent:m', 'bw:s'] } });
   await login(page, fake, 'A');
   await page.waitForTimeout(800);
-  const r = await page.evaluate(() => { const cards = [...document.querySelectorAll('#dash > .w')].map(c => ({ width: c.offsetWidth, height: c.offsetHeight })); const edit = document.querySelector('#view .home-edit').getBoundingClientRect(), nav = document.querySelector('#nav').getBoundingClientRect(); return { w: cards.map(c => Math.round(c.width)), h: cards.map(c => Math.round(c.height)), gap: Math.round(nav.top - edit.bottom) }; });
+  const r = await page.evaluate(() => { const cards = [...document.querySelectorAll('#dash > .w')].map(c => ({ width: c.offsetWidth, height: c.offsetHeight })); const edit = document.querySelector('#view .home-edit').getBoundingClientRect(), nav = document.querySelector('#nav').getBoundingClientRect(); return { w: cards.map(c => Math.round(c.width)), h: cards.map(c => Math.round(c.height)), gap: Math.round(Math.min(nav.top, document.querySelector('#nav .nav-train').getBoundingClientRect().top) - edit.bottom) }; });
   expect(new Set(r.w).size).toBe(1);
   expect(new Set(r.h).size).toBe(1);
   expect(r.h[0]).toBeGreaterThanOrEqual(240);
+  /* down to the new-session button floating above the dock, and not under it */
   expect(r.gap).toBeLessThan(60);
+  expect(r.gap).toBeGreaterThanOrEqual(0);
 });
 
 test('quick splash on phones only', async ({ page }, info) => {
@@ -139,4 +141,34 @@ test('every theme paints its page background on one fixed layer, so the safe are
     expect(r.color, t).toBe(r.canvas);
     if (t === 'ocean') expect(r.image, t).toContain('linear-gradient'); else expect(r.image, t).toBe('none');
   }
+});
+
+test('phone: a compact greeting, so the first widget starts in the top 40% of the screen, and Edit home stays clear of the Start button', async ({ browser }, info) => {
+  phoneOnly(info);
+  for (const [width, height] of [[412, 915], [390, 844], [375, 667]]) {
+    const page = await (await browser.newContext({ viewport: { width, height }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })).newPage();
+    await login(page, new FakeSupabase(benchHistory()), 'A');
+    await page.waitForTimeout(900);
+    const m = await page.evaluate(() => {
+      const r = el => el.getBoundingClientRect(), q = s => document.querySelector(s);
+      const fab = [r(q('.nav-train')), ...(q('.nav-train .nl') ? [r(q('.nav-train .nl'))] : [])];
+      return { font: parseFloat(getComputedStyle(q('.hero .display')).fontSize), top: r(q('#dash > .w')).top, vh: innerHeight, e: r(q('.home-edit .btn')).toJSON(), f: fab.map(x => x.toJSON()) };
+    });
+    const at = `${width}×${height}`;
+    expect(m.font, at).toBeGreaterThanOrEqual(24); expect(m.font, at).toBeLessThan(34);
+    expect(m.top / m.vh, at).toBeLessThan(0.4);
+    for (const f of m.f) expect(m.e.right <= f.left || f.right <= m.e.left || m.e.bottom <= f.top || f.bottom <= m.e.top, at).toBe(true);
+    await page.context().close();
+  }
+});
+
+test('Ocean: a widget opened full screen and the today panel show the page’s gradient, not a flat block', async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('sg-theme', 'ocean'); } catch {} });
+  await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'ocean' } }), 'A');
+  await page.goto('/w/week');
+  await expect(page.locator('.wfull')).toBeVisible();
+  expect(await page.locator('.wfull').evaluate(e => { const c = getComputedStyle(e); return [c.backgroundColor, c.backgroundImage]; })).toEqual(['rgba(0, 0, 0, 0)', 'none']);
+  await page.goto('/');
+  await page.locator('.ts-open').click();
+  expect(await page.locator('.tsh-panel').evaluate(e => getComputedStyle(e).backgroundImage)).toContain('linear-gradient');
 });
