@@ -10,6 +10,16 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.11-alpha · 29 October 2026
+
+**CBum on Home**
+
+- **Three quotes from Chris Bumstead (CBum),** six-time Classic Physique Olympia champion, joined the Home quotes:
+  on champion mentality, and on never being the biggest guy in the gym. Each is from his own posts as reported
+  by fitness news sites; the many lines credited to him online with no source were left out.
+
+---
+
 ## 0.1.10-alpha · 29 October 2026
 
 **Tap the quote for another**

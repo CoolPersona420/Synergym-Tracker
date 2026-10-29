@@ -106,7 +106,7 @@ test('the week can start on Monday, Sunday or Saturday', async () => {
   assert.equal(profToDb({ ...DEFAULT_PROFILE, weekStart: 6 }).week_start, 6);
 });
 
-test('quotes are well formed, short enough for the phone Home, and include the Stoics and Dorian Yates', async () => {
+test('quotes are well formed, short enough for the phone Home, and include the Stoics, Dorian Yates and CBum', async () => {
   const { QUOTES } = await import('../../src/data/quotes.js');
   for (const q of QUOTES) {
     assert.equal(q.length, 2); assert.ok(q[0].trim() && q[1].trim());
@@ -115,7 +115,7 @@ test('quotes are well formed, short enough for the phone Home, and include the S
     assert.doesNotMatch(q[0], /^["“]|["”]$/, 'the page adds its own quote marks');
   }
   assert.equal(new Set(QUOTES.map(q => q[0])).size, QUOTES.length, 'no quote twice');
-  for (const a of ['Marcus Aurelius', 'Seneca', 'Epictetus', 'Dorian Yates']) assert.ok(QUOTES.some(q => q[1] === a), a);
+  for (const a of ['Marcus Aurelius', 'Seneca', 'Epictetus', 'Dorian Yates', 'Chris “CBum” Bumstead']) assert.ok(QUOTES.some(q => q[1] === a), a);
 });
 
 test('the quote deck deals every quote once before any repeats, and never the same one twice in a row', async () => {

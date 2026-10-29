@@ -1,6 +1,6 @@
 /* Shown on Home: a fresh shuffle each visit, and a tap deals the next.
    Stoic lines are from standard translations (Hays and Long for Marcus Aurelius, Gummere for Seneca's letters,
-   Long and Oldfather for Epictetus); Dorian Yates' are from his interviews and posts. */
+   Long and Oldfather for Epictetus); Dorian Yates' and Chris Bumstead's are from their interviews and posts. */
 export const QUOTES = [
   ['The iron never lies to you.', 'Henry Rollins'],
   ['Two hundred pounds is always two hundred pounds.', 'Henry Rollins'],
@@ -31,5 +31,9 @@ export const QUOTES = [
   /* Dorian Yates */
   ['I logged every single workout.', 'Dorian Yates'],
   ['I gave it my all each and every session.', 'Dorian Yates'],
-  ['I’d lock myself in the office and go over the poundages from my last workout.', 'Dorian Yates']
+  ['I’d lock myself in the office and go over the poundages from my last workout.', 'Dorian Yates'],
+  /* Chris Bumstead */
+  ['Having a champion mentality isn’t about the trophies, medals, or success. It’s about having no quit.', 'Chris “CBum” Bumstead'],
+  ['Champion mentality is the endless pursuit of being the best man I can be.', 'Chris “CBum” Bumstead'],
+  ['I’m almost never the biggest guy in the gym, and I wouldn’t have it any other way.', 'Chris “CBum” Bumstead']
 ];
