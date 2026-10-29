@@ -19,6 +19,18 @@ export const setWeekStart = d => { week0 = WEEK_DAYS.includes(+d) ? +d : 1; };
 export const weekStartDay = () => week0;
 export function weekStart(t) { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() - week0 + 7) % 7)); return d.getTime(); }
 export function shiftWeek(t, n) { const d = new Date(t); d.setDate(d.getDate() + 7 * n); return weekStart(d.getTime()); }
+/* a shuffled deck of 0..n-1: each comes up once before any comes round again, and a reshuffle never
+   starts with the one just shown */
+export function deck(n, rand = Math.random) {
+  let order = [], at = 0;
+  const shuffle = last => {
+    order = [...Array(n).keys()]; at = 0;
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    if (n > 1 && order[0] === last) [order[0], order[n - 1]] = [order[n - 1], order[0]];
+  };
+  shuffle(-1);
+  return { current: () => order[at], next() { if (++at >= n) shuffle(order[n - 1]); return order[at]; } };
+}
 export function roll(t) { return `<span class="roll"><span data-t="${esc(t)}">${esc(t)}</span></span>`; }
 let toastT;
 export function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2800); }

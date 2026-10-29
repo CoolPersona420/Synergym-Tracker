@@ -10,6 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.10-alpha · 29 October 2026
+
+**Tap the quote for another**
+
+- **More to read on Home:** Stoic lines from Marcus Aurelius, Seneca and Epictetus, and Dorian Yates on how he
+  trained, joined the quotes. Each was checked against its source (standard translations for the Stoics; Yates'
+  own interviews and posts), and the popular lines with no traceable source were left out.
+- **Tap the quote (or press Enter on it) and the next one comes in.** Quotes come from a shuffled deck, so you
+  see every one before any comes round again. A small shuffle mark next to the name shows it can be tapped.
+- **On phones, the widgets resize with the quote** as it changes, so they still end just above the **+** button
+  and nothing below them jumps.
+
+---
+
 ## 0.1.9-alpha · 29 October 2026
 
 **Fast with a big log, and a round of fixes**

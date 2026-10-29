@@ -925,6 +925,13 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
 .quote figcaption{margin-top:6px;font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .quote figcaption::before{content:"— "}
 #view.enter .quote{animation:rise 1s var(--ease) .45s both}
+/* tap for another: a quiet shuffle mark by the name; the words fade out and back in */
+.quote[data-act]{cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;transition:border-color .2s}
+.quote blockquote,.quote figcaption{transition:opacity .17s var(--ease),transform .17s var(--ease)}
+.quote.out blockquote,.quote.out figcaption{opacity:0;transform:translateY(-3px)}
+.quote figcaption{display:flex;align-items:center;gap:6px}
+.q-next{display:inline-flex;opacity:.55;transition:opacity .2s}.q-next .ico{width:13px;height:13px}
+@media (hover:hover){.quote[data-act]:hover{border-left-color:var(--accent)}.quote[data-act]:hover .q-next{opacity:1}}
 
 /* widgets */
 @media (min-width:48rem){#dash{grid-auto-flow:row dense}}

@@ -6,7 +6,7 @@ import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
 import { DEFAULT_EXERCISES } from './data/exercises.js';
 import { reduced, LITE, isIOS } from './lib/env.js';
-import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, roll, toast } from './lib/util.js';
+import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, deck, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays } from './lib/sanitize.js';
 import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
 import { parseImport, SPLIT_MAX } from './lib/importer.js';
@@ -696,8 +696,12 @@ function sizeDash() {
   d.style.setProperty('--dash-h', Math.max(15 * 16, Math.floor(innerHeight - (d.getBoundingClientRect().top + scrollY) - below - dock)) + 'px');
 }
 addEventListener('resize', () => { if (S.view === 'today') sizeDash(); });
+/* the greeting can change height after it's drawn (tapping the quote for another, its font arriving), so the
+   widgets refit with it, frame by frame while the quote eases to its new height */
+const heroFit = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (S.view === 'today') sizeDash(); }) : null;
 function afterRender(entered) {
   if (S.view === 'today') { sizeDash(); wireCarousel(); }
+  if (heroFit) { heroFit.disconnect(); const h = S.view === 'today' && $('#view .hero'); if (h) heroFit.observe(h); }
   if (S.view === 'today' && S.loaded && !S.hinted && coarse.matches && !reduced) {
     S.hinted = true;
     let n = 0; try { n = +localStorage.getItem('sg-fab-hint') || 0; localStorage.setItem('sg-fab-hint', n + 1); } catch {}
@@ -921,6 +925,21 @@ const pendingPublic = () => { try { const t = localStorage.getItem('sg-open-spli
 /* greeting and quote vary per visit, but stay put while you use the app */
 const SEED = Math.random();
 const pick = (arr, salt = 0) => arr[Math.floor(((SEED * 9301 + salt * 49297) % 1) * arr.length)];
+/* tapping the quote deals the next one: the words fade, the box eases to its new height, the new words fade in */
+const QD = deck(QUOTES.length);
+function nextQuote(fig) {
+  QD.next();
+  /* taps during a swap just move further along; the swap shows wherever it got to */
+  if (fig._swap) return;
+  const put = () => { const [t, a] = QUOTES[QD.current()]; fig.querySelector('blockquote').textContent = t; fig.querySelector('.q-a').textContent = a; };
+  if (reduced) return put();
+  fig._swap = true; fig.classList.add('out');
+  setTimeout(() => {
+    const h0 = fig.offsetHeight; put(); const h1 = fig.offsetHeight;
+    fig.classList.remove('out'); fig._swap = false;
+    if (h0 !== h1) fig.animate({ height: [`${h0}px`, `${h1}px`], overflow: ['hidden', 'hidden'] }, { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  }, 170);
+}
 /* up-next dropdown: desktop shows a small pill over the day name; phones show one outlined field holding both */
 const pickBtn = (label, day, sub, o = {}) => `<button class="what what-pick${o.cls ? ' ' + o.cls : ''}" ${o.attrs || 'data-act="next-pick" aria-haspopup="dialog" aria-expanded="false"'} aria-label="${o.aria || 'Change what’s up next'}">
   <span class="wp-d" aria-hidden="true"><span class="wp-chip"><span class="wp-t">${label}</span>${o.deskIcon === false ? '' : `<i class="dd">${o.icon || ICON.down}</i>`}</span><b>${day}</b></span>
@@ -977,11 +996,11 @@ function vToday() {
     cta = `<div class="what"></div>
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   }
-  const [qt, qa] = pick(QUOTES, 5), ents = homeEntries(), spans = packSpans(ents.map(e => WSPAN[e.size])), ws = ents.map(e => e.id);
+  const [qt, qa] = QUOTES[QD.current()], ents = homeEntries(), spans = packSpans(ents.map(e => WSPAN[e.size])), ws = ents.map(e => e.id);
   return pageTop('Home', '', false) + `
   <section class="hero rv">
     <div class="hero-top"><div><button class="lbl eyebrow ts-open" data-act="today-sum" aria-label="Today’s summary" aria-haspopup="dialog">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span>${ICON.down}</button>${disp(lines)}</div>
-      <figure class="quote"><blockquote>${esc(qt)}</blockquote><figcaption>${esc(qa)}</figcaption></figure></div>
+      <figure class="quote" data-act="quote-next" role="button" tabindex="0" aria-live="polite" title="Another quote"><blockquote>${esc(qt)}</blockquote><figcaption><span class="q-a">${esc(qa)}</span><i class="q-next" aria-hidden="true">${ICON.shuffle}</i></figcaption></figure></div>
     <div class="hero-cta">${cta}</div>
   </section>
   ${ws.length ? `<div class="dash" id="dash">${ents.map((e, i) => wCard(e.id, phoneDash() ? 'm' : e.size, spans[i])).join('')}</div>
@@ -2595,6 +2614,7 @@ const ACT = {
   'goal-new': el => goalSheet(el.dataset.id || null),
   'coach-switch': () => { S.profile.coachOn = !coachOn(); queue('p', 0); render(false); toast(coachOn() ? 'Coach on. Its card is back on Home.' : 'Coach off. Switch it back on in Settings any time.'); },
   'coach-close': () => back(),
+  'quote-next': el => nextQuote(el),
   /* the plan is the Coach's first tab, so it gets the plain /coach address */
   'coach-go': el => { const t = el.dataset.t || 'plan'; S.coachTab = t; go('coach', t === 'plan' ? null : t); },
   'coach-tab': el => { S.coachTab = el.dataset.t; if (S.arg) go('coach', null, { replace: true }); else render(false); },
@@ -2754,7 +2774,7 @@ const ACT = {
 };
 /* app feel on phones: a light haptic tick on key taps (Android; iOS has no web vibration) */
 const coarse = matchMedia('(pointer:coarse)');
-const BUZZ = new Set(['day-move', 'w-open', 'w-close', 'coach-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install']);
+const BUZZ = new Set(['day-move', 'w-open', 'w-close', 'coach-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install', 'quote-next']);
 const buzz = (ms = 8) => { if (!coarse.matches || reduced) return; try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;

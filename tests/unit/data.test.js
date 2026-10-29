@@ -106,6 +106,31 @@ test('the week can start on Monday, Sunday or Saturday', async () => {
   assert.equal(profToDb({ ...DEFAULT_PROFILE, weekStart: 6 }).week_start, 6);
 });
 
+test('quotes are well formed, short enough for the phone Home, and include the Stoics and Dorian Yates', async () => {
+  const { QUOTES } = await import('../../src/data/quotes.js');
+  for (const q of QUOTES) {
+    assert.equal(q.length, 2); assert.ok(q[0].trim() && q[1].trim());
+    /* two lines at most on a phone, so the widgets keep their room */
+    assert.ok(q[0].length <= 120, `too long for the phone Home: ${q[0]}`);
+    assert.doesNotMatch(q[0], /^["“]|["”]$/, 'the page adds its own quote marks');
+  }
+  assert.equal(new Set(QUOTES.map(q => q[0])).size, QUOTES.length, 'no quote twice');
+  for (const a of ['Marcus Aurelius', 'Seneca', 'Epictetus', 'Dorian Yates']) assert.ok(QUOTES.some(q => q[1] === a), a);
+});
+
+test('the quote deck deals every quote once before any repeats, and never the same one twice in a row', async () => {
+  const { deck } = await import('../../src/lib/util.js');
+  const d = deck(5), round = [d.current()];
+  for (let i = 0; i < 4; i++) round.push(d.next());
+  assert.deepEqual([...round].sort(), [0, 1, 2, 3, 4]);
+  /* with two, half of all reshuffles would start with the one just shown */
+  for (const n of [5, 2]) {
+    const k = deck(n); let prev = k.current();
+    for (let i = 0; i < 200; i++) { const x = k.next(); assert.notEqual(x, prev); assert.equal(k.current(), x); prev = x; }
+  }
+  const one = deck(1); assert.equal(one.current(), 0); assert.equal(one.next(), 0);
+});
+
 test('an empty set stays empty when a session is loaded, and one saved as zeros is empty again', async () => {
   const { num } = await import('../../src/lib/sanitize.js');
   assert.equal(num(null), null); assert.equal(num(''), null); assert.equal(num(undefined), null); assert.equal(num('0'), 0); assert.equal(num(2.5), 2.5); assert.equal(num('x'), null);
