@@ -14,7 +14,9 @@ const ease = t => 1 - Math.pow(1 - t, 3);
 export function edgeBack({ view, canBack, label, onBack, held = () => false, reduced = false }) {
   document.body.insertAdjacentHTML('beforeend', `<div id="eb-edge" aria-hidden="true"></div><div id="eb-hint" aria-hidden="true">${ICON.back}<span></span></div>`);
   const edge = document.getElementById('eb-edge'), hint = document.getElementById('eb-hint');
-  let g = null, raf = 0;
+  let g = null, raf = 0, last = null;
+  /* each event once: it can reach a handler twice, on the touched element and on the window (see start) */
+  const fresh = e => e !== last && !!(last = e);
 
   const parts = () => {
     const out = [], walk = el => { for (const c of el.children) { if (c.matches(FIXED)) out.push(c); else if (c.querySelector(FIXED)) walk(c); else out.push(c); } };
@@ -35,12 +37,17 @@ export function edgeBack({ view, canBack, label, onBack, held = () => false, red
     const p = e.touches[0];
     if (p.clientX > EDGE || !canBack() || held()) return;
     if (e.target instanceof Element && e.target.closest('.sheet,#tsheet')) return;
-    g = { x0: p.clientX, y0: p.clientY, dx: 0, on: false, els: null, trail: [[e.timeStamp, p.clientX]] };
-    /* only a swipe that starts at the edge listens to moves (and can stop the page scrolling) */
+    g = { x0: p.clientX, y0: p.clientY, dx: 0, on: false, els: null, trail: [[e.timeStamp, p.clientX]], el: e.target };
+    /* only a swipe that starts at the edge listens to moves (and can stop the page scrolling). The touched element
+       hears the rest of this finger even if it leaves the page mid-swipe (the launch splash fading out, a redraw),
+       when the window no longer does, so it listens there too */
     addEventListener('touchmove', move, { passive: false });
+    g.el.addEventListener('touchmove', move, { passive: false });
+    g.el.addEventListener('touchend', end, { passive: true });
+    g.el.addEventListener('touchcancel', cancel, { passive: true });
   }
   function move(e) {
-    if (!g) return;
+    if (!g || !fresh(e)) return;
     const p = e.touches[0], dx = p.clientX - g.x0, dy = p.clientY - g.y0;
     if (!g.on) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
@@ -54,15 +61,17 @@ export function edgeBack({ view, canBack, label, onBack, held = () => false, red
     g.trail.push([e.timeStamp, p.clientX]); if (g.trail.length > 5) g.trail.shift();
     paint(g.els, g.dx);
   }
-  function end() {
-    if (!g) return;
+  function end(e) {
+    if (!g || !fresh(e)) return;
     if (!g.on) return finish(false, true);
     const [t0, x0] = g.trail[0], [t1, x1] = g.trail[g.trail.length - 1], v = t1 > t0 ? (x1 - x0) / (t1 - t0) : 0;
     finish(g.dx > innerWidth * 0.35 || (v > 0.45 && g.dx > 24));
   }
+  function cancel(e) { if (g && fresh(e)) finish(false); }
   function finish(go, quiet = false) {
     removeEventListener('touchmove', move, { passive: false });
     const s = g; g = null;
+    if (s) { s.el.removeEventListener('touchmove', move); s.el.removeEventListener('touchend', end); s.el.removeEventListener('touchcancel', cancel); }
     if (quiet || !s || !s.on) return;
     const from = s.dx, to = go ? innerWidth : 0, dur = reduced ? 0 : go ? 220 : 280, t0 = performance.now();
     const done = () => {
@@ -83,5 +92,5 @@ export function edgeBack({ view, canBack, label, onBack, held = () => false, red
 
   addEventListener('touchstart', start, { passive: true });
   addEventListener('touchend', end, { passive: true });
-  addEventListener('touchcancel', () => finish(false), { passive: true });
+  addEventListener('touchcancel', cancel, { passive: true });
 }

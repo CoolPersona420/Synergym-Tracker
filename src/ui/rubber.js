@@ -16,7 +16,9 @@ export function rubberBand(view, { ios = false, reduced = false, held = () => fa
   const band = d => (1 - 1 / (d * C / innerHeight + 1)) * innerHeight;
   const unband = o => innerHeight / C * (o / innerHeight) / (1 - o / innerHeight);
   const atTop = () => se.scrollTop <= 0, atEnd = () => se.scrollTop >= se.scrollHeight - se.clientHeight - 1;
-  let els = [], x = 0, v = 0, raf = 0, touch = null, down = false, ended = 0;
+  let els = [], x = 0, v = 0, raf = 0, touch = null, down = false, ended = 0, last = null, tgt = null;
+  /* each event once: it can reach a handler twice, on the touched element and on the window (see touchstart) */
+  const fresh = e => e !== last && !!(last = e);
 
   const pick = () => {
     const out = [], walk = el => { for (const c of el.children) { if (c.matches(FIXED)) continue; if (c.querySelector(FIXED)) walk(c); else out.push(c); } };
@@ -49,11 +51,16 @@ export function rubberBand(view, { ios = false, reduced = false, held = () => fa
     /* only a touch that starts at an end (or catches a bounce) may need to hold the page still, so only then does
        the browser wait for this listener; every other scroll goes ahead without asking the page first */
     removeEventListener('touchmove', move);
-    addEventListener('touchmove', move, { passive: !(caught || atTop() || atEnd()) });
+    const passive = !(caught || atTop() || atEnd());
+    addEventListener('touchmove', move, { passive });
+    /* the touched element hears the rest of this finger even if it leaves the page mid-gesture (a redraw), when
+       the window no longer does */
+    if (tgt) { tgt.removeEventListener('touchmove', move); tgt.removeEventListener('touchend', end); tgt.removeEventListener('touchcancel', end); }
+    tgt = e.target; tgt.addEventListener('touchmove', move, { passive }); tgt.addEventListener('touchend', end, { passive: true }); tgt.addEventListener('touchcancel', end, { passive: true });
   }, { passive: true });
 
   function move(e) {
-    if (!touch) return;
+    if (!touch || !fresh(e)) return;
     if (held()) { if (x) { x = 0; paint(); } touch = null; return; }
     if (e.touches.length !== 1) { if (x) spring(); touch = null; return; }
     const p = e.touches[0], y = p.clientY;
@@ -78,7 +85,7 @@ export function rubberBand(view, { ios = false, reduced = false, held = () => fa
     x = band(d) * touch.dir; touch.lastY = y; paint();
   }
 
-  const end = e => { if (touch && x) { v = 0; spring(); } touch = null; down = e.touches.length > 0; ended = performance.now(); };
+  function end(e) { if (!fresh(e)) return; if (touch && x) { v = 0; spring(); } touch = null; down = e.touches.length > 0; ended = performance.now(); }
   addEventListener('touchend', end, { passive: true });
   addEventListener('touchcancel', end, { passive: true });
 

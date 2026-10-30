@@ -16,6 +16,11 @@ const moveTo = (page, x, y = 420, steps = 8, ms = 16) => page.evaluate(async ([x
 }, [x, y, steps, ms]);
 const up = page => page.evaluate(() => window.__f.fire('touchend', window.__f.x, window.__f.y));
 const swipe = async (page, x0, x1, opts = {}) => { await down(page, x0, opts.y); await moveTo(page, x1, opts.y1 ?? opts.y, opts.steps, opts.ms); await up(page); };
+/* a page opened by its address has loaded (the app reloads) and finished drawing: nothing busy under the swipe */
+const settled = async page => {
+  await page.waitForFunction(() => !document.getElementById('splash') && !document.getElementById('qsplash') && document.querySelector('#view .card'));
+  await page.waitForTimeout(300);
+};
 
 test.describe('installed on an iPhone', () => {
   test.use({ userAgent: IPHONE, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -46,20 +51,36 @@ test.describe('installed on an iPhone', () => {
     const h = benchHistory(), fake = new FakeSupabase(h);
     await login(page, fake, 'A');
     await page.goto('/exercises/' + h.exercises[0].id);
-    await page.waitForTimeout(700);
+    await settled(page);
     await swipe(page, 4, 330);
     await expect(page).toHaveURL(/\/exercises$/);
+  });
+
+  test('a swipe that starts on the launch splash still springs back when the splash goes', async ({ page }) => {
+    const h = benchHistory(), fake = new FakeSupabase(h);
+    await login(page, fake, 'A');
+    await page.goto('/exercises/' + h.exercises[0].id);
+    /* the finger lands on the splash, which fades and leaves the page mid-swipe (a slow phone in CI hit this) */
+    await page.waitForFunction(() => document.getElementById('qsplash'));
+    await page.waitForTimeout(150);
+    await down(page, 4);
+    expect(await page.evaluate(() => window.__f.el.id)).toBe('qsplash');
+    await moveTo(page, 70, 420, 8, 120);
+    await up(page);
+    expect(await page.evaluate(() => window.__f.el.isConnected)).toBe(false);
+    await expect.poll(() => page.locator('#view > *').first().evaluate(el => el.style.translate)).toBe('');
   });
 
   test('a short, slow drag springs back and stays put', async ({ page }) => {
     const h = benchHistory(), fake = new FakeSupabase(h);
     await login(page, fake, 'A');
     await page.goto('/exercises/' + h.exercises[0].id);
-    await page.waitForTimeout(700);
+    await settled(page);
     await swipe(page, 4, 70, { ms: 70 });
-    await page.waitForTimeout(500);
+    /* it springs home (however slow the machine), and stays on the page */
+    await expect.poll(() => page.locator('#view > *').first().evaluate(el => el.style.translate)).toBe('');
+    await page.waitForTimeout(300);
     await expect(page).toHaveURL(/\/exercises\/.+/);
-    expect(await page.locator('#view > *').first().evaluate(el => el.style.translate)).toBe('');
   });
 
   test('only from the edge, only sideways, and not on the dock’s own pages or over a sheet', async ({ page }) => {

@@ -10,6 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.16-alpha · 30 October 2026
+
+**Swipes that can't get stuck**
+
+- **Fixed:** on an iPhone (the app installed), a swipe back from the left edge started in the first second after
+  opening the app could leave the page stuck partly slid over. The finger had landed on the launch splash, which
+  fades out and leaves the page mid-swipe, and the end of the swipe was then never heard. Our test suite caught
+  it on GitHub's slower machines.
+- The same guard now covers every touch gesture: swiping back, pulling down the today panel, and the stretch at
+  the top and bottom of the page. Each listens on the element your finger touched as well as the page, so the
+  end of a gesture always lands, even if what you touched is redrawn mid-gesture.
+
+---
+
 ## 0.1.15-alpha · 30 October 2026
 
 **On a computer, the Logbook opens to the right**

@@ -20,7 +20,9 @@ export function topPanel({ content, canPull, hintText, reduced = false, buzz = (
     <div id="pull-hint" aria-hidden="true"><span class="ph-i"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg></span><span class="ph-t"></span></div>`);
   const root = document.getElementById('tsheet'), panel = root.querySelector('.tsh-panel'), body = root.querySelector('.tsh-body'),
     scrim = root.querySelector('.tsh-scrim'), hint = document.getElementById('pull-hint'), hintT = hint.querySelector('.ph-t');
-  let hv = 0, y = 0, v = 0, raf = 0, shown = false, open = false, drag = null, armed = false, back = null;
+  let hv = 0, y = 0, v = 0, raf = 0, shown = false, open = false, drag = null, armed = false, back = null, last = null, tgt = null;
+  /* each event once: it can reach a handler twice, on the touched element and on the window (see touchstart) */
+  const fresh = e => e !== last && !!(last = e);
 
   const clamp = (a, lo, hi) => Math.min(hi, Math.max(lo, a));
   const band = d => (1 - 1 / (d * C / innerHeight + 1)) * innerHeight;
@@ -84,11 +86,17 @@ export function topPanel({ content, canPull, hintText, reduced = false, buzz = (
     else drag = null;
     /* only a touch that can move the panel holds up the page's scrolling (see rubber.js) */
     removeEventListener('touchmove', move);
-    if (drag) addEventListener('touchmove', move, { passive: false });
+    if (tgt) { tgt.removeEventListener('touchmove', move); tgt.removeEventListener('touchend', end); tgt.removeEventListener('touchcancel', cancel); tgt = null; }
+    if (drag) {
+      addEventListener('touchmove', move, { passive: false });
+      /* the touched element hears the rest of this finger even if it leaves the page mid-gesture (a redraw), when
+         the window no longer does */
+      tgt = e.target; tgt.addEventListener('touchmove', move, { passive: false }); tgt.addEventListener('touchend', end, { passive: true }); tgt.addEventListener('touchcancel', cancel, { passive: true });
+    }
   }, { passive: true });
 
   function move(e) {
-    if (!drag || e.touches.length !== 1) return;
+    if (!drag || e.touches.length !== 1 || !fresh(e)) return;
     const p = e.touches[0], dy = p.clientY - drag.y, dx = p.clientX - drag.x;
     drag.s.push({ y: p.clientY, t: performance.now() }); if (drag.s.length > 12) drag.s.shift();
     if (!drag.on) {
@@ -115,14 +123,16 @@ export function topPanel({ content, canPull, hintText, reduced = false, buzz = (
     paint();
   }
 
-  const end = () => {
+  function end(e) {
+    if (!fresh(e)) return;
     const d = drag; drag = null; if (!d || !d.on) return;
     const sp = speedOf(d);
     if (d.kind === 'pull') { const go = (armed && sp > -300) || sp > 900; pillOff(); settle(go, sp); }
     else settle(!((hv - y > hv * 0.2 && sp < 300) || sp < -700), sp);
-  };
+  }
+  function cancel(e) { if (!fresh(e)) return; if (drag && drag.on) { const k = drag.kind; drag = null; pillOff(); settle(k === 'shut'); } else drag = null; }
   addEventListener('touchend', end, { passive: true });
-  addEventListener('touchcancel', () => { if (drag && drag.on) { const k = drag.kind; drag = null; pillOff(); settle(k === 'shut'); } else drag = null; }, { passive: true });
+  addEventListener('touchcancel', cancel, { passive: true });
 
   return {
     open() { if (open) return; prepare(); settle(true); },
