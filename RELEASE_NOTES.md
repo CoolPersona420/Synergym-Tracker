@@ -10,6 +10,16 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.15-alpha · 30 October 2026
+
+**On a computer, the Logbook opens to the right**
+
+- Holding **Start session** in the sidebar now brings the Logbook capsule out **beside** the button, level with
+  it, and you **drag right** into it (or click it). On a phone it's unchanged: hold + and slide up. The capsule is
+  solid over the page so its label stays readable.
+
+---
+
 ## 0.1.14-alpha · 30 October 2026
 
 **The Logbook**

@@ -751,8 +751,8 @@ function renderNav() {
   const nav = $('#nav'); let fab = nav.querySelector(':scope > .nav-train');
   if (!fab) {
     nav.innerHTML = ''; fab = document.createElement('button'); fab.className = 'nav-train'; nav.appendChild(fab);
-    /* hold it, then slide up: the Logbook, the one place to log or change past days */
-    holdReveal(fab, { label: 'Logbook', icon: ICON.book, buzz, reduced, enabled: () => S.loaded && S.view !== 'logbook', open: cap => { cap.style.viewTransitionName = 'wfocus'; S.lbFrom = cap; go('logbook'); } });
+    /* hold it, then slide up (right, beside a computer's sidebar): the Logbook, the one place to log or change past days */
+    holdReveal(fab, { label: 'Logbook', icon: ICON.book, buzz, reduced, side: () => !phoneDash(), enabled: () => S.loaded && S.view !== 'logbook', open: cap => { cap.style.viewTransitionName = 'wfocus'; S.lbFrom = cap; go('logbook'); } });
   }
   for (const c of [...nav.children]) if (c !== fab) c.remove();
   /* on a rest day it shows a moon and stars; tapping it still asks to undo the rest day before anything starts */
@@ -2406,7 +2406,7 @@ function nudgeEdit() {
 }
 function lbHint() {
   const f = $('#nav .nav-train'); if (f) { f.classList.remove('nudge'); void f.offsetWidth; f.classList.add('nudge'); }
-  buzz(6); toast(phoneDash() ? 'Past sessions change in the Logbook: hold + and slide up' : 'Past sessions change in the Logbook: hold Start session and slide up');
+  buzz(6); toast(phoneDash() ? 'Past sessions change in the Logbook: hold + and slide up' : 'Past sessions change in the Logbook: hold Start session and drag right');
 }
 const recNote = a => a && a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : '';
 function saveEditSheet() {

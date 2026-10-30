@@ -7,7 +7,7 @@ const exRow = (fake, id) => fake.exercises.find(e => e.id === id);
 const ago = n => Date.now() - n * 864e5;
 const hold = async (page, ms) => { const b = await page.locator('#nav .nav-train .ring').boundingBox(); await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await page.waitForTimeout(ms); return b; };
 
-test('hold the session button, slide up into the capsule, and the Logbook opens; a plain tap still starts a session', async ({ page }) => {
+test('hold the session button, slide into the capsule (up on a phone, right on a computer), and the Logbook opens; a plain tap still starts a session', async ({ page }, info) => {
   await login(page, new FakeSupabase(benchHistory()), 'A');
   /* a tap is a tap */
   await page.locator('#nav .nav-train').click();
@@ -16,14 +16,17 @@ test('hold the session button, slide up into the capsule, and the Logbook opens;
   /* a hold let go without sliding leaves the capsule to tap */
   await hold(page, 650); await page.mouse.up();
   await expect(page.locator('.holdcap.in')).toBeVisible();
+  /* beside the button on a computer, above it on a phone */
+  const cb = await page.locator('.holdcap').boundingBox(), rb = await page.locator('#nav .nav-train').boundingBox();
+  if (info.project.name === 'desktop') expect(cb.x).toBeGreaterThan(rb.x + rb.width); else expect(cb.y + cb.height).toBeLessThan(rb.y + 20);
   await expect(page.locator('#sheet')).toBeHidden();
   await page.locator('.holdcap').click();
   await expect(page).toHaveURL(/\/logbook$/);
   await page.click('[data-act="lb-close"]');
   await expect(page).not.toHaveURL(/logbook/);
   /* sliding only part of the way springs back */
-  const b = await hold(page, 650), x = b.x + b.width / 2, y = b.y + b.height / 2;
-  await page.mouse.move(x, y - 20); await page.mouse.up();
+  const b = await hold(page, 650), x = b.x + b.width / 2, y = b.y + b.height / 2, side = info.project.name === 'desktop';
+  await page.mouse.move(side ? x + 20 : x, side ? y : y - 20); await page.mouse.up();
   await expect(page).not.toHaveURL(/logbook/);
   await page.mouse.click(5, 300);
   await expect(page.locator('.holdcap')).toHaveCount(0);

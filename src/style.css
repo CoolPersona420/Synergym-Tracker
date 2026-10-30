@@ -429,6 +429,14 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .holdcap.drag .hc-knob{transition:background .25s,color .25s}
 .holdcap.armed{background:var(--accent);color:var(--on-accent)}
 .holdcap.armed .hc-knob{background:var(--on-accent);color:var(--accent)}
+/* on a computer it pops out beside Start session and you drag right */
+.holdcap.h{flex-direction:row;align-items:center;padding:6px 14px 6px 6px;background:var(--surface);transform-origin:0 50%;transform:translateX(-16px) scale(.5)}
+.holdcap.h.in{transform:none}
+.holdcap.h.out{transform:translateX(-10px) scale(.7)}
+.holdcap.h .hc-knob{order:-1;flex:none;width:auto;height:100%;margin:0}
+.holdcap.h .hc-t{margin:0 0 0 auto;font-size:.66rem}
+.holdcap.h .hc-up{order:2;margin:0 2px 0 10px;rotate:135deg;animation-name:hc-right}
+@keyframes hc-right{0%,100%{translate:-2px 0}50%{translate:3px 0}}
 @media (prefers-reduced-motion:reduce){.holdcap,.hc-knob{transition:none}.hc-up{animation:none}}
 
 /* ---------- the Logbook: a month to tap through, and the day you picked ---------- */

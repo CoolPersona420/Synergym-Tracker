@@ -8,7 +8,9 @@ export async function openLogbook(page) {
   const b = await page.locator('#nav .nav-train .ring').boundingBox(), x = b.x + b.width / 2, y = b.y + b.height / 2;
   await page.mouse.move(x, y); await page.mouse.down();
   await expect(page.locator('.holdcap.in')).toBeVisible();
-  for (let i = 1; i <= 14; i++) await page.mouse.move(x, y - i * 11);
+  /* up on a phone, right beside a computer's sidebar */
+  const side = await page.evaluate(() => !matchMedia('(max-width:47.99rem)').matches);
+  for (let i = 1; i <= 16; i++) await page.mouse.move(side ? x + i * 16 : x, side ? y : y - i * 11);
   await page.mouse.up();
   await expect(page).toHaveURL(/\/logbook$/);
   await expect(page.locator('#lb-cal')).toBeVisible();
