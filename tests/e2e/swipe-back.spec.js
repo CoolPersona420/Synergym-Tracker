@@ -66,8 +66,9 @@ test.describe('installed on an iPhone', () => {
     await down(page, 4);
     expect(await page.evaluate(() => window.__f.el.id)).toBe('qsplash');
     await moveTo(page, 70, 420, 8, 120);
+    /* lift only once the splash has gone, however long this machine takes to get there */
+    await page.waitForFunction(() => !window.__f.el.isConnected, null, { timeout: 8000 });
     await up(page);
-    expect(await page.evaluate(() => window.__f.el.isConnected)).toBe(false);
     await expect.poll(() => page.locator('#view > *').first().evaluate(el => el.style.translate)).toBe('');
   });
 
