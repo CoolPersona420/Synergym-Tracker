@@ -61,7 +61,9 @@ const S = {
   profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(),
   view: 'today', arg: null, link: null, rest: null, q: '', hf: HF0(), exq: '', exm: '', showArchived: false, A: null, animate: false,
   ob: { step: 2, name: '', username: '', unit: 'kg', bw: 75, exp: null, goal: null, days: 3, tpl: null },
-  pk: {}, authMode: 'signin', authMsg: null, recover: false, pub: null, lastFetch: 0
+  pk: {}, authMode: 'signin', authMsg: null, recover: false, pub: null, lastFetch: 0,
+  /* a finished session being edited: { id, orig (as it was before), dirty } */
+  edit: null
 };
 
 /* ================= utils ================= */
@@ -96,9 +98,12 @@ const OB = { lastOk: new Map(), pending: new Set(), timers: new Map(), inflight:
 const obKey = () => S.user ? 'sg-outbox-' + S.user.id : null;
 /* outbox keys are "s:<id>", "x:<id>", "sp:<id>", or plain "p" for the profile */
 const splitKey = key => { const i = key.indexOf(':'); return i < 0 ? [key, ''] : [key.slice(0, i), key.slice(i + 1)]; };
+/* what may be saved of a session: while it's being edited, only the version from before the edit, so a draft
+   never reaches the server or the phone's store, even if the app closes mid-edit */
+const savedSess = id => S.edit && S.edit.id === id ? S.edit.orig : S.sessions.get(id);
 function snapshot(key) {
   const [t, id] = splitKey(key);
-  if (t === 's') return S.sessions.get(id) || null;
+  if (t === 's') return savedSess(id) || null;
   if (t === 'x') return S.library.find(e => e.id === id) || null;
   if (t === 'sp') return S.splits.get(id) || null;
   if (t === 'p') return S.profile;
@@ -124,6 +129,8 @@ function restoreOutbox() {
 function queue(key, delay = 600) {
   if (!S.user) return;
   EDITS++;
+  /* a change to the session being edited is a draft: the numbers and records update, nothing is saved */
+  if (S.edit && key === 's:' + S.edit.id) { DATA_REV++; S.edit.dirty = true; return; }
   if (!(key.startsWith('s:') && S.sessions.get(key.slice(2))?.endedAt == null)) DATA_REV++;
   OB.pending.add(key); persistOutbox();
   clearTimeout(OB.timers.get(key)); OB.timers.set(key, setTimeout(() => flush(key), delay)); syncUI();
@@ -131,7 +138,7 @@ function queue(key, delay = 600) {
 async function runJob(key) {
   if (S.local) return runLocal(key);
   const [t, id] = splitKey(key);
-  if (t === 's') { const s = S.sessions.get(id); return s ? sb.from('sessions').upsert(sessToDb(s)) : sb.from('sessions').delete().eq('id', id); }
+  if (t === 's') { const s = savedSess(id); return s ? sb.from('sessions').upsert(sessToDb(s)) : sb.from('sessions').delete().eq('id', id); }
   if (t === 'x') { const e = S.library.find(x => x.id === id); return e ? sb.from('exercises').upsert(exToDb(e)) : sb.from('exercises').delete().eq('id', id); }
   if (t === 'sp') { const p = S.splits.get(id); return p ? sb.from('splits').upsert(splitToDb(p)) : sb.from('splits').delete().eq('id', id); }
   if (t === 'p') return sb.from('profiles').update(profToDb(S.profile)).eq('id', S.user.id);
@@ -220,6 +227,8 @@ async function loadAll() {
   const sess = new Map(ss.map(r => { const s = sessFromDb(r); return [s.id, s]; }));
   for (const [id] of sess) if (keep('s:' + id) && !S.sessions.has(id)) sess.delete(id);
   for (const [id, s] of S.sessions) if (keep('s:' + id)) sess.set(id, s);
+  /* a session being edited keeps its draft; what the server has becomes the version Discard goes back to */
+  if (S.edit) { const id = S.edit.id; if (sess.has(id) && S.sessions.has(id)) { if (!keep('s:' + id)) S.edit.orig = sess.get(id); sess.set(id, S.sessions.get(id)); } else S.edit = null; }
   S.sessions = sess;
   const spl = new Map(sp.map(r => [r.id, splitFromDb(r)]));
   for (const [id] of spl) if (keep('sp:' + id) && !S.splits.has(id)) spl.delete(id);
@@ -534,6 +543,7 @@ const TABS = ['today', 'splits', 'exercises', 'history', 'prefs'];
 function route(enter = true) {
   const [v, a] = parsePath();
   const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg, from = S.view, fromArg = S.arg;
+  if (S.edit && (v !== 'session' || arg !== S.edit.id)) endEdit();
   S.view = v; S.arg = arg; S.link = null; S.spLink = null;
   let dir = navDir; navDir = 'fwd';
   /* tab to tab: a sideways slide in the direction of the tab bar */
@@ -701,6 +711,7 @@ addEventListener('resize', () => { if (S.view === 'today') sizeDash(); });
 const heroFit = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (S.view === 'today') sizeDash(); }) : null;
 function afterRender(entered) {
   if (S.view === 'today') { sizeDash(); wireCarousel(); }
+  { const sv = S.view === 'session' ? cur() : null, v = $('#view'); v.classList.toggle('s-locked', locked(sv)); v.classList.toggle('s-editing', editing(sv)); }
   if (heroFit) { heroFit.disconnect(); const h = S.view === 'today' && $('#view .hero'); if (h) heroFit.observe(h); }
   if (S.view === 'today' && S.loaded && !S.hinted && coarse.matches && !reduced) {
     S.hinted = true;
@@ -1546,13 +1557,14 @@ function rowSession(s) {
 
 /* ---------- Session ---------- */
 function vSession() {
-  const s = cur(), a = S.A.sess.get(s.id), live = !s.endedAt, groups = groupsOf(s), gmap = new Map();
+  const s = cur(), a = S.A.sess.get(s.id), live = !s.endedAt, groups = groupsOf(s), gmap = new Map(), ro = locked(s), ed = editing(s);
   for (const g of groups) for (const x of g.m) gmap.set(x.st.id, g);
   const sp = splitOf(s.splitId);
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button>
-    <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80">
+    <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80"${ro ? ' readonly' : ''}>
+    ${ro ? `<button class="btn line sm s-edit" data-act="sess-edit">${ICON.pen}Edit</button>` : ''}
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
-  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : 'completed'}</div>${sessCoachBand(s)}
+  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</div>${sessCoachBand(s)}
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
     <div class="bignum" id="sint" style="margin-top:10px">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
@@ -1561,8 +1573,8 @@ function vSession() {
   <div class="strip rv" id="strip">${stripHTML(a)}</div>
   <div class="items">${s.items.map(it => exCard(it, gmap)).join('') || `<div class="empty rv"><b>No exercises yet.</b>Tap + to add one from your library.</div>`}</div>
   <div class="groups" id="gsum">${groupsHTML(groups)}</div>
-  <textarea class="notes rv" data-f="notes" placeholder="Notes: how it felt, sleep, anything worth remembering" maxlength="4000">${esc(s.notes || '')}</textarea>
-  ${live ? '' : `<div class="done-bar rv"><button class="btn" data-act="repeat" data-id="${s.id}">${roll('Repeat this session')}</button><button class="btn ghost" data-act="edit-date">${roll('Change date')}</button></div>`}
+  <textarea class="notes rv" data-f="notes" placeholder="${ro ? 'No notes' : 'Notes: how it felt, sleep, anything worth remembering'}" maxlength="4000"${ro ? ' readonly' : ''}>${esc(s.notes || '')}</textarea>
+  ${live || ed ? '' : `<div class="done-bar rv"><button class="btn" data-act="repeat" data-id="${s.id}">${roll('Repeat this session')}</button><button class="btn ghost" data-act="edit-date">${roll('Change date')}</button></div>`}
   ${transport(s)}`;
 }
 const tierText = a => `${tier(a.int)}${a.prs.length ? ` · <em class="pr">${a.prs.length} PR</em>` : ''}${a.calib ? ' · calibrating' : ''}`;
@@ -1594,11 +1606,11 @@ function suggLine(it, bw) {
   return `<div class="sugg"><span class="sugg-t"><span class="lbl">Last</span> ${fmt(g.last)} <span class="arr" aria-hidden="true">→</span> <span class="lbl">Try</span> <b>${fmt(g.next)}</b><small>${why}</small></span><button class="btn ghost sm" data-act="sugg-use" data-item="${it.id}">${roll('Use')}</button></div>`;
 }
 function setRow(st, i, gmap) {
-  const g = gmap.get(st.id), p = S.A.set.get(st.id), sel = S.link && S.link.has(st.id);
+  const g = gmap.get(st.id), p = S.A.set.get(st.id), sel = S.link && S.link.has(st.id), ro = locked(cur()) ? ' readonly' : '';
   return `<div class="set${st.done ? ' done' : ''}${sel ? ' sel' : ''}"${S.link ? ` data-act="link-pick" data-set="${st.id}"` : ''}>
   <button class="sno" data-act="set-menu" data-set="${st.id}" aria-label="Set ${i + 1} options">${i + 1}<span data-gtag="${st.id}">${g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''}</span></button>
-  <input data-f="w" data-set="${st.id}" inputmode="decimal" enterkeyhint="next" value="${fmtW(st.w)}" placeholder="${st.pw != null ? fmtW(st.pw) : '0'}" aria-label="Weight, set ${i + 1}" autocomplete="off">
-  <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, set ${i + 1}" autocomplete="off">
+  <input data-f="w" data-set="${st.id}" inputmode="decimal" enterkeyhint="next" value="${fmtW(st.w)}" placeholder="${st.pw != null ? fmtW(st.pw) : '0'}" aria-label="Weight, set ${i + 1}" autocomplete="off"${ro}>
+  <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, set ${i + 1}" autocomplete="off"${ro}>
   <span class="int${p >= 99.5 ? ' top' : ''}" data-int="${st.id}">${setInt(st)}</span>
   <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark set not done' : 'Mark set done'}" aria-pressed="${!!st.done}">${ICON.check}</button>
   ${prLine(st)}</div>`;
@@ -1616,7 +1628,10 @@ function transport(s) {
     <button class="tfin" data-act="link-do"${sel.length < 2 ? ' disabled style="opacity:.4"' : ''}>Link</button></div>`;
   }
   const live = !s.endedAt;
-  return `<div class="transport"><button class="tb" data-act="link-toggle" aria-label="Link sets into a superset, giant set or drop set" title="Link sets">${ICON.link}</button><span class="tdiv"></span>
+  if (editing(s)) return `<div class="transport ed-bar"><button class="tb" data-act="edit-discard" aria-label="Discard changes" title="Discard changes">${ICON.x}</button><span class="tdiv"></span>
+  <div class="tlink"><b>Editing</b><span class="muted">Nothing is saved until you tap Save</span></div>
+  <button class="tfin" data-act="edit-save">Save</button></div>`;
+  return `<div class="transport">${locked(s) ? '' : `<button class="tb" data-act="link-toggle" aria-label="Link sets into a superset, giant set or drop set" title="Link sets">${ICON.link}</button><span class="tdiv"></span>`}
   <div class="tsum" id="tsum" data-act="rest-tap"></div>
   <span id="trest" hidden style="display:flex;gap:2px"><button class="tb" data-act="rest-add" data-d="-15" aria-label="15 seconds less">−15</button><button class="tb" data-act="rest-add" data-d="15" aria-label="15 seconds more">+15</button></span>
   ${live ? `<button class="tfin" data-act="finish"><i></i>Finish</button>` : `<button class="tfin" data-act="back">Done</button>`}</div>`;
@@ -2316,17 +2331,86 @@ function toggleDone(setId) {
 let AC = null;
 function startRest() { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume && AC.resume(); } catch {} S.rest = { end: Date.now() + S.profile.rest * 1000, beeped: false }; tick(); }
 function beep() { if (!S.profile.sound || !AC) return; try { const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime; o.frequency.value = 880; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.25, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + .4); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + .45); } catch {} }
+/* a set counts once it has reps; a ticked set takes the numbers it was hinted with */
+const logged = s => s.items.some(it => it.sets.some(st => +st.r > 0 || (st.done && +st.pr > 0)));
+function tidySets(s) {
+  for (const it of s.items) { for (const st of it.sets) { if (st.done && st.r == null && st.pr != null) st.r = st.pr; if (st.done && st.w == null && st.pw != null) st.w = st.pw; } it.sets = it.sets.filter(st => +st.r > 0); }
+  s.items = s.items.filter(it => it.sets.length); cleanGroups(s);
+}
 function finish() {
   const s = cur(); if (!s) return;
-  const any = s.items.some(it => it.sets.some(st => +st.r > 0 || (st.done && +st.pr > 0)));
+  const any = logged(s);
   if (!any) return confirmSheet('Nothing logged', 'This session has no sets with reps. Delete it instead?', 'Delete session', () => delSession(s.id), 'Keep logging');
-  for (const it of s.items) { for (const st of it.sets) { if (st.done && st.r == null && st.pr != null) st.r = st.pr; if (st.done && st.w == null && st.pw != null) st.w = st.pw; } it.sets = it.sets.filter(st => +st.r > 0); }
-  s.items = s.items.filter(it => it.sets.length); cleanGroups(s); s.endedAt = Date.now(); S.rest = null; S.link = null;
+  tidySets(s); s.endedAt = Date.now(); S.rest = null; S.link = null;
   if (isRestToday()) { S.profile.restDays = (S.profile.restDays || []).filter(k => k !== dayKey(Date.now())); queue('p', 300); }
   queue('s:' + s.id, 0); compute(); const a = S.A.sess.get(s.id);
   render(true); toast(`Saved · intensity ${Math.round(a.int)}${a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : ''}`);
 }
-function delSession(id) { S.sessions.delete(id); queue('s:' + id, 0); S.rest = null; go('today', null, { replace: true }); toast('Session deleted'); }
+function delSession(id) { if (S.edit && S.edit.id === id) S.edit = null; S.sessions.delete(id); queue('s:' + id, 0); S.rest = null; go('today', null, { replace: true }); toast('Session deleted'); }
+
+/* ---------- editing a finished session ----------
+   A finished session reads as it was logged. Edit unlocks it as a draft: nothing is saved while it changes (see
+   queue), and records light up as you type. Save keeps it as today's session (a copy dated now; the original stays
+   as it was) or updates the original. Discard, or leaving the page, puts it back as it was, with an Undo. */
+const editing = s => !!(s && S.edit && S.edit.id === s.id);
+const locked = s => !!(s && s.endedAt && !editing(s));
+function startEdit() {
+  const s = cur(); if (!s || !s.endedAt || S.edit) return;
+  S.edit = { id: s.id, orig: clone(s), dirty: false }; buzz(); render(false);
+}
+/* puts the session back as it was; a draft with changes can be brought back from the toast */
+function endEdit() {
+  const e = S.edit; S.edit = null; if (!e) return;
+  const draft = S.sessions.get(e.id); if (!draft) return;
+  S.sessions.set(e.id, e.orig); EDITS++; DATA_REV++;
+  if (e.dirty) toast('Changes discarded', { label: 'Undo', fn: () => {
+    if (S.edit || S.sessions.get(e.id) !== e.orig) return;
+    S.sessions.set(e.id, draft); S.edit = e; EDITS++; DATA_REV++;
+    if (S.view === 'session' && S.arg === e.id) render(false); else go('session', e.id);
+  } });
+}
+/* a tap on something a finished session keeps locked points at Edit */
+function nudgeEdit() {
+  const b = $('#view .s-edit'); if (b) { b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge'); }
+  buzz(6); toast('Tap Edit to change this session');
+}
+const recNote = a => a && a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : '';
+function saveEditSheet() {
+  const e = S.edit, s = e && S.sessions.get(e.id); if (!s) return;
+  if (!logged(s)) return toast('Log at least one set with reps first');
+  const when = fmtDate(e.orig.startedAt);
+  menuSheet('Save changes', [
+    { label: 'Save as today’s session', hint: `${when} stays as it was`, fn: () => saveEdit('new') },
+    { label: `Update ${when}`, hint: 'fix it where it is', fn: () => saveEdit('update') }
+  ]);
+}
+function saveEdit(how) {
+  const e = S.edit, s = e && S.sessions.get(e.id); if (!s) return;
+  if (how === 'new' && (restBlock(() => saveEdit('new')) || dayFull())) return;
+  tidySets(s); S.edit = null;
+  if (how === 'update') {
+    if (!e.dirty) { render(false); return toast('No changes to save'); }
+    queue('s:' + s.id, 0); compute(); render(false); buzz(12);
+    return toast(`Updated${recNote(S.A.sess.get(s.id))}`, { label: 'Undo', fn: () => {
+      if (S.edit && S.edit.id === e.id) S.edit = null;
+      S.sessions.set(e.id, clone(e.orig)); queue('s:' + e.id, 0); render(false);
+    } });
+  }
+  /* the copy ends now and lasts as long as the original did (from midnight at the earliest); fresh ids throughout,
+     linked sets keep their groups */
+  const now = Date.now(), len = Math.max(60000, (s.endedAt || now) - s.startedAt), gm = new Map();
+  const gid = g => g ? gm.get(g) || gm.set(g, sid()).get(g) : null;
+  const copy = { ...s, id: uuid(), startedAt: Math.max(new Date(now).setHours(0, 0, 0, 0), now - len), endedAt: now,
+    items: s.items.map(it => ({ ...it, id: sid(), sets: it.sets.map(st => ({ ...st, id: sid(), g: gid(st.g) })) })) };
+  S.sessions.set(e.id, e.orig); S.sessions.set(copy.id, copy);
+  queue('s:' + copy.id, 0); compute(); buzz(12);
+  go('session', copy.id, { replace: true });
+  toast(`Saved as today’s session${recNote(S.A.sess.get(copy.id))}`, { label: 'Undo', fn: () => {
+    if (S.edit && S.edit.id === copy.id) S.edit = null;
+    S.sessions.delete(copy.id); queue('s:' + copy.id, 0);
+    if (S.view === 'session' && S.arg === copy.id) go('session', e.id, { replace: true }); else render(false);
+  } });
+}
 function editDate() {
   const s = cur(); if (!s) return; const d = new Date(s.startedAt);
   const v = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -2379,7 +2463,9 @@ function plateSheet(kg) {
 function setMenu(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
   const w = st.w ?? st.pw, ex = exOf(f.it.exId);
-  const items = [...(ex && ex.kind !== 'bw' ? [{ label: 'Plate calculator', hint: w > 0 ? `${fmtW(w)} ${unit()}` : '', fn: () => plateSheet(w) }] : []), { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
+  const plates = ex && ex.kind !== 'bw' ? [{ label: 'Plate calculator', hint: w > 0 ? `${fmtW(w)} ${unit()}` : '', fn: () => plateSheet(w) }] : [];
+  if (locked(s)) return menuSheet(`${ex?.name || 'Set'} · set ${f.i + 1}`, [...plates, { label: 'Edit session', hint: 'to change this set', fn: startEdit }]);
+  const items = [...plates, { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
     { label: 'Duplicate set', fn: () => { f.it.sets.splice(f.i + 1, 0, { ...clone(st), id: sid(), done: false, g: null }); queue('s:' + s.id, 300); render(false); } }];
   if (st.g) items.push({ label: 'Unlink from group', fn: () => { st.g = null; cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
   items.push({ label: 'Delete set', warn: true, fn: () => { f.it.sets.splice(f.i, 1); cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
@@ -2387,6 +2473,7 @@ function setMenu(setId) {
 }
 function itemMenu(itemId) {
   const s = cur(); if (!s) return; const i = s.items.findIndex(x => x.id === itemId); if (i < 0) return; const it = s.items[i];
+  if (locked(s)) return menuSheet(exOf(it.exId)?.name || 'Exercise', [{ label: 'Exercise history', fn: () => go('exercise', it.exId) }, { label: 'Edit session', hint: 'to change this exercise', fn: startEdit }]);
   const mv = d => { const j = i + d; if (j < 0 || j >= s.items.length) return; [s.items[i], s.items[j]] = [s.items[j], s.items[i]]; queue('s:' + s.id, 300); render(false); };
   const items = []; if (i > 0) items.push({ label: 'Move up', fn: () => mv(-1) }); if (i < s.items.length - 1) items.push({ label: 'Move down', fn: () => mv(1) });
   items.push({ label: 'Exercise history', fn: () => go('exercise', it.exId) });
@@ -2396,7 +2483,9 @@ function itemMenu(itemId) {
 }
 function sessMenu() {
   const s = cur(); if (!s) return;
+  if (editing(s)) return menuSheet(sessName(s), [{ label: 'Save changes', fn: saveEditSheet }, { label: 'Discard changes', warn: true, fn: () => { endEdit(); render(false); } }]);
   menuSheet(sessName(s), [
+    ...(s.endedAt ? [{ label: 'Edit session', hint: 'then save as today’s, or update this one', fn: startEdit }] : []),
     { label: 'Change date', fn: editDate },
     ...(s.endedAt ? [{ label: 'Repeat this session', fn: () => repeatSession(s.id) }, { label: 'Reopen as live', hint: 'resume logging', fn: () => { if (activeSession()) return toast('Another session is live'); s.endedAt = null; queue('s:' + s.id, 0); render(false); } }] : []),
     { label: 'Delete session', warn: true, fn: () => confirmSheet('Delete session?', 'This removes the session and all its sets. It can’t be undone.', 'Delete', () => delSession(s.id)) }
@@ -2679,6 +2768,9 @@ const ACT = {
   'bw-del': el => { S.profile.bwLog = unlogBw(S.profile.bwLog, el.dataset.d); const l = S.profile.bwLog; if (l.length) S.profile.bw = l[l.length - 1].kg; queue('p', 300); render(false); },
   'item-menu': el => itemMenu(el.dataset.item),
   'sess-menu': sessMenu,
+  'sess-edit': startEdit,
+  'edit-save': saveEditSheet,
+  'edit-discard': () => { endEdit(); render(false); },
   'edit-date': editDate,
   finish,
   'link-toggle': () => { S.link = new Set(); render(false); toast('Tap the sets you want to link'); },
@@ -2776,14 +2868,19 @@ const ACT = {
 const coarse = matchMedia('(pointer:coarse)');
 const BUZZ = new Set(['day-move', 'w-open', 'w-close', 'coach-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install', 'quote-next']);
 const buzz = (ms = 8) => { if (!coarse.matches || reduced) return; try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
+/* what changes a session; on a finished one these wait for Edit */
+const LOCKED_ACTS = new Set(['add-ex', 'add-set', 'add-drop', 'done', 'sugg-use', 'link-toggle', 'link-pick', 'link-do', 'unlink']);
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+  const el = e.target.closest('[data-act]');
+  if (S.view === 'session' && locked(cur()) && (e.target.closest('#view [readonly]') || (el && LOCKED_ACTS.has(el.dataset.act)))) { e.preventDefault(); return nudgeEdit(); }
+  if (!el || el.disabled) return;
   const fn = ACT[el.dataset.act]; if (!fn) return; e.preventDefault(); if (BUZZ.has(el.dataset.act)) buzz();
   const oops = err => { console.error(err); reportError(err && err.message || String(err), err && err.stack); toast('Something went wrong. Try that again.'); };
   try { const r = fn(el, e); if (r && r.catch) r.catch(oops); } catch (err) { oops(err); }
 });
 document.addEventListener('input', e => {
   const el = e.target, f = el.dataset && el.dataset.f; if (!f) return; const s = cur();
+  if (S.view === 'session' && locked(s) && (f === 'w' || f === 'r' || f === 'sname' || f === 'notes')) return;
   switch (f) {
     case 'w': case 'r': { if (!s) return; const x = findSet(s, el.dataset.set); if (!x) return; const raw = el.value.trim().replace(',', '.');
       if (f === 'w') { const v = parseFloat(raw); x.st.w = raw === '' || !isFinite(v) ? null : Math.min(2000, Math.max(0, fromU(v))); }
@@ -2920,7 +3017,7 @@ const SYNC_FAILED = [];
 async function runLocal(key) {
   const [t, id] = splitKey(key);
   try {
-    if (t === 's') { const x = S.sessions.get(id); x ? await ldb.put('sessions', clone(x)) : await ldb.del('sessions', id); }
+    if (t === 's') { const x = savedSess(id); x ? await ldb.put('sessions', clone(x)) : await ldb.del('sessions', id); }
     else if (t === 'x') { const x = S.library.find(e => e.id === id); x ? await ldb.put('exercises', clone(x)) : await ldb.del('exercises', id); }
     else if (t === 'sp') { const x = S.splits.get(id); x ? await ldb.put('splits', clone(x)) : await ldb.del('splits', id); }
     else if (t === 'p') await ldb.kvSet('profile', clone(S.profile));
@@ -2933,7 +3030,7 @@ async function loadLocal() {
   const d = await ldb.loadAllLocal();
   S.profile = { ...DEFAULT_PROFILE, ...(d.profile || {}) };
   S.library = d.exercises.filter(e => e && e.id && e.name).map(e => ({ id: e.id, name: String(e.name).slice(0, 60), muscle: e.muscle || 'Full body', kind: e.kind === 'bw' ? 'bw' : 'w', archived: !!e.archived, isDefault: !!e.isDefault, oneRm: num(e.oneRm), oneRmAt: num(e.oneRmAt) }));
-  S.sessions = new Map(d.sessions.map(cleanSession).filter(Boolean).map(x => [x.id, x]));
+  S.sessions = new Map(d.sessions.map(cleanSession).filter(Boolean).map(x => [x.id, x])); S.edit = null;
   S.splits = new Map(d.splits.filter(x => x && x.id).map(x => [x.id, { ...x, days: cleanDays(x.days) }]));
   S.shared = []; S.lastFetch = Date.now();
   LDIRTY.clear(); for (const k of d.dirty) LDIRTY.add(k);
@@ -3035,7 +3132,7 @@ async function syncUp(u) {
     const have = new Set((sv.data || []).map(x => x.id)), adding = plan.splits.filter(x => !have.has(x.id)).length;
     if (have.size + adding > SPLIT_MAX) throw Object.assign(new Error('split-limit'), { user: `Your account has ${plural(have.size, 'split')} and this phone has ${adding} more. Synergym keeps up to ${SPLIT_MAX}: delete some on this phone, then go online again. Everything is still on this phone.` });
     const server = profFromDb(pr.data);
-    S.library = plan.library; S.sessions = new Map(plan.sessions.map(x => [x.id, x])); S.splits = new Map(plan.splits.map(x => [x.id, x]));
+    S.library = plan.library; S.sessions = new Map(plan.sessions.map(x => [x.id, x])); S.edit = null; S.splits = new Map(plan.splits.map(x => [x.id, x]));
     S.profile = { ...plan.profile, username: server.username, activeSession: server.activeSession, onboarded: plan.profile.onboarded || server.onboarded };
     const n = plan.upload.size;
     SYNC_FAILED.length = 0;

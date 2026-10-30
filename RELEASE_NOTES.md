@@ -10,6 +10,23 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.12-alpha · 30 October 2026
+
+**Edit a past session, and save it as the latest**
+
+- **Finished sessions are locked until you tap Edit.** Before, a stray tap on a number in an old session changed
+  your history straight away, with no Save and no Undo. Now a finished session reads exactly as you logged it; a tap
+  on a number points you to **Edit**.
+- **Edit** unlocks it as a draft: change any set, add or remove sets and exercises, and new records show as you type.
+  Nothing is saved until you choose how:
+  - **Save as today's session** logs it as a new session dated today. The original stays as it was.
+  - **Update** fixes the original where it is.
+- **Undo** follows every save for a few seconds. **✕**, or leaving the page, drops the changes, and Undo brings them
+  back. A draft is never saved to your account or your phone, even if the app closes mid-edit.
+- Inspired by Hevy's Edit Workout and Copy Workout, and StrengthLog's record list that updates when you fix a workout.
+
+---
+
 ## 0.1.11-alpha · 29 October 2026
 
 **CBum on Home**

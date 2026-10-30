@@ -33,4 +33,9 @@ export function deck(n, rand = Math.random) {
 }
 export function roll(t) { return `<span class="roll"><span data-t="${esc(t)}">${esc(t)}</span></span>`; }
 let toastT;
-export function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2800); }
+/* act: an optional { label, fn } button, such as Undo; the toast then stays a little longer and takes taps */
+export function toast(msg, act) {
+  const t = $('#toast'); t.textContent = msg; t.classList.toggle('act', !!act);
+  if (act) { const b = document.createElement('button'); b.className = 'toast-act'; b.textContent = act.label; b.onclick = () => { clearTimeout(toastT); t.classList.remove('show'); act.fn(); }; t.append(b); }
+  t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), act ? 5000 : 2800);
+}

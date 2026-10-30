@@ -392,6 +392,25 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .notes{width:100%;min-height:6rem;margin-top:var(--s0);border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface);padding:var(--s0);font-size:1rem;resize:vertical;outline:none}
 .notes:focus{border-color:var(--accent)}
 .done-bar{display:flex;flex-wrap:wrap;gap:var(--s-1);margin-top:var(--s1)}
+/* a finished session reads as it was logged until Edit: numbers sit as plain text, the adding controls step away */
+.s-edit{flex:none}
+.s-edit.nudge{animation:nudge .45s var(--ease)}
+@keyframes nudge{20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}
+#view.s-locked .set input{background:transparent;cursor:default}
+#view.s-locked .notes{background:transparent;border-color:transparent;resize:none;min-height:0;padding-inline:0;cursor:default}
+#view.s-locked .notes:placeholder-shown{display:none}
+#view.s-locked .s-name{cursor:default}
+#view.s-locked :is([data-act="add-set"],[data-act="add-drop"],[data-act="add-ex"],.gx){display:none}
+#view.s-locked .chk{opacity:.7}
+/* editing: the fields fade in, the edit bar comes up from the bottom */
+#view.s-editing .set input{border-color:var(--line)}
+#view.s-editing .set input:focus{border-color:var(--accent)}
+#view.s-editing .set input,#view.s-editing .notes{animation:field-in .35s var(--ease) both}
+@keyframes field-in{from{background-color:transparent;border-color:transparent}}
+.ed-tag{color:var(--accent);font-weight:700}
+.transport.ed-bar{animation:bar-up .4s var(--ease) both}
+@keyframes bar-up{from{transform:translate(-50%,calc(100% + 1rem));opacity:0}}
+@media (prefers-reduced-motion:reduce){.s-edit.nudge,#view.s-editing .set input,#view.s-editing .notes,.transport.ed-bar{animation:none}}
 .transport{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--s-1) + env(safe-area-inset-bottom,0px));width:min(36rem,calc(100% - 1.5rem - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));display:flex;align-items:center;gap:6px;padding:6px;border-radius:999px;background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow);z-index:25}
 @media (min-width:60rem){.transport{left:calc(50% + 7.75rem)}}
 .transport .tb{width:2.75rem;height:2.75rem;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:600;font-size:.8rem}
@@ -561,8 +580,10 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .btns{display:flex;gap:var(--s-1);justify-content:flex-end;flex-wrap:wrap;margin-top:var(--s1)}
 .form{display:grid;gap:var(--s0)}
 .form label{display:grid;gap:6px;font-size:.82rem;font-weight:600;color:var(--ink-2)}
-#toast{position:fixed;left:50%;top:calc(var(--s0) + env(safe-area-inset-top,0px));transform:translate(-50%,-160%);z-index:60;background:var(--solid);color:var(--solid-ink);padding:.62rem var(--s0);border-radius:999px;font-size:.9rem;font-weight:600;max-width:calc(100% - 2rem);transition:transform .5s var(--ease),visibility 0s linear .5s;pointer-events:none;text-align:center;box-shadow:var(--shadow);visibility:hidden}
+#toast{position:fixed;left:50%;width:max-content;top:calc(var(--s0) + env(safe-area-inset-top,0px));transform:translate(-50%,-160%);z-index:60;background:var(--solid);color:var(--solid-ink);padding:.62rem var(--s0);border-radius:999px;font-size:.9rem;font-weight:600;max-width:calc(100% - 2rem);transition:transform .5s var(--ease),visibility 0s linear .5s;pointer-events:none;text-align:center;box-shadow:var(--shadow);visibility:hidden}
 #toast.show{transform:translate(-50%,0);visibility:visible;transition:transform .5s var(--ease),visibility 0s}
+#toast.act{display:flex;align-items:center;gap:.6rem;padding-right:.35rem;pointer-events:auto;text-align:left}
+.toast-act{flex:none;padding:.35rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--solid-ink) 16%,transparent);color:inherit;font:inherit;font-weight:700}
 body.bare #view{max-width:none;padding:0}
 .auth-tabs button{text-align:center}
 /* sticky page header */
