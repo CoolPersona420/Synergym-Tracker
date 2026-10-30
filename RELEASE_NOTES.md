@@ -10,6 +10,23 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.13-alpha · 30 October 2026
+
+**Log the days you missed, and a saved 1RM that keeps up with your edits**
+
+- **Log a past day.** Open the Consistency widget and tap any day, or tap **Log a past day** in History. You see
+  what's on that day and can log a session for it (filled in from your split, or empty) or mark it a rest day.
+  The session opens ready to fill in, dated that day at the time you usually train; tick the sets you did or type
+  them, then Save. Nothing is saved until you do, and leaving drops the draft.
+- **Your saved 1RM follows your edits, when you say so.** Records, estimated 1RMs, the coach's targets, streaks and
+  every widget already recalculate after an edit. A 1RM you saved yourself didn't, so the coach kept planning from
+  it. Now, after you save an edit or a missed day:
+  - a set that beats your saved 1RM brings up the familiar **New 1RM PR?** sheet, dated from that session;
+  - correcting the session your saved 1RM came from (say, a typo) offers to lower it back to your best estimate.
+  Undo takes the 1RM back too.
+
+---
+
 ## 0.1.12-alpha · 30 October 2026
 
 **Edit a past session, and save it as the latest**

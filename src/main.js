@@ -1319,13 +1319,14 @@ function chartDays(days) {
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Daily session intensity, last ${lab(days)}">${g}${f}</svg>
   <div class="axis"><span class="lbl">${lab(days)}</span><span class="lbl">${Math.round(days * 2 / 3)}d</span><span class="lbl">${Math.round(days / 3)}d</span><span class="lbl">today</span></div></div>`;
 }
-function heatWeeks(weeks) {
+/* tap: each past day opens it (the full view; on Home the whole card is one button) */
+function heatWeeks(weeks, tap = false) {
   const cw = weekStart(Date.now()), start = shiftWeek(cw, -(weeks - 1)), di = dayIntensity(), tk = dayKey(Date.now()), now = Date.now(), rd = new Set(S.profile.restDays || []);
   let h = '';
   for (let w = 0; w < weeks; w++) { const ws = shiftWeek(start, w); for (let d = 0; d < 7; d++) { const dt = new Date(ws); dt.setDate(dt.getDate() + d); const k = dayKey(dt);
     let c = ''; if (dt.getTime() > now) c = 'fut'; else if (di.has(k)) { const v = di.get(k); c = v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1'; } else if (rd.has(k)) c = 'rd';
-    if (k === tk) c += ' today'; h += `<i class="${c}" title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : rd.has(k) ? ' · rest day' : ''}"></i>`; } }
-  return `<div class="heat${weeks > 30 ? ' dense' : ''}" aria-label="Training days, last ${weeks} weeks">${h}</div>`;
+    if (k === tk) c += ' today'; h += `<i class="${c}"${tap && dt.getTime() <= now ? ` data-act="day" data-k="${k}"` : ''} title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : rd.has(k) ? ' · rest day' : ''}"></i>`; } }
+  return `<div class="heat${weeks > 30 ? ' dense' : ''}${tap ? ' tap' : ''}" aria-label="Training days, last ${weeks} weeks">${h}</div>`;
 }
 const heatKey = `<div class="heat-f"><span class="lbl">less</span><span class="lbl"><i class="rd-key"></i>rest</span><span class="lbl">more intense</span></div>`;
 const restIn = days => { const t = Date.now() - days * 864e5; return (S.profile.restDays || []).filter(k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime() >= t; }).length; };
@@ -1438,7 +1439,7 @@ const WIDGETS = {
       return z === 'l' ? base + mkv([['this week', `${C.thisWeek}/${C.target}`], ['streak', plural(C.streak, 'wk')], ['best streak', plural(bestStreak(), 'wk')]]) : base; },
     full: w => {
       const C = consistency(), m = weekCounts(), cw = weekStart(Date.now()); let hit = 0; for (let i = 0; i < w; i++) if ((m.get(shiftWeek(cw, -i)) || 0) >= C.target) hit++;
-      return `<section class="card">${heatWeeks(w)}${heatKey}</section>`
+      return `<section class="card">${heatWeeks(w, true)}${heatKey}<p class="muted heat-tip">Tap a day to see it, log a session you missed, or mark a rest day.</p></section>`
         + kvs([['Score', C.score == null ? '–' : Math.round(C.score)], ['This week', `${C.thisWeek}/${C.target}`], ['Streak', plural(C.streak, 'wk')], ['Best streak', plural(bestStreak(), 'wk')], ['Weeks on target', `${hit}/${w}`], ['Rest days', restIn(w * 7)]])
         + `<p class="muted wf-note">Your weekly target is in Settings. A week at or above target scores 100; the score averages your last 8 full weeks.</p>`;
     }
@@ -1629,7 +1630,7 @@ function transport(s) {
   }
   const live = !s.endedAt;
   if (editing(s)) return `<div class="transport ed-bar"><button class="tb" data-act="edit-discard" aria-label="Discard changes" title="Discard changes">${ICON.x}</button><span class="tdiv"></span>
-  <div class="tlink"><b>Editing</b><span class="muted">Nothing is saved until you tap Save</span></div>
+  <div class="tlink"><b>${S.edit.orig ? 'Editing' : `Logging ${fmtDate(s.startedAt)}`}</b><span class="muted">Nothing is saved until you tap Save</span></div>
   <button class="tfin" data-act="edit-save">Save</button></div>`;
   return `<div class="transport">${locked(s) ? '' : `<button class="tb" data-act="link-toggle" aria-label="Link sets into a superset, giant set or drop set" title="Link sets">${ICON.link}</button><span class="tdiv"></span>`}
   <div class="tsum" id="tsum" data-act="rest-tap"></div>
@@ -1675,7 +1676,7 @@ function hfDateText(f) {
 }
 function vHistory() {
   const f = S.hf;
-  return pageTop('History', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `<h1 class="h1 rv" style="margin:10px 0 16px">History</h1>
+  return pageTop('History', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `<div class="h-top rv"><h1 class="h1">History</h1><button class="btn line sm" data-act="log-past">${ICON.plus}Log a past day</button></div>
   <div class="hsearch rv"><input class="search" data-f="q" data-act="hf-open" placeholder="Search by session, exercise or note" value="${esc(S.q)}" autocomplete="off" aria-label="Search history">
   <button class="iconbtn hf-tog${f.open || hfOn(f) ? ' on' : ''}" data-act="hf-toggle" aria-label="Filters" aria-expanded="${f.open || hfOn(f)}" aria-controls="hfil">${FILTER_ICON}</button></div>
   <div id="hfil">${hfHTML()}</div>
@@ -2220,10 +2221,11 @@ function askSecond(proceed) {
   });
   return true;
 }
-function dayPicker({ title, note, onPick, foot = [] }) {
+/* marks: show "up next" and "done today" (not when logging a past day) */
+function dayPicker({ title, note, onPick, foot = [], marks = true }) {
   const splits = [...S.splits.values()].filter(sp => sp.days.some(d => !isRestDay(d))).sort((x, y) => y.updatedAt - x.updatedAt);
-  const nx = nextSplitDay(); let sel = nx ? nx.sp.id : splits[0]?.id;
-  const doneIds = new Set(doneToday().map(s => s.splitId + ':' + s.splitDay)), body = $('#sheet-body');
+  const nx = marks ? nextSplitDay() : null; let sel = nx ? nx.sp.id : (nextSplitDay()?.sp.id || splits[0]?.id);
+  const doneIds = new Set(marks ? doneToday().map(s => s.splitId + ':' + s.splitDay) : []), body = $('#sheet-body');
   const draw = () => {
     const prev = fluidCapture(body), sp = S.splits.get(sel);
     body.innerHTML = `<div class="sh-h"><h3>${esc(title)}</h3>${xBtn()}</div>
@@ -2268,9 +2270,15 @@ function startFromSplit(spid, di, force = false) {
   const sp = S.splits.get(spid), d = sp && sp.days[di]; if (!d) return;
   if (restBlock(() => startFromSplit(spid, di, force)) || dayFull()) return;
   if (!force && !plannedSecond(spid, di) && askSecond(() => startFromSplit(spid, di, true))) return;
+  const items = splitItems(d, coachOn());
+  newSession({ name: d.type || null, items, splitId: spid, splitDay: di });
+  toast(coachOn() ? `${dayLabel(sp.days, di)} loaded with the coach’s targets as hints.` : `${dayLabel(sp.days, di)} loaded. Last weights show as hints.`);
+}
+/* a split day's exercises as session items, with the coach's targets (or last time's numbers) as hints */
+function splitItems(d, withCoach) {
   const groups = dayGroups(d), gid = new Map();
   const items = d.exercises.map(x => {
-    const e = ensureExercise(x), last = lastSetsFor(e.id), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g), plan = coachOn() ? planFor(e.id, { reps: x.reps, sets: x.sets }) : null;
+    const e = ensureExercise(x), last = lastSetsFor(e.id), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g), plan = withCoach ? planFor(e.id, { reps: x.reps, sets: x.sets }) : null;
     return { id: sid(), exId: e.id, sets: Array.from({ length: plan ? plan.sets : x.sets }, (_, i) => {
       const l = plan ? { w: plan.next.w, r: plan.next.r } : last && last[Math.min(i, last.length - 1)];
       /* superset / giant set: set i of each linked exercise forms round i; a single linked exercise links all its sets */
@@ -2278,9 +2286,8 @@ function startFromSplit(spid, di, force = false) {
       return { id: sid(), w: null, r: null, pw: l ? l.w : null, pr: plan ? plan.next.r : r0 ?? (l ? l.r : null), done: false, g };
     }) };
   });
-  const tmp = { items }; cleanGroups(tmp);
-  newSession({ name: d.type || null, items, splitId: spid, splitDay: di });
-  toast(coachOn() ? `${dayLabel(sp.days, di)} loaded with the coach’s targets as hints.` : `${dayLabel(sp.days, di)} loaded. Last weights show as hints.`);
+  cleanGroups({ items });
+  return items;
 }
 function repeatSession(id, force = false) {
   const src = S.sessions.get(id); if (!src) return;
@@ -2351,24 +2358,28 @@ function delSession(id) { if (S.edit && S.edit.id === id) S.edit = null; S.sessi
 /* ---------- editing a finished session ----------
    A finished session reads as it was logged. Edit unlocks it as a draft: nothing is saved while it changes (see
    queue), and records light up as you type. Save keeps it as today's session (a copy dated now; the original stays
-   as it was) or updates the original. Discard, or leaving the page, puts it back as it was, with an Undo. */
+   as it was) or updates the original. Discard, or leaving the page, puts it back as it was, with an Undo.
+   A day you didn't log starts the same way, as a new draft (orig null) that Save simply keeps. */
 const editing = s => !!(s && S.edit && S.edit.id === s.id);
 const locked = s => !!(s && s.endedAt && !editing(s));
 function startEdit() {
   const s = cur(); if (!s || !s.endedAt || S.edit) return;
   S.edit = { id: s.id, orig: clone(s), dirty: false }; buzz(); render(false);
 }
-/* puts the session back as it was; a draft with changes can be brought back from the toast */
+/* puts the session back as it was (a new one goes away); a draft with changes can be brought back from the toast */
 function endEdit() {
   const e = S.edit; S.edit = null; if (!e) return;
   const draft = S.sessions.get(e.id); if (!draft) return;
-  S.sessions.set(e.id, e.orig); EDITS++; DATA_REV++;
-  if (e.dirty) toast('Changes discarded', { label: 'Undo', fn: () => {
-    if (S.edit || S.sessions.get(e.id) !== e.orig) return;
+  if (e.orig) S.sessions.set(e.id, e.orig); else S.sessions.delete(e.id);
+  EDITS++; DATA_REV++;
+  if (e.dirty) toast(e.orig ? 'Changes discarded' : 'Draft discarded', { label: 'Undo', fn: () => {
+    if (S.edit || (e.orig ? S.sessions.get(e.id) !== e.orig : S.sessions.has(e.id))) return;
     S.sessions.set(e.id, draft); S.edit = e; EDITS++; DATA_REV++;
     if (S.view === 'session' && S.arg === e.id) render(false); else go('session', e.id);
   } });
 }
+/* Discard: a new draft has nothing to go back to, so the page goes back too */
+function discardEdit() { const fresh = S.edit && !S.edit.orig; endEdit(); if (fresh) back(); else render(false); }
 /* a tap on something a finished session keeps locked points at Edit */
 function nudgeEdit() {
   const b = $('#view .s-edit'); if (b) { b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge'); }
@@ -2378,22 +2389,27 @@ const recNote = a => a && a.prs.length ? ` · ${a.prs.length} record${a.prs.leng
 function saveEditSheet() {
   const e = S.edit, s = e && S.sessions.get(e.id); if (!s) return;
   if (!logged(s)) return toast('Log at least one set with reps first');
+  if (!e.orig) return saveEdit('day');
   const when = fmtDate(e.orig.startedAt);
   menuSheet('Save changes', [
     { label: 'Save as today’s session', hint: `${when} stays as it was`, fn: () => saveEdit('new') },
     { label: `Update ${when}`, hint: 'fix it where it is', fn: () => saveEdit('update') }
   ]);
 }
+/* how: 'update' the original, save as a 'new' session today, or keep a missed 'day' as it is */
 function saveEdit(how) {
   const e = S.edit, s = e && S.sessions.get(e.id); if (!s) return;
   if (how === 'new' && (restBlock(() => saveEdit('new')) || dayFull())) return;
   tidySets(s); S.edit = null;
-  if (how === 'update') {
-    if (!e.dirty) { render(false); return toast('No changes to save'); }
+  if (how === 'update' || how === 'day') {
+    if (how === 'update' && !e.dirty) { render(false); return toast('No changes to save'); }
     queue('s:' + s.id, 0); compute(); render(false); buzz(12);
-    return toast(`Updated${recNote(S.A.sess.get(s.id))}`, { label: 'Undo', fn: () => {
+    const orm = offerOneRm(ormChanges(e.orig, s), s);
+    return toast(`${how === 'day' ? `Logged for ${fmtDate(s.startedAt)}` : 'Updated'}${recNote(S.A.sess.get(s.id))}`, { label: 'Undo', fn: () => {
       if (S.edit && S.edit.id === e.id) S.edit = null;
-      S.sessions.set(e.id, clone(e.orig)); queue('s:' + e.id, 0); render(false);
+      orm.undo();
+      if (e.orig) { S.sessions.set(e.id, clone(e.orig)); queue('s:' + e.id, 0); render(false); }
+      else { S.sessions.delete(e.id); queue('s:' + e.id, 0); if (S.view === 'session' && S.arg === e.id) back(); else render(false); }
     } });
   }
   /* the copy ends now and lasts as long as the original did (from midnight at the earliest); fresh ids throughout,
@@ -2405,11 +2421,109 @@ function saveEdit(how) {
   S.sessions.set(e.id, e.orig); S.sessions.set(copy.id, copy);
   queue('s:' + copy.id, 0); compute(); buzz(12);
   go('session', copy.id, { replace: true });
+  const orm = offerOneRm(ormChanges(null, copy), copy);
   toast(`Saved as today’s session${recNote(S.A.sess.get(copy.id))}`, { label: 'Undo', fn: () => {
     if (S.edit && S.edit.id === copy.id) S.edit = null;
+    orm.undo();
     S.sessions.delete(copy.id); queue('s:' + copy.id, 0);
     if (S.view === 'session' && S.arg === copy.id) go('session', e.id, { replace: true }); else render(false);
   } });
+}
+
+/* ---------- a saved 1RM after an edit ----------
+   Everything else follows an edit by itself; a 1RM saved by hand only changes when you say so. So after a save:
+   a set that now beats it offers to raise it, and correcting the session it came from downward offers to drop it
+   back to your best estimate. */
+function ormChanges(before, after) {
+  const top = (s, exId) => { let b = 0; if (s) { const ex = exOf(exId); for (const it of s.items) if (it.exId === exId) for (const st of it.sets) if (+st.r > 0) b = Math.max(b, e1rm(loadOf(st, ex), +st.r)); } return roundW(b); };
+  const out = [];
+  for (const id of new Set([...(before ? before.items : []), ...after.items].map(it => it.exId))) {
+    const ex = exOf(id); if (!ex || !(ex.oneRm > 0)) continue;
+    const now = top(after, id), was = top(before, id);
+    if (now > ex.oneRm + 1e-6) out.push({ ex, up: true, to: now });
+    else if (was > 0 && Math.abs(was - ex.oneRm) < 0.01 && now < was) { const est = roundW(prevBestE1rm(id)); if (est < ex.oneRm) out.push({ ex, up: false, to: est }); }
+  }
+  return out;
+}
+/* asks once for all of them; returns { undo } so the session's Undo takes the 1RM back with it */
+function offerOneRm(changes, s) {
+  const prev = changes.map(c => ({ ex: c.ex, oneRm: c.ex.oneRm, oneRmAt: c.ex.oneRmAt })); let done = false;
+  const h = { undo: () => { if (!done) return; done = false; for (const p of prev) { p.ex.oneRm = p.oneRm; p.ex.oneRmAt = p.oneRmAt; queue('x:' + p.ex.id, 0); } } };
+  if (!changes.length) return h;
+  const u = unit(), up = changes.every(c => c.up), down = changes.every(c => !c.up), val = c => c.to > 0 ? fmtW(c.to) : '–';
+  const why = c => c.up ? `From your corrected ${fmtDate(s.startedAt)} session. Your saved 1RM is ${fmtW(c.ex.oneRm)} ${u} (+${fmtW(c.to - c.ex.oneRm)} ${u}).`
+    : `Your saved ${fmtW(c.ex.oneRm)} ${u} came from the session you just corrected. ${c.to > 0 ? 'Go back to your best estimate.' : 'Go back to estimating it from your sets.'}`;
+  /* one lift: the same sheet as a 1RM PR during a workout; several: a short list */
+  const one = changes.length === 1 && changes[0];
+  openSheet(`<div class="sh-h"><h3>${up ? 'New 1RM PR?' : down ? 'Lower your 1RM?' : 'Update your 1RM?'}</h3>${xBtn()}</div>
+  ${one ? `<div class="pr-hero orm-list"><span class="lbl">${esc(one.ex.name)}</span><div class="bignum md"><span class="n">${val(one)}</span><span class="pr-u">${u}</span></div><p class="muted">${why(one)}</p></div>`
+    : `<div class="list orm-list">${changes.map(c => `<div class="row"><span class="row-m"><span class="t">${esc(c.ex.name)}</span><span class="sub">${c.up ? 'up from' : 'down from'} ${fmtW(c.ex.oneRm)} ${u}</span></span><span class="row-r"><span class="d">${val(c)} ${u}</span></span></div>`).join('')}</div>`}
+  <div class="btns"><button class="btn ghost" data-act="close">Not now</button><button class="btn" id="orm-apply">${up ? 'Update my 1RM' : down ? 'Lower it' : 'Update'}</button></div>`, r => {
+    r.querySelector('#orm-apply').onclick = () => {
+      /* a raised 1RM dates from that session; a lowered one goes back to following your best estimate */
+      for (const c of changes) { if (c.up) { c.ex.oneRm = c.to; c.ex.oneRmAt = s.endedAt || Date.now(); } else { c.ex.oneRm = null; c.ex.oneRmAt = null; } queue('x:' + c.ex.id, 0); }
+      done = true; closeSheet(); render(false); buzz(12);
+      toast(changes.length > 1 ? '1RMs updated' : `${changes[0].ex.name} 1RM: ${changes[0].to > 0 ? fmtW(changes[0].to) + ' ' + u : 'estimated'}`, { label: 'Undo', fn: () => { h.undo(); render(false); } });
+    };
+  });
+  return h;
+}
+
+/* ---------- a day you didn't log ----------
+   Tap a past day on the Consistency heat map (or "Log a past day" in History): see what's there, log a session
+   for it from your split or empty, or mark it a rest day. The session opens as a new draft dated that day. */
+const dayStart = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
+const sessOn = k => [...S.sessions.values()].filter(s => s.endedAt && dayKey(s.startedAt) === k).sort((a, b) => a.startedAt - b.startedAt);
+function setRestDay(k, on) {
+  const cur_ = (S.profile.restDays || []).filter(d => d !== k);
+  S.profile.restDays = on ? [...cur_, k].slice(-400) : cur_; queue('p', 200); buzz();
+}
+function daySheet(k) {
+  const t0 = dayStart(k); if (!(t0 <= Date.now())) return;
+  const list = sessOn(k), rest = (S.profile.restDays || []).includes(k), label = `${DAYS[new Date(t0).getDay()]} ${fmtDate(t0)}`;
+  openSheet(`<div class="sh-h"><h3>${label}</h3>${xBtn()}</div>
+  ${list.length ? `<div class="list today-list">${list.map(sessRowToday).join('')}</div>`
+    : rest ? `<div class="sec-done"><span class="dt-check rest" aria-hidden="true">${ICON.moon}</span><span><b>Rest day</b><span class="muted">Marked as a rest day.</span></span></div>`
+    : `<p class="muted">Nothing logged on this day.</p>`}
+  ${list.length >= DAY_MAX ? `<p class="muted" style="margin-top:12px">${DAY_MAX} sessions is the most for one day.</p>` : ''}
+  <div class="btns">${rest ? `<button class="btn" id="dy-unrest">Undo rest day</button>`
+    : `${list.length ? '' : `<button class="btn ghost" id="dy-rest">${ICON.moon}Mark as rest day</button>`}${list.length < DAY_MAX ? `<button class="btn" id="dy-log">${list.length ? 'Log another session' : 'Log a session'}</button>` : ''}`}</div>`, r => {
+    r.querySelector('#dy-log')?.addEventListener('click', () => { closeSheet(); logPastDay(k); });
+    r.querySelector('#dy-rest')?.addEventListener('click', () => { setRestDay(k, true); closeSheet(); render(false); toast(`${label} marked as a rest day`); });
+    r.querySelector('#dy-unrest')?.addEventListener('click', () => { setRestDay(k, false); closeSheet(); render(false); daySheet(k); });
+  });
+}
+function logPastDay(k) {
+  dayPicker({ title: `Log ${DAYS[new Date(dayStart(k)).getDay()]} ${fmtDate(dayStart(k))}`, marks: false,
+    note: 'The session is filled in from that day. Change anything, then Save.',
+    onPick: (sp, i) => backfill(k, { sp, i }), foot: [{ label: 'Empty session', fn: () => backfill(k) }] });
+}
+/* a new finished session on day k, at the time you usually train (after that day's other session, if any),
+   kept inside the day and never in the future, opened as a draft */
+function backfill(k, pick) {
+  const t0 = dayStart(k), list = sessOn(k), ref = sorted()[0];
+  let st = t0 + (ref ? ref.startedAt - dayStart(dayKey(ref.startedAt)) : 18 * 36e5);
+  if (list.length) st = Math.max(st, list[list.length - 1].endedAt + 30 * 6e4);
+  const end = Math.min(t0 + 864e5 - 6e4, Date.now());
+  st = Math.max(t0, Math.min(st, end - 36e5));
+  const sp = pick && S.splits.get(pick.sp), d = sp && sp.days[pick.i];
+  const s = { id: uuid(), name: d ? d.type || null : null, startedAt: st, endedAt: Math.min(st + 36e5, end), notes: '', items: d ? splitItems(d, false) : [], splitId: d ? sp.id : null, splitDay: d ? pick.i : null };
+  if (S.edit) endEdit();
+  S.sessions.set(s.id, s); S.edit = { id: s.id, orig: null, dirty: false }; EDITS++; DATA_REV++;
+  go('session', s.id);
+  toast(d ? 'Tick the sets you did, or type what you lifted' : 'Add the exercises you did');
+}
+/* History's way in: pick the day first */
+function pastDayPicker() {
+  const y = new Date(Date.now() - 864e5), v = `${y.getFullYear()}-${pad(y.getMonth() + 1)}-${pad(y.getDate())}`, t = new Date(), max = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+  openSheet(`<div class="sh-h"><h3>Log a past day</h3>${xBtn()}</div><div class="form">
+  <label>Day<input class="field" type="date" id="pd-day" value="${v}" max="${max}"></label>
+  <p class="muted" style="font-size:13px">For a session you didn’t log at the time, or a rest day. Records, your 1RM and the coach update when you save.</p></div>
+  <div class="btns"><button class="btn" id="pd-go">Continue</button></div>`, r => {
+    r.querySelector('#pd-go').onclick = () => { const raw = r.querySelector('#pd-day').value; if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return toast('Pick a day');
+      const [yy, mm, dd] = raw.split('-').map(Number), k = dayKey(new Date(yy, mm - 1, dd)); if (dayStart(k) > Date.now()) return toast('Pick today or a day before');
+      closeSheet(); daySheet(k); };
+  });
 }
 function editDate() {
   const s = cur(); if (!s) return; const d = new Date(s.startedAt);
@@ -2483,7 +2597,7 @@ function itemMenu(itemId) {
 }
 function sessMenu() {
   const s = cur(); if (!s) return;
-  if (editing(s)) return menuSheet(sessName(s), [{ label: 'Save changes', fn: saveEditSheet }, { label: 'Discard changes', warn: true, fn: () => { endEdit(); render(false); } }]);
+  if (editing(s)) return menuSheet(sessName(s), [{ label: 'Save', fn: saveEditSheet }, { label: 'Change date and time', fn: editDate }, { label: S.edit.orig ? 'Discard changes' : 'Discard this session', warn: true, fn: discardEdit }]);
   menuSheet(sessName(s), [
     ...(s.endedAt ? [{ label: 'Edit session', hint: 'then save as today’s, or update this one', fn: startEdit }] : []),
     { label: 'Change date', fn: editDate },
@@ -2770,7 +2884,9 @@ const ACT = {
   'sess-menu': sessMenu,
   'sess-edit': startEdit,
   'edit-save': saveEditSheet,
-  'edit-discard': () => { endEdit(); render(false); },
+  'edit-discard': discardEdit,
+  day: el => daySheet(el.dataset.k),
+  'log-past': pastDayPicker,
   'edit-date': editDate,
   finish,
   'link-toggle': () => { S.link = new Set(); render(false); toast('Tap the sets you want to link'); },

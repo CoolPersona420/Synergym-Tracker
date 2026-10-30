@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.12, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.13, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.12-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.13-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -45,6 +45,8 @@ The version lives in `package.json` (`0.1.12-alpha`) and shows in Settings › A
   Each opens full screen with more detail.
 - **Edit past sessions:** finished sessions are locked until you tap **Edit**; then save the changes as today's
   session (the original stays as it was) or update the original, with Undo.
+- **Log a past day:** tap a day on the Consistency heat map (or Log a past day in History) to log a session you
+  missed or mark a rest day. A saved 1RM that an edit beats, or that came from a corrected session, is offered for update.
 - **Bodyweight log**, **History** with search, and an **exercise library** of your own with editable
   muscle groups.
 - **Themes:** Auto (follows the device) plus eleven named palettes.

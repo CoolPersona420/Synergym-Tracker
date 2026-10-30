@@ -310,6 +310,13 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .heat i.fut{background:transparent;box-shadow:inset 0 0 0 1px var(--heat0)}
 .heat i.today{outline:1.5px solid var(--ink);outline-offset:1px}
 .heat-f{display:flex;justify-content:space-between;margin-top:var(--s-1)}
+/* the full view's days open on a tap */
+.heat.tap i[data-act]{cursor:pointer;transition:transform .15s var(--ease)}
+.heat.tap i[data-act]:active{transform:scale(.82)}
+@media (hover:hover){.heat.tap i[data-act]:hover{outline:1.5px solid var(--accent);outline-offset:1px}}
+.heat-tip{font-size:var(--t-xs);margin-top:var(--s-1)}
+.h-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s-1);margin:10px 0 16px}
+.h-top .h1{margin:0}
 .stats{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s0) var(--s0);align-items:center}
 .stats .term{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1.05rem}
 .restctl{display:flex;align-items:center;gap:var(--s-1);justify-self:end}
