@@ -10,6 +10,26 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.14-alpha · 30 October 2026
+
+**The Logbook**
+
+- **Hold +, slide up.** Press and hold the round + button (Start session in the sidebar on a computer). A capsule
+  rises from it, the way holding the mic and sliding up works in Telegram and WhatsApp. Slide up into it and let
+  go: the Logbook grows out of the capsule. Let go early and it springs back; let go without sliding and the capsule
+  waits a moment so you can tap it. A plain tap on + still starts a session. Holding Space on the button works too.
+- **A calendar of every day,** shaded like the Consistency heat map (darker is harder, outlined is a rest day, today
+  is ringed). Swipe or use the arrows for other months; the future stays closed.
+- **Tap a day** to see its sessions. Open one to **Edit** it, with everything a live session has, linking sets
+  included: save it as today's session or update it, with Undo. **Log a session** fills a day you didn't log, from
+  your split or empty; **Rest day** marks it as rest.
+- **The one place past days change.** Sessions opened from History or Home are view-only now (Repeat still works);
+  a tap on one points you to the Logbook. The Consistency heat map and History no longer log days themselves.
+- Records, estimated 1RMs, the coach and widgets follow every change, and a saved 1RM that no longer matches is
+  offered for update, as before.
+
+---
+
 ## 0.1.13-alpha · 30 October 2026
 
 **Log the days you missed, and a saved 1RM that keeps up with your edits**

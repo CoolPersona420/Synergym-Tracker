@@ -10,6 +10,7 @@ export const ICON={
  split:'<svg class="ico" viewBox="0 0 24 24"><rect x="3.5" y="5" width="4" height="14" rx="1.2"/><rect x="10" y="5" width="4" height="14" rx="1.2"/><rect x="16.5" y="5" width="4" height="14" rx="1.2"/></svg>',
  prefs:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/><circle cx="12" cy="12" r="2.8"/></svg>',
  plus:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></svg>',
+ book:'<svg class="ico" viewBox="0 0 24 24"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v14H7.5A2.5 2.5 0 0 0 5 19.5zM5 19.5A2.5 2.5 0 0 0 7.5 22H19v-5M9 7.5h6M9 11h4"/></svg>',
  shuffle:'<svg class="ico" viewBox="0 0 24 24"><path d="M3 7h3.5c2.5 0 4 1.5 5.5 5s3 5 5.5 5H21M3 17h3.5c1.2 0 2.2-.4 3-1.1M14.5 8.1c.8-.7 1.8-1.1 3-1.1H21M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>',
  play:'<svg class="ico" viewBox="0 0 24 24"><path d="M8 5.5l10.5 6.5L8 18.5z" fill="currentColor"/></svg>',
  back:'<svg class="ico" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>',

@@ -35,8 +35,8 @@ export function rubberBand(view, { ios = false, reduced = false, held = () => fa
     };
     raf = requestAnimationFrame(step);
   };
-  /* sheets, sliders and text boxes keep their own touch behaviour */
-  const skip = t => !(t instanceof Element) || t.closest('.sheet,textarea,input[type=range]') || document.body.style.overflow === 'hidden';
+  /* sheets, sliders, text boxes and the dock (holding + slides up to the Logbook) keep their own touch behaviour */
+  const skip = t => !(t instanceof Element) || t.closest('.sheet,textarea,input[type=range],#nav') || document.body.style.overflow === 'hidden';
 
   addEventListener('touchstart', e => {
     down = true;

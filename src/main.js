@@ -19,6 +19,7 @@ import { guideSections, tourSlides } from './ui/guide.js';
 import { rubberBand } from './ui/rubber.js';
 import { edgeBack } from './ui/edgeback.js';
 import { topPanel } from './ui/toppanel.js';
+import { holdReveal } from './ui/hold.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
@@ -512,11 +513,12 @@ function parsePath() {
     case 'guide': return ['guide'];
     case 'coach': return ['coach', seg[1]];
     case 'w': return seg[1] ? ['widget', seg[1]] : ['today'];
+    case 'logbook': return ['logbook'];
     case 's': return seg[1] ? ['public', seg[1]] : ['today'];
     default: return ['today'];
   }
 }
-const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', coach: '/coach' + (a ? '/' + a : ''), public: '/s/' + a, widget: '/w/' + a })[v] || '/';
+const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', coach: '/coach' + (a ? '/' + a : ''), public: '/s/' + a, widget: '/w/' + a, logbook: '/logbook' })[v] || '/';
 function go(v, a = null, { replace = false } = {}) {
   const path = pathOf(v, a);
   if (replace) history.replaceState({ d: depth }, '', path); else { depth++; history.pushState({ d: depth, from: S.view }, '', path); }
@@ -532,9 +534,9 @@ const upOf = v => ({ exercise: 'exercises', split: 'splits', shared: 'splits', g
 let swipeNav = false;
 addEventListener('popstate', e => { const d = e.state?.d || 0; navDir = swipeNav ? 'swipe' : d < depth ? 'back' : 'fwd'; swipeNav = false; depth = d; route(true); });
 /* the iPhone back swipe works on pages reached from another one; the dock's own pages are where you go back to */
-const SWIPE_BACK = new Set(['exercise', 'split', 'shared', 'session', 'guide', 'coach', 'widget']);
+const SWIPE_BACK = new Set(['exercise', 'split', 'shared', 'session', 'guide', 'coach', 'widget', 'logbook']);
 const canSwipeBack = () => !!(S.user && S.loaded && S.profile.onboarded && SWIPE_BACK.has(S.view) && !S.link && $('#sheet').hidden);
-const VIEW_NAME = { today: 'Home', history: 'History', exercises: 'Exercises', exercise: 'Exercise', splits: 'Splits', split: 'Split', shared: 'Split', session: 'Session', prefs: 'Settings', guide: 'Guide', coach: 'Coach', widget: 'Home' };
+const VIEW_NAME = { today: 'Home', history: 'History', exercises: 'Exercises', exercise: 'Exercise', splits: 'Splits', split: 'Split', shared: 'Split', session: 'Session', prefs: 'Settings', guide: 'Guide', coach: 'Coach', widget: 'Home', logbook: 'Logbook' };
 const backLabel = () => VIEW_NAME[depth > 0 && history.state?.from ? history.state.from : upOf(S.view)] || 'Back';
 /* page change: a curtain wipe through the View Transitions API where the browser has it
    (old page lifts away, new page is revealed from below; reversed when going back). */
@@ -544,6 +546,8 @@ function route(enter = true) {
   const [v, a] = parsePath();
   const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg, from = S.view, fromArg = S.arg;
   if (S.edit && (v !== 'session' || arg !== S.edit.id)) endEdit();
+  /* a finished session can only be changed when it was opened from the Logbook */
+  if (!(v === 'session' && arg === S.lbCtx)) S.lbCtx = null;
   S.view = v; S.arg = arg; S.link = null; S.spLink = null;
   let dir = navDir; navDir = 'fwd';
   /* tab to tab: a sideways slide in the direction of the tab bar */
@@ -553,13 +557,17 @@ function route(enter = true) {
   let morph = null;
   if (v === 'widget' && from === 'today') { dir = 'widget'; morph = document.querySelector(`#view [data-w="${CSS.escape(arg || '')}"]`); }
   else if (from === 'widget' && v === 'today' && dir !== 'swipe') { dir = 'widget'; S.morphW = fromArg; }
+  /* the Logbook grows out of the capsule it was opened from, and fades away as it closes */
+  else if (v === 'logbook' && S.lbFrom) { dir = 'widget'; morph = S.lbFrom; }
+  else if (from === 'logbook' && v !== 'session' && dir !== 'swipe') dir = 'widget';
+  const pre = S.lbFrom ? (c => () => c.remove())(S.lbFrom) : null; S.lbFrom = null;
   if (v !== 'today' && v !== 'widget') S.homeRestore = null;
   if (enter && changed && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
     document.documentElement.dataset.nav = dir;
     if (morph) morph.style.viewTransitionName = 'wfocus';
-    const t = document.startViewTransition(() => render(true));
+    const t = document.startViewTransition(() => { if (pre) pre(); render(true); });
     t.finished.finally(() => { if (S.morphW) { S.morphW = null; const c = document.querySelector('#view [data-w][style*="wfocus"]'); if (c) c.style.viewTransitionName = ''; } });
-  } else { S.morphW = null; render(enter); }
+  } else { if (pre) pre(); S.morphW = null; render(enter); }
 }
 
 /* ================= rendering ================= */
@@ -636,6 +644,7 @@ function render(enter) {
         case 'guide': html = vGuide(); break;
         case 'coach': html = vCoach(); break;
         case 'widget': html = vWidget(); break;
+        case 'logbook': html = vLogbook(); break;
         default: html = vToday();
       }
     }
@@ -651,7 +660,7 @@ function render(enter) {
   document.body.classList.toggle('bare', bare);
   document.body.classList.toggle('in-session', app && S.view === 'session');
   document.body.classList.toggle('on-prefs', app && (S.view === 'prefs' || S.view === 'guide'));
-  document.body.classList.toggle('in-full', app && (S.view === 'widget' || S.view === 'coach'));
+  document.body.classList.toggle('in-full', app && (S.view === 'widget' || S.view === 'coach' || S.view === 'logbook'));
   if (enter) {
     const hr = S.view === 'today' && S.homeRestore;
     if (hr) { const d = $('#dash', v); if (d) d.scrollLeft = hr.x; scrollTo(0, hr.y); S.homeRestore = null; } else scrollTo(0, 0);
@@ -711,6 +720,7 @@ addEventListener('resize', () => { if (S.view === 'today') sizeDash(); });
 const heroFit = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (S.view === 'today') sizeDash(); }) : null;
 function afterRender(entered) {
   if (S.view === 'today') { sizeDash(); wireCarousel(); }
+  if (S.view === 'logbook') wireLogbook();
   { const sv = S.view === 'session' ? cur() : null, v = $('#view'); v.classList.toggle('s-locked', locked(sv)); v.classList.toggle('s-editing', editing(sv)); }
   if (heroFit) { heroFit.disconnect(); const h = S.view === 'today' && $('#view .hero'); if (h) heroFit.observe(h); }
   if (S.view === 'today' && S.loaded && !S.hinted && coarse.matches && !reduced) {
@@ -739,7 +749,11 @@ function renderNav() {
   const it = (v, l, i) => `<button class="nav-i${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}">${i}${roll(l)}</button>`;
   /* the session button is kept across renders (only its contents change), so hiding and showing it can animate */
   const nav = $('#nav'); let fab = nav.querySelector(':scope > .nav-train');
-  if (!fab) { nav.innerHTML = ''; fab = document.createElement('button'); fab.className = 'nav-train'; nav.appendChild(fab); }
+  if (!fab) {
+    nav.innerHTML = ''; fab = document.createElement('button'); fab.className = 'nav-train'; nav.appendChild(fab);
+    /* hold it, then slide up: the Logbook, the one place to log or change past days */
+    holdReveal(fab, { label: 'Logbook', icon: ICON.book, buzz, reduced, enabled: () => S.loaded && S.view !== 'logbook', open: cap => { cap.style.viewTransitionName = 'wfocus'; S.lbFrom = cap; go('logbook'); } });
+  }
   for (const c of [...nav.children]) if (c !== fab) c.remove();
   /* on a rest day it shows a moon and stars; tapping it still asks to undo the rest day before anything starts */
   const rest = !a && S.loaded && isRestToday(), mode = a ? 'live:' + a.id : rest ? 'rest' : 'idle';
@@ -1319,14 +1333,13 @@ function chartDays(days) {
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Daily session intensity, last ${lab(days)}">${g}${f}</svg>
   <div class="axis"><span class="lbl">${lab(days)}</span><span class="lbl">${Math.round(days * 2 / 3)}d</span><span class="lbl">${Math.round(days / 3)}d</span><span class="lbl">today</span></div></div>`;
 }
-/* tap: each past day opens it (the full view; on Home the whole card is one button) */
-function heatWeeks(weeks, tap = false) {
+function heatWeeks(weeks) {
   const cw = weekStart(Date.now()), start = shiftWeek(cw, -(weeks - 1)), di = dayIntensity(), tk = dayKey(Date.now()), now = Date.now(), rd = new Set(S.profile.restDays || []);
   let h = '';
   for (let w = 0; w < weeks; w++) { const ws = shiftWeek(start, w); for (let d = 0; d < 7; d++) { const dt = new Date(ws); dt.setDate(dt.getDate() + d); const k = dayKey(dt);
     let c = ''; if (dt.getTime() > now) c = 'fut'; else if (di.has(k)) { const v = di.get(k); c = v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1'; } else if (rd.has(k)) c = 'rd';
-    if (k === tk) c += ' today'; h += `<i class="${c}"${tap && dt.getTime() <= now ? ` data-act="day" data-k="${k}"` : ''} title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : rd.has(k) ? ' · rest day' : ''}"></i>`; } }
-  return `<div class="heat${weeks > 30 ? ' dense' : ''}${tap ? ' tap' : ''}" aria-label="Training days, last ${weeks} weeks">${h}</div>`;
+    if (k === tk) c += ' today'; h += `<i class="${c}" title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : rd.has(k) ? ' · rest day' : ''}"></i>`; } }
+  return `<div class="heat${weeks > 30 ? ' dense' : ''}" aria-label="Training days, last ${weeks} weeks">${h}</div>`;
 }
 const heatKey = `<div class="heat-f"><span class="lbl">less</span><span class="lbl"><i class="rd-key"></i>rest</span><span class="lbl">more intense</span></div>`;
 const restIn = days => { const t = Date.now() - days * 864e5; return (S.profile.restDays || []).filter(k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime() >= t; }).length; };
@@ -1439,7 +1452,7 @@ const WIDGETS = {
       return z === 'l' ? base + mkv([['this week', `${C.thisWeek}/${C.target}`], ['streak', plural(C.streak, 'wk')], ['best streak', plural(bestStreak(), 'wk')]]) : base; },
     full: w => {
       const C = consistency(), m = weekCounts(), cw = weekStart(Date.now()); let hit = 0; for (let i = 0; i < w; i++) if ((m.get(shiftWeek(cw, -i)) || 0) >= C.target) hit++;
-      return `<section class="card">${heatWeeks(w, true)}${heatKey}<p class="muted heat-tip">Tap a day to see it, log a session you missed, or mark a rest day.</p></section>`
+      return `<section class="card">${heatWeeks(w)}${heatKey}</section>`
         + kvs([['Score', C.score == null ? '–' : Math.round(C.score)], ['This week', `${C.thisWeek}/${C.target}`], ['Streak', plural(C.streak, 'wk')], ['Best streak', plural(bestStreak(), 'wk')], ['Weeks on target', `${hit}/${w}`], ['Rest days', restIn(w * 7)]])
         + `<p class="muted wf-note">Your weekly target is in Settings. A week at or above target scores 100; the score averages your last 8 full weeks.</p>`;
     }
@@ -1563,7 +1576,7 @@ function vSession() {
   const sp = splitOf(s.splitId);
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button>
     <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80"${ro ? ' readonly' : ''}>
-    ${ro ? `<button class="btn line sm s-edit" data-act="sess-edit">${ICON.pen}Edit</button>` : ''}
+    ${ro && S.lbCtx === s.id ? `<button class="btn line sm s-edit" data-act="sess-edit">${ICON.pen}Edit</button>` : ''}
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
   <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</div>${sessCoachBand(s)}
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
@@ -1575,7 +1588,7 @@ function vSession() {
   <div class="items">${s.items.map(it => exCard(it, gmap)).join('') || `<div class="empty rv"><b>No exercises yet.</b>Tap + to add one from your library.</div>`}</div>
   <div class="groups" id="gsum">${groupsHTML(groups)}</div>
   <textarea class="notes rv" data-f="notes" placeholder="${ro ? 'No notes' : 'Notes: how it felt, sleep, anything worth remembering'}" maxlength="4000"${ro ? ' readonly' : ''}>${esc(s.notes || '')}</textarea>
-  ${live || ed ? '' : `<div class="done-bar rv"><button class="btn" data-act="repeat" data-id="${s.id}">${roll('Repeat this session')}</button><button class="btn ghost" data-act="edit-date">${roll('Change date')}</button></div>`}
+  ${live || ed ? '' : `<div class="done-bar rv"><button class="btn" data-act="repeat" data-id="${s.id}">${roll('Repeat this session')}</button>${S.lbCtx === s.id ? `<button class="btn ghost" data-act="edit-date">${roll('Change date')}</button>` : ''}</div>`}
   ${transport(s)}`;
 }
 const tierText = a => `${tier(a.int)}${a.prs.length ? ` · <em class="pr">${a.prs.length} PR</em>` : ''}${a.calib ? ' · calibrating' : ''}`;
@@ -1629,7 +1642,7 @@ function transport(s) {
     <button class="tfin" data-act="link-do"${sel.length < 2 ? ' disabled style="opacity:.4"' : ''}>Link</button></div>`;
   }
   const live = !s.endedAt;
-  if (editing(s)) return `<div class="transport ed-bar"><button class="tb" data-act="edit-discard" aria-label="Discard changes" title="Discard changes">${ICON.x}</button><span class="tdiv"></span>
+  if (editing(s)) return `<div class="transport ed-bar"><button class="tb" data-act="edit-discard" aria-label="Discard changes" title="Discard changes">${ICON.x}</button><button class="tb" data-act="link-toggle" aria-label="Link sets into a superset, giant set or drop set" title="Link sets">${ICON.link}</button><span class="tdiv"></span>
   <div class="tlink"><b>${S.edit.orig ? 'Editing' : `Logging ${fmtDate(s.startedAt)}`}</b><span class="muted">Nothing is saved until you tap Save</span></div>
   <button class="tfin" data-act="edit-save">Save</button></div>`;
   return `<div class="transport">${locked(s) ? '' : `<button class="tb" data-act="link-toggle" aria-label="Link sets into a superset, giant set or drop set" title="Link sets">${ICON.link}</button><span class="tdiv"></span>`}
@@ -1676,7 +1689,7 @@ function hfDateText(f) {
 }
 function vHistory() {
   const f = S.hf;
-  return pageTop('History', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `<div class="h-top rv"><h1 class="h1">History</h1><button class="btn line sm" data-act="log-past">${ICON.plus}Log a past day</button></div>
+  return pageTop('History', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `<h1 class="h1 rv" style="margin:10px 0 16px">History</h1>
   <div class="hsearch rv"><input class="search" data-f="q" data-act="hf-open" placeholder="Search by session, exercise or note" value="${esc(S.q)}" autocomplete="off" aria-label="Search history">
   <button class="iconbtn hf-tog${f.open || hfOn(f) ? ' on' : ''}" data-act="hf-toggle" aria-label="Filters" aria-expanded="${f.open || hfOn(f)}" aria-controls="hfil">${FILTER_ICON}</button></div>
   <div id="hfil">${hfHTML()}</div>
@@ -2353,7 +2366,11 @@ function finish() {
   queue('s:' + s.id, 0); compute(); const a = S.A.sess.get(s.id);
   render(true); toast(`Saved · intensity ${Math.round(a.int)}${a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : ''}`);
 }
-function delSession(id) { if (S.edit && S.edit.id === id) S.edit = null; S.sessions.delete(id); queue('s:' + id, 0); S.rest = null; go('today', null, { replace: true }); toast('Session deleted'); }
+function delSession(id) {
+  const lb = S.lbCtx === id; if (S.edit && S.edit.id === id) S.edit = null;
+  S.sessions.delete(id); queue('s:' + id, 0); S.rest = null;
+  if (lb) back(); else go('today', null, { replace: true }); toast('Session deleted');
+}
 
 /* ---------- editing a finished session ----------
    A finished session reads as it was logged. Edit unlocks it as a draft: nothing is saved while it changes (see
@@ -2370,20 +2387,26 @@ function startEdit() {
 function endEdit() {
   const e = S.edit; S.edit = null; if (!e) return;
   const draft = S.sessions.get(e.id); if (!draft) return;
+  const ctx = S.lbCtx === e.id;
   if (e.orig) S.sessions.set(e.id, e.orig); else S.sessions.delete(e.id);
   EDITS++; DATA_REV++;
   if (e.dirty) toast(e.orig ? 'Changes discarded' : 'Draft discarded', { label: 'Undo', fn: () => {
     if (S.edit || (e.orig ? S.sessions.get(e.id) !== e.orig : S.sessions.has(e.id))) return;
-    S.sessions.set(e.id, draft); S.edit = e; EDITS++; DATA_REV++;
+    S.sessions.set(e.id, draft); S.edit = e; EDITS++; DATA_REV++; if (ctx) S.lbCtx = e.id;
     if (S.view === 'session' && S.arg === e.id) render(false); else go('session', e.id);
   } });
 }
 /* Discard: a new draft has nothing to go back to, so the page goes back too */
 function discardEdit() { const fresh = S.edit && !S.edit.orig; endEdit(); if (fresh) back(); else render(false); }
-/* a tap on something a finished session keeps locked points at Edit */
+/* a tap on something a finished session keeps locked points at Edit, or, outside the Logbook, at the Logbook */
 function nudgeEdit() {
-  const b = $('#view .s-edit'); if (b) { b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge'); }
+  const b = $('#view .s-edit'); if (!b) return lbHint();
+  b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge');
   buzz(6); toast('Tap Edit to change this session');
+}
+function lbHint() {
+  const f = $('#nav .nav-train'); if (f) { f.classList.remove('nudge'); void f.offsetWidth; f.classList.add('nudge'); }
+  buzz(6); toast(phoneDash() ? 'Past sessions change in the Logbook: hold + and slide up' : 'Past sessions change in the Logbook: hold Start session and slide up');
 }
 const recNote = a => a && a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : '';
 function saveEditSheet() {
@@ -2420,13 +2443,14 @@ function saveEdit(how) {
     items: s.items.map(it => ({ ...it, id: sid(), sets: it.sets.map(st => ({ ...st, id: sid(), g: gid(st.g) })) })) };
   S.sessions.set(e.id, e.orig); S.sessions.set(copy.id, copy);
   queue('s:' + copy.id, 0); compute(); buzz(12);
+  if (S.lbCtx === e.id) S.lbCtx = copy.id;
   go('session', copy.id, { replace: true });
   const orm = offerOneRm(ormChanges(null, copy), copy);
   toast(`Saved as today’s session${recNote(S.A.sess.get(copy.id))}`, { label: 'Undo', fn: () => {
     if (S.edit && S.edit.id === copy.id) S.edit = null;
     orm.undo();
     S.sessions.delete(copy.id); queue('s:' + copy.id, 0);
-    if (S.view === 'session' && S.arg === copy.id) go('session', e.id, { replace: true }); else render(false);
+    if (S.view === 'session' && S.arg === copy.id) { if (S.lbCtx === copy.id) S.lbCtx = e.id; go('session', e.id, { replace: true }); } else render(false);
   } });
 }
 
@@ -2469,32 +2493,94 @@ function offerOneRm(changes, s) {
   return h;
 }
 
-/* ---------- a day you didn't log ----------
-   Tap a past day on the Consistency heat map (or "Log a past day" in History): see what's there, log a session
-   for it from your split or empty, or mark it a rest day. The session opens as a new draft dated that day. */
+/* ---------- the Logbook ----------
+   The one place to log or change a past day. Hold the session button (+ on a phone, Start session on a computer)
+   and slide up into the capsule. A month calendar, filled in like the Consistency heat map; tap a day to see its
+   sessions (they open ready to Edit), log a session for it from your split or empty, or mark it a rest day.
+   Sessions opened anywhere else are read-only (see S.lbCtx). */
 const dayStart = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
 const sessOn = k => [...S.sessions.values()].filter(s => s.endedAt && dayKey(s.startedAt) === k).sort((a, b) => a.startedAt - b.startedAt);
+const monthOf = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
 function setRestDay(k, on) {
   const cur_ = (S.profile.restDays || []).filter(d => d !== k);
   S.profile.restDays = on ? [...cur_, k].slice(-400) : cur_; queue('p', 200); buzz();
 }
-function daySheet(k) {
-  const t0 = dayStart(k); if (!(t0 <= Date.now())) return;
-  const list = sessOn(k), rest = (S.profile.restDays || []).includes(k), label = `${DAYS[new Date(t0).getDay()]} ${fmtDate(t0)}`;
-  openSheet(`<div class="sh-h"><h3>${label}</h3>${xBtn()}</div>
-  ${list.length ? `<div class="list today-list">${list.map(sessRowToday).join('')}</div>`
-    : rest ? `<div class="sec-done"><span class="dt-check rest" aria-hidden="true">${ICON.moon}</span><span><b>Rest day</b><span class="muted">Marked as a rest day.</span></span></div>`
-    : `<p class="muted">Nothing logged on this day.</p>`}
-  ${list.length >= DAY_MAX ? `<p class="muted" style="margin-top:12px">${DAY_MAX} sessions is the most for one day.</p>` : ''}
-  <div class="btns">${rest ? `<button class="btn" id="dy-unrest">Undo rest day</button>`
-    : `${list.length ? '' : `<button class="btn ghost" id="dy-rest">${ICON.moon}Mark as rest day</button>`}${list.length < DAY_MAX ? `<button class="btn" id="dy-log">${list.length ? 'Log another session' : 'Log a session'}</button>` : ''}`}</div>`, r => {
-    r.querySelector('#dy-log')?.addEventListener('click', () => { closeSheet(); logPastDay(k); });
-    r.querySelector('#dy-rest')?.addEventListener('click', () => { setRestDay(k, true); closeSheet(); render(false); toast(`${label} marked as a rest day`); });
-    r.querySelector('#dy-unrest')?.addEventListener('click', () => { setRestDay(k, false); closeSheet(); render(false); daySheet(k); });
+const dayName = t => { const n = DAYS[new Date(t).getDay()]; return n[0] + n.slice(1).toLowerCase(); };
+const lbState = () => S.lb || (S.lb = { m: monthOf(Date.now()), k: dayKey(Date.now()) });
+function vLogbook() {
+  const L = lbState();
+  return `<div class="wfull lb" style="view-transition-name:wfocus">
+    <header class="wf-top"><div><span class="lbl">Log or change any day</span><h1 class="h1">Logbook</h1></div>${xBtn('lb-close')}</header>
+    <div class="lb-wrap"><section class="card lb-cal" id="lb-cal">${lbMonth(L)}</section><section class="lb-day" id="lb-day" aria-live="polite">${lbDay(L.k)}</section></div></div>`;
+}
+function lbMonth(L) {
+  const m0 = new Date(L.m), y = m0.getFullYear(), mo = m0.getMonth(), days = new Date(y, mo + 1, 0).getDate(), now = Date.now(), tk = dayKey(now);
+  const di = dayIntensity(), rd = new Set(S.profile.restDays || []), w0 = weekStartDay(), lead = (m0.getDay() - w0 + 7) % 7;
+  let n = 0, rest = 0, cells = '';
+  for (let i = 0; i < lead; i++) cells += '<i class="lb-pad"></i>';
+  for (let d = 1; d <= days; d++) {
+    const dt = new Date(y, mo, d), k = dayKey(dt), fut = dt.getTime() > now, v = di.get(k), cnt = sessOn(k).length;
+    n += cnt; if (rd.has(k)) rest++;
+    const c = fut ? 'fut' : v != null ? (v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1') : cnt ? 'l1' : rd.has(k) ? 'rd' : '';
+    cells += `<button class="lb-d ${c}${k === tk ? ' today' : ''}${k === L.k ? ' sel' : ''}" data-act="lb-pick" data-k="${k}"${fut ? ' disabled' : ''} aria-label="${dayName(dt)} ${d} ${MONTHS[mo]}${cnt ? ', ' + plural(cnt, 'session') : rd.has(k) ? ', rest day' : ''}"${k === L.k ? ' aria-pressed="true"' : ''}><span>${d}</span>${cnt > 1 ? '<i class="lb-two"></i>' : ''}</button>`;
+  }
+  const head = Array.from({ length: 7 }, (_, i) => DAYS[(w0 + i) % 7].slice(0, 1)).map(x => `<span class="lbl">${x}</span>`).join('');
+  const first = sorted().length ? monthOf(sorted()[sorted().length - 1].startedAt) : L.m, canBack = L.m > Math.min(first, monthOf(now) - 1), canFwd = L.m < monthOf(now);
+  return `<div class="lb-mh"><button class="iconbtn lb-prev" data-act="lb-m" data-d="-1" aria-label="Previous month"${canBack ? '' : ' disabled'}>${ICON.down}</button>
+    <div class="lb-mt"><b>${MONTHS[mo]} ${y}</b><span class="lbl">${plural(n, 'session')}${rest ? ` · ${plural(rest, 'rest day')}` : ''}</span></div>
+    <button class="iconbtn lb-next" data-act="lb-m" data-d="1" aria-label="Next month"${canFwd ? '' : ' disabled'}>${ICON.down}</button></div>
+  <div class="lb-wk">${head}</div><div class="lb-grid">${cells}</div>`;
+}
+function lbDay(k) {
+  const t0 = dayStart(k), list = [...S.sessions.values()].filter(s => dayKey(s.startedAt) === k).sort((a, b) => a.startedAt - b.startedAt);
+  const rest = (S.profile.restDays || []).includes(k), today = k === dayKey(Date.now()), dt = new Date(t0), full = list.filter(s => s.endedAt).length >= DAY_MAX;
+  return `<div class="lb-dh"><div><span class="lbl">${DAYS[dt.getDay()]}${today ? ' · today' : ''}</span><b>${dt.getDate()} ${MONTHS[dt.getMonth()]}</b></div></div>
+  ${list.length ? `<div class="list">${list.map(s => rowSession(s).replace('data-act="open"', 'data-act="lb-open"')).join('')}</div>`
+    : rest ? `<div class="sec-done"><span class="dt-check rest" aria-hidden="true">${ICON.moon}</span><span><b>Rest day</b><span class="muted">Recovery counts.</span></span></div>`
+    : `<p class="muted lb-none">Nothing logged on this day.</p>`}
+  ${full ? `<p class="muted lb-none">${DAY_MAX} sessions is the most for one day.</p>` : ''}
+  <div class="btns lb-acts">${rest ? `<button class="btn line" data-act="lb-rest" data-k="${k}" data-on="0">${ICON.moon}Undo rest day</button>`
+    : list.length ? '' : `<button class="btn line" data-act="lb-rest" data-k="${k}" data-on="1">${ICON.moon}Rest day</button>`}${!rest && !full ? `<button class="btn" data-act="lb-log" data-k="${k}">${ICON.plus}${list.length ? 'Log another' : 'Log a session'}</button>` : ''}</div>`;
+}
+function lbRefresh() { const L = lbState(), c = $('#lb-cal'), p = $('#lb-day'); if (c) { c.innerHTML = lbMonth(L); wireLogbook(); } if (p) p.innerHTML = lbDay(L.k); }
+/* another month: the grid slides out one way and the new month in from the other */
+function lbMove(d) {
+  const L = lbState(), m = new Date(L.m); m.setMonth(m.getMonth() + d); const t = m.getTime();
+  if (t > monthOf(Date.now())) return;
+  const cal = $('#lb-cal'); if (!cal) return;
+  L.m = t; buzz(6);
+  cal.innerHTML = lbMonth(L); wireLogbook();
+  const g = cal.querySelector('.lb-grid'); if (!reduced) g.classList.add(d > 0 ? 'in-r' : 'in-l');
+}
+function lbPick(k) {
+  const L = lbState(); if (L.k === k) return; L.k = k; buzz(6);
+  for (const b of $$('#lb-cal .lb-d')) { const on = b.dataset.k === k; b.classList.toggle('sel', on); if (on) b.setAttribute('aria-pressed', 'true'); else b.removeAttribute('aria-pressed'); }
+  const p = $('#lb-day'); if (!p) return; p.innerHTML = lbDay(k);
+  if (!reduced) { p.classList.remove('in'); void p.offsetWidth; p.classList.add('in'); }
+}
+/* the month follows a sideways swipe on the calendar, then springs to the next month or back */
+function wireLogbook() {
+  const g = $('#lb-cal .lb-grid'); if (!g || g._sw) return; g._sw = 1;
+  let st = null;
+  g.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') return; st = { x: e.clientX, y: e.clientY, t: performance.now(), on: false }; });
+  g.addEventListener('pointermove', e => {
+    if (!st) return; const dx = e.clientX - st.x, dy = e.clientY - st.y;
+    if (!st.on) { if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return; st.on = true; g.style.transition = 'none'; }
+    const L = lbState(), atEnd = dx < 0 && L.m >= monthOf(Date.now());
+    g.style.transform = `translateX(${(atEnd ? dx * .25 : dx * .9).toFixed(1)}px)`; g.style.opacity = String(1 - Math.min(.5, Math.abs(dx) / g.clientWidth));
   });
+  const end = () => {
+    if (!st) return; const s0 = st; st = null; if (!s0.on) return;
+    const dx = parseFloat(g.style.transform.slice(11)) || 0, fast = Math.abs(dx) / (performance.now() - s0.t) > .5;
+    g.style.transition = 'transform .3s var(--ease),opacity .3s'; g.style.transform = ''; g.style.opacity = '';
+    if (Math.abs(dx) > g.clientWidth * .22 || (fast && Math.abs(dx) > 30)) lbMove(dx < 0 ? 1 : -1);
+  };
+  g.addEventListener('pointerup', end); g.addEventListener('pointercancel', end);
+  /* a swipe isn't a tap on the day under it */
+  g.addEventListener('click', e => { if (g.style.transform) e.stopPropagation(); }, true);
 }
 function logPastDay(k) {
-  dayPicker({ title: `Log ${DAYS[new Date(dayStart(k)).getDay()]} ${fmtDate(dayStart(k))}`, marks: false,
+  dayPicker({ title: `Log ${dayName(dayStart(k))} ${fmtDate(dayStart(k))}`, marks: false,
     note: 'The session is filled in from that day. Change anything, then Save.',
     onPick: (sp, i) => backfill(k, { sp, i }), foot: [{ label: 'Empty session', fn: () => backfill(k) }] });
 }
@@ -2510,20 +2596,8 @@ function backfill(k, pick) {
   const s = { id: uuid(), name: d ? d.type || null : null, startedAt: st, endedAt: Math.min(st + 36e5, end), notes: '', items: d ? splitItems(d, false) : [], splitId: d ? sp.id : null, splitDay: d ? pick.i : null };
   if (S.edit) endEdit();
   S.sessions.set(s.id, s); S.edit = { id: s.id, orig: null, dirty: false }; EDITS++; DATA_REV++;
-  go('session', s.id);
+  S.lbCtx = s.id; go('session', s.id);
   toast(d ? 'Tick the sets you did, or type what you lifted' : 'Add the exercises you did');
-}
-/* History's way in: pick the day first */
-function pastDayPicker() {
-  const y = new Date(Date.now() - 864e5), v = `${y.getFullYear()}-${pad(y.getMonth() + 1)}-${pad(y.getDate())}`, t = new Date(), max = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
-  openSheet(`<div class="sh-h"><h3>Log a past day</h3>${xBtn()}</div><div class="form">
-  <label>Day<input class="field" type="date" id="pd-day" value="${v}" max="${max}"></label>
-  <p class="muted" style="font-size:13px">For a session you didn’t log at the time, or a rest day. Records, your 1RM and the coach update when you save.</p></div>
-  <div class="btns"><button class="btn" id="pd-go">Continue</button></div>`, r => {
-    r.querySelector('#pd-go').onclick = () => { const raw = r.querySelector('#pd-day').value; if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return toast('Pick a day');
-      const [yy, mm, dd] = raw.split('-').map(Number), k = dayKey(new Date(yy, mm - 1, dd)); if (dayStart(k) > Date.now()) return toast('Pick today or a day before');
-      closeSheet(); daySheet(k); };
-  });
 }
 function editDate() {
   const s = cur(); if (!s) return; const d = new Date(s.startedAt);
@@ -2578,7 +2652,7 @@ function setMenu(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
   const w = st.w ?? st.pw, ex = exOf(f.it.exId);
   const plates = ex && ex.kind !== 'bw' ? [{ label: 'Plate calculator', hint: w > 0 ? `${fmtW(w)} ${unit()}` : '', fn: () => plateSheet(w) }] : [];
-  if (locked(s)) return menuSheet(`${ex?.name || 'Set'} · set ${f.i + 1}`, [...plates, { label: 'Edit session', hint: 'to change this set', fn: startEdit }]);
+  if (locked(s)) return S.lbCtx === s.id ? menuSheet(`${ex?.name || 'Set'} · set ${f.i + 1}`, [...plates, { label: 'Edit session', hint: 'to change this set', fn: startEdit }]) : plates.length ? plateSheet(w) : nudgeEdit();
   const items = [...plates, { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
     { label: 'Duplicate set', fn: () => { f.it.sets.splice(f.i + 1, 0, { ...clone(st), id: sid(), done: false, g: null }); queue('s:' + s.id, 300); render(false); } }];
   if (st.g) items.push({ label: 'Unlink from group', fn: () => { st.g = null; cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
@@ -2587,7 +2661,7 @@ function setMenu(setId) {
 }
 function itemMenu(itemId) {
   const s = cur(); if (!s) return; const i = s.items.findIndex(x => x.id === itemId); if (i < 0) return; const it = s.items[i];
-  if (locked(s)) return menuSheet(exOf(it.exId)?.name || 'Exercise', [{ label: 'Exercise history', fn: () => go('exercise', it.exId) }, { label: 'Edit session', hint: 'to change this exercise', fn: startEdit }]);
+  if (locked(s)) return menuSheet(exOf(it.exId)?.name || 'Exercise', [{ label: 'Exercise history', fn: () => go('exercise', it.exId) }, ...(S.lbCtx === s.id ? [{ label: 'Edit session', hint: 'to change this exercise', fn: startEdit }] : [])]);
   const mv = d => { const j = i + d; if (j < 0 || j >= s.items.length) return; [s.items[i], s.items[j]] = [s.items[j], s.items[i]]; queue('s:' + s.id, 300); render(false); };
   const items = []; if (i > 0) items.push({ label: 'Move up', fn: () => mv(-1) }); if (i < s.items.length - 1) items.push({ label: 'Move down', fn: () => mv(1) });
   items.push({ label: 'Exercise history', fn: () => go('exercise', it.exId) });
@@ -2598,6 +2672,8 @@ function itemMenu(itemId) {
 function sessMenu() {
   const s = cur(); if (!s) return;
   if (editing(s)) return menuSheet(sessName(s), [{ label: 'Save', fn: saveEditSheet }, { label: 'Change date and time', fn: editDate }, { label: S.edit.orig ? 'Discard changes' : 'Discard this session', warn: true, fn: discardEdit }]);
+  /* a finished session opened outside the Logbook can be repeated, not changed */
+  if (s.endedAt && S.lbCtx !== s.id) return menuSheet(sessName(s), [{ label: 'Repeat this session', hint: 'start a new one like it', fn: () => repeatSession(s.id) }, { label: 'Change this session', hint: 'hold + and slide up to the Logbook', fn: lbHint }]);
   menuSheet(sessName(s), [
     ...(s.endedAt ? [{ label: 'Edit session', hint: 'then save as today’s, or update this one', fn: startEdit }] : []),
     { label: 'Change date', fn: editDate },
@@ -2885,8 +2961,12 @@ const ACT = {
   'sess-edit': startEdit,
   'edit-save': saveEditSheet,
   'edit-discard': discardEdit,
-  day: el => daySheet(el.dataset.k),
-  'log-past': pastDayPicker,
+  'lb-close': () => back(),
+  'lb-m': el => lbMove(+el.dataset.d),
+  'lb-pick': el => lbPick(el.dataset.k),
+  'lb-open': el => { S.lbCtx = el.dataset.id; go('session', el.dataset.id); },
+  'lb-log': el => logPastDay(el.dataset.k),
+  'lb-rest': el => { const k = el.dataset.k, on = el.dataset.on === '1'; setRestDay(k, on); lbRefresh(); toast(on ? 'Marked as a rest day' : 'Rest day removed'); },
   'edit-date': editDate,
   finish,
   'link-toggle': () => { S.link = new Set(); render(false); toast('Tap the sets you want to link'); },

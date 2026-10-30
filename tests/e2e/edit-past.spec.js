@@ -1,16 +1,33 @@
 import { test, expect } from '@playwright/test';
 import { FakeSupabase, login, benchHistory } from './fake-supabase.js';
+import { openInLogbook } from './logbook.js';
 
-/* the last bench session, three days ago: 80×8 three times (sets s31, s32, s33); the one before was 77.5×8 */
+/* the last bench session, three days ago: 80×8 three times (sets s31, s32, s33); the one before was 77.5×8.
+   Opened from its day in the Logbook, the one place past sessions change */
 async function openLast(page) {
   const data = benchHistory(), fake = new FakeSupabase(data), last = data.sessions[0];
   await login(page, fake, 'A');
-  await page.goto('/session/' + last.id);
-  await expect(page.locator('.s-edit')).toBeVisible();
+  await openInLogbook(page, last);
   return { fake, last, w: page.locator('[data-f="w"][data-set="s31"]'), r2: page.locator('[data-f="r"][data-set="s32"]') };
 }
 const row = (fake, id) => fake.sessions.find(s => s.id === id);
 const outbox = page => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('sg-outbox')).map(k => localStorage.getItem(k)).join(''));
+
+test('opened anywhere but the Logbook, a finished session is view-only and points to the Logbook', async ({ page }) => {
+  const data = benchHistory(), fake = new FakeSupabase(data), last = data.sessions[0];
+  await login(page, fake, 'A');
+  await page.goto('/history');
+  await page.locator(`[data-act="open"][data-id="${last.id}"]`).click();
+  await expect(page.locator('.s-meta')).toContainText('completed');
+  await expect(page.locator('.s-edit')).toHaveCount(0);
+  await expect(page.locator('#view [data-act="edit-date"]')).toHaveCount(0);
+  await page.locator('[data-f="w"][data-set="s31"]').click();
+  await expect(page.locator('#toast')).toContainText('Past sessions change in the Logbook');
+  await page.click('[data-act="sess-menu"]');
+  await expect(page.locator('#sheet')).toContainText('Repeat this session');
+  for (const t of ['Edit session', 'Change date', 'Reopen as live', 'Delete session']) await expect(page.locator('#sheet')).not.toContainText(t);
+  expect(row(fake, last.id).items[0].sets[0].w).toBe(80);
+});
 
 test('a finished session reads as it was logged: nothing changes until Edit, and a tap points at Edit', async ({ page }) => {
   const { fake, last, w } = await openLast(page);
@@ -83,10 +100,10 @@ test('Discard, or leaving mid-edit, puts the session back as it was; Undo brings
   await page.locator('#toast .toast-act').click();
   await expect(page.locator('.ed-bar')).toBeVisible();
   await expect(w).toHaveValue('90');
-  /* leaving the page with changes */
+  /* leaving the page with changes: back to the Logbook */
   await page.click('.s-top [data-act="back"]');
   await expect(page.locator('#toast')).toContainText('Changes discarded');
-  await expect(page).not.toHaveURL(/\/session\//);
+  await expect(page).toHaveURL(/\/logbook$/);
   await page.locator('#toast .toast-act').click();
   await expect(page).toHaveURL(new RegExp('/session/' + last.id));
   await expect(w).toHaveValue('90');
