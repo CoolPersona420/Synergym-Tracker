@@ -5,8 +5,6 @@
    Works the same with a finger or a mouse; holding Space on the button raises it from the keyboard. */
 
 const HOLD = 420;
-/* resistance past the top of the track, as in UIScrollView */
-const C = 0.55;
 
 export function holdReveal(btn, { label, icon, open, buzz = () => {}, reduced = false, enabled = () => true, side = () => false }) {
   let timer = 0, start = null, cap = null, knob = null, track = 0, armed = false, hideT = 0, swallow = false, h = false;
@@ -20,7 +18,7 @@ export function holdReveal(btn, { label, icon, open, buzz = () => {}, reduced = 
       /* beside the button, level with its ring, across the sidebar's edge */
       const b = btn.getBoundingClientRect(), H = Math.max(r.height + 12, 52), W = Math.min(232, innerWidth - b.right - 18);
       Object.assign(cap.style, { left: `${b.right + 10}px`, top: `${r.top + r.height / 2 - H / 2}px`, bottom: '', width: `${W}px`, height: `${H}px` });
-      cap.classList.remove('over'); track = cap.clientWidth - knob.offsetWidth - 18; return;
+      cap.classList.remove('over'); track = cap.clientWidth - knob.offsetWidth - 12; return;
     }
     cap.style.top = '';
     const w = Math.max(r.width, 52), H = 152, room = r.top - 10 - 8 >= H;
@@ -28,7 +26,8 @@ export function holdReveal(btn, { label, icon, open, buzz = () => {}, reduced = 
     cap.style.bottom = `${room ? innerHeight - r.top + 10 : innerHeight - r.bottom - (w - r.width) / 2}px`;
     cap.style.height = `${room ? H : Math.min(H, r.bottom + (w - r.width) / 2 - 8)}px`;
     cap.classList.toggle('over', !room);
-    track = cap.clientHeight - knob.offsetHeight - 18;
+    /* the knob travels to the far end and stops there, inside the pill, with the same inset all round */
+    track = cap.clientHeight - knob.offsetHeight - 12;
   };
   const show = () => {
     clearTimeout(hideT);
@@ -47,10 +46,10 @@ export function holdReveal(btn, { label, icon, open, buzz = () => {}, reduced = 
     const c = cap; cap = null; knob = null; c.classList.remove('in'); c.classList.add('out');
     setTimeout(() => c.remove(), reduced ? 0 : 260);
   };
-  /* follows the finger along the track (up, or right beside a sidebar); past the end it pulls with resistance,
-     and near the end it arms */
+  /* follows the finger along the track (up, or right beside a sidebar) and stops at its end, never leaving the
+     pill; near the end it arms */
   const drag = dist => {
-    const d = Math.max(0, dist), y = d <= track ? d : track + (1 - 1 / ((d - track) * C / track + 1)) * track * 0.4;
+    const d = Math.max(0, dist), y = Math.min(d, track);
     cap.classList.add('drag'); knob.style.transform = h ? `translateX(${y}px)` : `translateY(${-y}px)`; cap.style.setProperty('--p', Math.min(1, y / track).toFixed(3));
     const on = d >= track * 0.8;
     if (on !== armed) { armed = on; cap.classList.toggle('armed', on); if (on) buzz(10); }

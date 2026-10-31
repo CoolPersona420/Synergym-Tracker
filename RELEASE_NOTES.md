@@ -10,6 +10,18 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.17-alpha · 31 October 2026
+
+**A calmer Logbook**
+
+- **Room to breathe.** Days without a session are now just their date, with more space between days and around
+  the month. Only days you trained get a tile (darker for harder sessions), so your training stands out at a glance.
+- **Rest days are striped,** with diagonal lines, instead of an outline.
+- **The capsule stays a pill.** Sliding past the end of the Logbook capsule no longer pushes its knob outside the
+  pill; it stops at the far end, with the same gap all round.
+
+---
+
 ## 0.1.16-alpha · 30 October 2026
 
 **Swipes that can't get stuck**

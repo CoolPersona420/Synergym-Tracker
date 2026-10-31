@@ -416,7 +416,7 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .nav-train.holding .ring{transform:scale(.88)}
 @media (max-width:47.99rem){.nav-train.holding .nl{opacity:0!important}}
 .nav-train.nudge .ring{animation:nudge .45s var(--ease)}
-.holdcap{position:fixed;z-index:70;height:9.5rem;border-radius:999px;background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow);display:flex;flex-direction:column;align-items:center;padding:12px 6px 6px;color:var(--ink);touch-action:none;
+.holdcap{position:fixed;z-index:70;height:9.5rem;border-radius:999px;overflow:hidden;background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow);display:flex;flex-direction:column;align-items:center;padding:12px 6px 6px;color:var(--ink);touch-action:none;
   transform-origin:50% 100%;transform:translateY(18px) scale(.4);opacity:0;transition:transform .5s var(--spring),opacity .2s,background .25s,color .25s}
 .holdcap.in{transform:none;opacity:1}
 .holdcap.out{transform:translateY(12px) scale(.6);opacity:0;transition:transform .25s var(--ease),opacity .2s}
@@ -442,34 +442,35 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 /* ---------- the Logbook: a month to tap through, and the day you picked ---------- */
 .lb-wrap{display:grid;gap:var(--s0);margin-top:var(--s0)}
 @media (min-width:56rem){.lb-wrap{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start}}
-.lb-cal{padding:var(--s0);overflow:hidden}
+.lb-cal{padding:var(--s1) var(--s0);overflow:hidden}
 .lb-mh{display:flex;align-items:center;gap:var(--s-1);margin-bottom:var(--s0)}
 .lb-mt{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
 .lb-mt b{font-size:1.15rem;font-weight:700;letter-spacing:-.01em}
 .lb-prev .ico{transform:rotate(90deg)}.lb-next .ico{transform:rotate(-90deg)}
 .lb-mh .iconbtn:disabled{opacity:.3}
-.lb-wk,.lb-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
-.lb-wk{margin-bottom:6px;text-align:center}
+/* room to breathe: empty days are just their number; trained days get a tile, shaded by effort, and rest days a
+   striped one */
+.lb-wk,.lb-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+.lb-wk{margin-bottom:10px;text-align:center}
 .lb-grid{touch-action:pan-y}
 .lb-grid.in-r{animation:lb-in-r .4s var(--ease) both}
 .lb-grid.in-l{animation:lb-in-l .4s var(--ease) both}
 @keyframes lb-in-r{from{opacity:0;transform:translateX(16%)}}
 @keyframes lb-in-l{from{opacity:0;transform:translateX(-16%)}}
 .lb-pad{aspect-ratio:1}
-.lb-d{position:relative;aspect-ratio:1;border-radius:12px;background:var(--heat0);display:grid;place-items:center;font-size:.95rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink);transition:transform .35s var(--spring),box-shadow .2s,background .25s}
+.lb-d{position:relative;aspect-ratio:1;border-radius:12px;background:transparent;display:grid;place-items:center;font-size:.95rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink);transition:transform .35s var(--spring),box-shadow .2s,background .25s}
 .lb-d:not(:disabled):active{transform:scale(.88)}
 .lb-d.l1{background:color-mix(in srgb,var(--heat-ink) 30%,var(--heat0))}
 .lb-d.l2{background:color-mix(in srgb,var(--heat-ink) 55%,var(--heat0))}
 .lb-d.l3{background:color-mix(in srgb,var(--heat-ink) 78%,var(--heat0))}
 .lb-d.l4{background:var(--heat-ink)}
 .lb-d.l2,.lb-d.l3,.lb-d.l4{color:var(--bg)}
-.lb-d.rd{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
-.lb-d.fut{background:transparent;box-shadow:inset 0 0 0 1px var(--heat0);color:var(--muted);opacity:.55}
+.lb-d.rd{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 34%,transparent) 0 1.5px,transparent 1.5px 6px)}
+.lb-d.fut{color:var(--muted);opacity:.35}
 .lb-d.today{outline:1.5px solid var(--ink);outline-offset:2px}
 .lb-d.sel{box-shadow:0 0 0 2px var(--surface),0 0 0 4.5px var(--accent);transform:scale(1.04)}
-.lb-d.rd.sel{box-shadow:inset 0 0 0 1.5px var(--muted),0 0 0 2px var(--surface),0 0 0 4.5px var(--accent)}
 .lb-d.today.sel{outline-color:transparent}
-@media (hover:hover){.lb-d:not(:disabled):not(.sel):hover{box-shadow:0 0 0 1.5px var(--accent)}}
+@media (hover:hover){.lb-d:not(:disabled):not(.sel):hover{box-shadow:0 0 0 1.5px var(--accent)}.lb-d:not(:disabled):not(.l1):not(.l2):not(.l3):not(.l4):not(.rd):hover{background:var(--heat0)}}
 .lb-two{position:absolute;bottom:5px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor;opacity:.8}
 .lb-day.in{animation:rise .4s var(--ease) both}
 .lb-dh{margin-bottom:var(--s-1)}
