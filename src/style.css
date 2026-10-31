@@ -1171,8 +1171,10 @@ html[data-nav="widget"]::view-transition-new(root){animation:fade .45s var(--eas
 @media (max-width:47.99rem){#dash{align-items:flex-start}#dash > .w-s .tile{min-height:7.5rem}}
 
 /* ---------- rest days ---------- */
-.heat i.rd{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
-.heat-f .rd-key{display:inline-block;width:9px;height:9px;border-radius:2px;box-shadow:inset 0 0 0 1.5px var(--muted);margin-right:5px;vertical-align:-1px}
+/* rest days are striped, as in the Logbook, with finer stripes for the smaller cells and the key */
+.heat i.rd{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 40%,transparent) 0 1.2px,transparent 1.2px 4px)}
+.heat.dense i.rd{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 45%,transparent) 0 1px,transparent 1px 2.5px)}
+.heat-f .rd-key{display:inline-block;width:9px;height:9px;border-radius:2px;background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 45%,transparent) 0 1px,transparent 1px 3px);margin-right:5px;vertical-align:-1px}
 
 /* ---------- split days: reorder ---------- */
 .day-mv{display:inline-flex;flex-direction:column;gap:2px;flex:none}

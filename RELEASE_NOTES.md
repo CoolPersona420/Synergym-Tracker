@@ -10,6 +10,15 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.18-alpha · 31 October 2026
+
+**Striped rest days on the Consistency heat map too**
+
+- Rest days on the Consistency heat map (the Home card and its full view) are now striped like the Logbook's,
+  and the **Rest** key in its legend matches. The stripes are finer on the 52-week view, where the days are small.
+
+---
+
 ## 0.1.17-alpha · 31 October 2026
 
 **A calmer Logbook**
