@@ -56,18 +56,18 @@ test.describe('installed on an iPhone', () => {
     await expect(page).toHaveURL(/\/exercises$/);
   });
 
-  test('a swipe that starts on the launch splash still springs back when the splash goes', async ({ page }) => {
+  test('a swipe whose touched element leaves the page mid-swipe still springs back', async ({ page }) => {
     const h = benchHistory(), fake = new FakeSupabase(h);
     await login(page, fake, 'A');
     await page.goto('/exercises/' + h.exercises[0].id);
-    /* the finger lands on the splash, which fades and leaves the page mid-swipe (a slow phone in CI hit this) */
-    await page.waitForFunction(() => document.getElementById('qsplash'));
-    await page.waitForTimeout(150);
+    await settled(page);
+    /* the launch splash fading out under a finger did this on a slow phone; a stand-in makes it happen on cue */
+    await page.evaluate(() => { const d = document.createElement('div'); d.id = 'gone'; d.style.cssText = 'position:fixed;inset:0;z-index:200'; document.body.appendChild(d); });
     await down(page, 4);
-    expect(await page.evaluate(() => window.__f.el.id)).toBe('qsplash');
-    await moveTo(page, 70, 420, 8, 120);
-    /* lift only once the splash has gone, however long this machine takes to get there */
-    await page.waitForFunction(() => !window.__f.el.isConnected, null, { timeout: 8000 });
+    expect(await page.evaluate(() => window.__f.el.id)).toBe('gone');
+    await moveTo(page, 50, 420, 6, 30);
+    await page.evaluate(() => document.getElementById('gone').remove());
+    await moveTo(page, 70, 420, 2, 30);
     await up(page);
     await expect.poll(() => page.locator('#view > *').first().evaluate(el => el.style.translate)).toBe('');
   });

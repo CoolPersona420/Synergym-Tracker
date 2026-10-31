@@ -472,6 +472,15 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .lb-d.today.sel{outline-color:transparent}
 @media (hover:hover){.lb-d:not(:disabled):not(.sel):hover{box-shadow:0 0 0 1.5px var(--accent)}.lb-d:not(:disabled):not(.l1):not(.l2):not(.l3):not(.l4):not(.rd):hover{background:var(--heat0)}}
 .lb-two{position:absolute;bottom:5px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor;opacity:.8}
+.lb-key{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;margin-top:var(--s0);padding-top:var(--s-1);border-top:1px solid var(--line)}
+.lb-scale{display:inline-flex;align-items:center;gap:4px}
+.lb-scale .lbl:first-child{margin-right:4px}.lb-scale .lbl:last-child{margin-left:4px}
+.lb-sw{display:inline-block;width:10px;height:10px;border-radius:3px}
+.lb-sw.l1{background:color-mix(in srgb,var(--heat-ink) 30%,var(--heat0))}
+.lb-sw.l2{background:color-mix(in srgb,var(--heat-ink) 55%,var(--heat0))}
+.lb-sw.l3{background:color-mix(in srgb,var(--heat-ink) 78%,var(--heat0))}
+.lb-sw.l4{background:var(--heat-ink)}
+.lb-key .td-key{display:inline-block;width:9px;height:9px;border-radius:3px;box-shadow:inset 0 0 0 1.5px var(--ink);margin-right:5px;vertical-align:-1px}
 .lb-day.in{animation:rise .4s var(--ease) both}
 .lb-dh{margin-bottom:var(--s-1)}
 .lb-dh b{display:block;margin-top:2px;font-size:var(--t1);font-weight:700;letter-spacing:-.02em;line-height:1.1}
@@ -1098,11 +1107,21 @@ html[data-nav="tab-back"]::view-transition-new(root){animation:tab-in-l .55s var
 @keyframes tab-out-r{to{opacity:0;transform:translateX(4%)}}
 @keyframes tab-in-r{from{opacity:0;transform:translateX(5%)}}
 @keyframes tab-in-l{from{opacity:0;transform:translateX(-5%)}}
-html[data-nav="widget"]::view-transition-old(root){animation:fade-out .35s var(--ease) both}
-html[data-nav="widget"]::view-transition-new(root){animation:fade .45s var(--ease) .1s both}
-::view-transition-group(wfocus){animation-duration:.6s;animation-timing-function:var(--ease-io);overflow:clip;border-radius:var(--r-lg);
+html[data-nav="widget"]::view-transition-old(root){animation:fade-out .3s var(--ease) both}
+html[data-nav="widget"]::view-transition-new(root){animation:fade .35s var(--ease) .15s both}
+/* one surface grows out of what you tapped (a widget's card, the Logbook's capsule) and shrinks back into it on
+   close: what was on it fades out early, what will be fades in once it has mostly grown, so the two never show
+   through each other; and the page's own entrance waits, so everything lands at once */
+::view-transition-group(wfocus){animation-duration:.5s;animation-timing-function:var(--ease-io);overflow:clip;border-radius:var(--r-lg);
   background:var(--bg);background-image:var(--page);background-size:100vw 120vh;background-position:0 -10vh;background-repeat:no-repeat}
-::view-transition-old(wfocus),::view-transition-new(wfocus){height:100%;object-fit:none;object-position:0 0;animation-duration:.45s}
+::view-transition-old(wfocus),::view-transition-new(wfocus){height:100%;object-fit:none;object-position:0 0;mix-blend-mode:normal}
+::view-transition-old(wfocus){animation:wf-out .5s linear both}
+::view-transition-new(wfocus){animation:wf-in .5s linear both}
+@keyframes wf-out{30%,to{opacity:0}}
+@keyframes wf-in{0%,30%{opacity:0}}
+html[data-nav="widget"] #view.enter .wfull .rv{animation:none}
+/* closing the Logbook: the + button is already in place to shrink into */
+body.vt-snap .nav,body.vt-snap .nav-train,body.vt-snap .nav-train .ring{transition:none!important}
 .no-vt #view.enter{animation:fade .35s var(--ease) both}
 @media (prefers-reduced-motion:reduce){
   html[data-nav]::view-transition-old(root),html[data-nav]::view-transition-new(root),::view-transition-group(wfocus),::view-transition-old(wfocus),::view-transition-new(wfocus){animation-duration:.01s!important}
@@ -1174,7 +1193,7 @@ html[data-nav="widget"]::view-transition-new(root){animation:fade .45s var(--eas
 /* rest days are striped, as in the Logbook, with finer stripes for the smaller cells and the key */
 .heat i.rd{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 40%,transparent) 0 1.2px,transparent 1.2px 4px)}
 .heat.dense i.rd{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 45%,transparent) 0 1px,transparent 1px 2.5px)}
-.heat-f .rd-key{display:inline-block;width:9px;height:9px;border-radius:2px;background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 45%,transparent) 0 1px,transparent 1px 3px);margin-right:5px;vertical-align:-1px}
+.heat-f .rd-key,.lb-key .rd-key{display:inline-block;width:9px;height:9px;border-radius:2px;background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 45%,transparent) 0 1px,transparent 1px 3px);margin-right:5px;vertical-align:-1px}
 
 /* ---------- split days: reorder ---------- */
 .day-mv{display:inline-flex;flex-direction:column;gap:2px;flex:none}

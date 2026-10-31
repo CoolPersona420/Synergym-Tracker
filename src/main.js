@@ -559,15 +559,19 @@ function route(enter = true) {
   else if (from === 'widget' && v === 'today' && dir !== 'swipe') { dir = 'widget'; S.morphW = fromArg; }
   /* the Logbook grows out of the capsule it was opened from, and fades away as it closes */
   else if (v === 'logbook' && S.lbFrom) { dir = 'widget'; morph = S.lbFrom; }
-  else if (from === 'logbook' && v !== 'session' && dir !== 'swipe') dir = 'widget';
+  else if (from === 'logbook' && v !== 'session' && dir !== 'swipe') { dir = 'widget'; S.lbBack = true; }
   const pre = S.lbFrom ? (c => () => c.remove())(S.lbFrom) : null; S.lbFrom = null;
   if (v !== 'today' && v !== 'widget') S.homeRestore = null;
   if (enter && changed && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
     document.documentElement.dataset.nav = dir;
     if (morph) morph.style.viewTransitionName = 'wfocus';
-    const t = document.startViewTransition(() => { if (pre) pre(); render(true); });
-    t.finished.finally(() => { if (S.morphW) { S.morphW = null; const c = document.querySelector('#view [data-w][style*="wfocus"]'); if (c) c.style.viewTransitionName = ''; } });
-  } else { if (pre) pre(); S.morphW = null; render(enter); }
+    /* the Logbook shrinks back into the session button it came from, held still at its full size meanwhile */
+    let ring = null;
+    const t = document.startViewTransition(() => { if (pre) pre(); render(true);
+      if (S.lbBack) { const r = $('#nav .nav-train .ring'); if (r && r.getBoundingClientRect().width) { document.body.classList.add('vt-snap'); ring = r; r.style.viewTransitionName = 'wfocus'; } } });
+    t.finished.finally(() => { S.lbBack = false; if (ring) { ring.style.viewTransitionName = ''; document.body.classList.remove('vt-snap'); }
+      if (S.morphW) { S.morphW = null; const c = document.querySelector('#view [data-w][style*="wfocus"]'); if (c) c.style.viewTransitionName = ''; } });
+  } else { if (pre) pre(); S.morphW = null; S.lbBack = false; render(enter); }
 }
 
 /* ================= rendering ================= */
@@ -2529,8 +2533,10 @@ function lbMonth(L) {
   return `<div class="lb-mh"><button class="iconbtn lb-prev" data-act="lb-m" data-d="-1" aria-label="Previous month"${canBack ? '' : ' disabled'}>${ICON.down}</button>
     <div class="lb-mt"><b>${MONTHS[mo]} ${y}</b><span class="lbl">${plural(n, 'session')}${rest ? ` · ${plural(rest, 'rest day')}` : ''}</span></div>
     <button class="iconbtn lb-next" data-act="lb-m" data-d="1" aria-label="Next month"${canFwd ? '' : ' disabled'}>${ICON.down}</button></div>
-  <div class="lb-wk">${head}</div><div class="lb-grid">${cells}</div>`;
+  <div class="lb-wk">${head}</div><div class="lb-grid">${cells}</div>${LB_KEY}`;
 }
+/* what the calendar's marks mean, in the heat map's words: shade is effort, stripes are rest, the ring is today */
+const LB_KEY = `<div class="lb-key" aria-hidden="true"><span class="lb-scale"><span class="lbl">less</span>${[1, 2, 3, 4].map(i => `<i class="lb-sw l${i}"></i>`).join('')}<span class="lbl">more intense</span></span><span class="lbl"><i class="rd-key"></i>rest</span><span class="lbl"><i class="td-key"></i>today</span></div>`;
 function lbDay(k) {
   const t0 = dayStart(k), list = [...S.sessions.values()].filter(s => dayKey(s.startedAt) === k).sort((a, b) => a.startedAt - b.startedAt);
   const rest = (S.profile.restDays || []).includes(k), today = k === dayKey(Date.now()), dt = new Date(t0), full = list.filter(s => s.endedAt).length >= DAY_MAX;

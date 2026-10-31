@@ -10,6 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.19-alpha · 31 October 2026
+
+**Smoother opening, and a key for the Logbook**
+
+- **Opening a widget is one smooth motion.** The card grows into the full view as a single surface: what was on
+  the card fades out first, and the full view fades in as it finishes growing. Before, both showed through each
+  other halfway, and the page kept drifting after it landed. Closing shrinks it back into its card the same way.
+- **The Logbook moves the same way.** It still grows out of the capsule, and now shrinks back into the + button
+  when you close it, instead of just fading.
+- **The Logbook has a key** under the calendar, in the Consistency heat map's words: less to more intense, rest,
+  and today.
+
+---
+
 ## 0.1.18-alpha · 31 October 2026
 
 **Striped rest days on the Consistency heat map too**
