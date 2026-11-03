@@ -2298,6 +2298,10 @@ function openPicker(mode, extra = {}) {
     pickerList();
   });
 }
+/* examples for the "Other … exercise" row at the end of each muscle group in the picker */
+const OTHER_EX = { Chest: 'cable press, machine fly', Back: 'chest-supported row, rack pull', Shoulders: 'landmine press, Y-raise', Biceps: 'spider curl, cable curl',
+  Triceps: 'JM press, kickback', Quads: 'hack squat, sissy squat', Hamstrings: 'Nordic curl, good morning', Glutes: 'glute bridge, hip abduction', Calves: 'seated calf raise, tibialis raise',
+  Core: 'Pallof press, dead bug', 'Full body': 'thruster, sled push' };
 function pickerList() {
   const q = S.pk.q.trim(), ql = q.toLowerCase(), m = S.pk.m;
   /* Cardio sits next to All: what's in the library, then the built-in kinds not added yet */
@@ -2318,6 +2322,8 @@ function pickerList() {
   }).join('');
   h += kinds.map(c => `<button class="pk" data-act="pk-cardio" data-k="${c.key}"><span><span class="n">${esc(c.name)}</span><br><span class="sub">Cardio</span></span><span class="lbl">add</span></button>`).join('');
   if (m === 'Cardio' && !q) h += `<button class="pk" data-act="pk-new"><span><span class="n">Other cardio…</span><br><span class="sub">Name your own: assault bike, hiking, a class</span></span><span class="lbl">new</span></button>`;
+  /* every muscle group ends with a way to add your own to it, already filed under that group */
+  else if (m && !q) h += `<button class="pk pk-other" data-act="pk-new"><span><span class="n">Other ${esc(m.toLowerCase())} exercise…</span><br><span class="sub">${OTHER_EX[m] ? `Name your own: ${OTHER_EX[m]}` : `Name your own and it’s filed under ${esc(m)}`}</span></span><span class="lbl">new</span></button>`;
   if (!h) h = `<div class="empty">No exercises match. Type a name to add a new one.</div>`;
   $('#pkl').innerHTML = h;
 }

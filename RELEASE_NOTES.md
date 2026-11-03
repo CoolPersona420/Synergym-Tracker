@@ -10,6 +10,17 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.24-alpha · 3 November 2026
+
+**Add your own exercise from any muscle group**
+
+- In the exercise picker (adding to a session or a split day), every muscle group now ends with **Other …
+  exercise**, like **Other cardio…**: "Other chest exercise…", "Other back exercise…" and so on, with a couple
+  of examples. Tap it and **Add exercise** opens with that group already chosen; save and it goes straight into
+  your session (or split day) and your exercise list. Your own muscle groups get the row too.
+
+---
+
 ## 0.1.23-alpha · 3 November 2026
 
 **A cleaner swipe to delete**
