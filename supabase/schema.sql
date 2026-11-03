@@ -64,7 +64,7 @@ create table if not exists public.exercises (
   user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name       text not null check (char_length(btrim(name)) between 1 and 60),
   muscle     text not null check (char_length(muscle) between 1 and 30),
-  kind       text not null default 'w' check (kind in ('w','bw')),
+  kind       text not null default 'w' check (kind in ('w','bw','c')),
   archived   boolean not null default false,
   is_default boolean not null default false,
   created_at timestamptz not null default now()
@@ -73,6 +73,9 @@ create unique index if not exists exercises_user_name_uq on public.exercises (us
 -- The user's confirmed one-rep max, updated when they accept a new PR while logging.
 alter table public.exercises add column if not exists one_rm numeric check (one_rm > 0 and one_rm < 2000);
 alter table public.exercises add column if not exists one_rm_at timestamptz;
+-- Cardio exercises (kind 'c': runs, rides, rows, swims), added in 0.1.22. Widens the check on older databases.
+alter table public.exercises drop constraint if exists exercises_kind_check;
+alter table public.exercises add constraint exercises_kind_check check (kind in ('w','bw','c'));
 
 create table if not exists public.sessions (
   id         uuid primary key,

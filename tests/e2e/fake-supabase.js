@@ -79,6 +79,9 @@ export class FakeSupabase {
       return json(obj ? out[0] ?? null : out);
     }
     if (method === 'PATCH') { const b = body(); for (const row of rows.filter(match)) Object.assign(row, b); if ('active_session' in (b || {})) this.log.push(`${name} claims`); return route.fulfill({ status: 204, body: '' }); }
+    /* the database's check on exercise kinds: weighted, bodyweight, cardio */
+    if ((method === 'POST' || method === 'PATCH') && t[1] === 'exercises') { const b = body(), list = Array.isArray(b) ? b : [b];
+      if (list.some(x => x && 'kind' in x && !['w', 'bw', 'c'].includes(x.kind))) return json({ code: '23514', message: 'new row for relation "exercises" violates check constraint "exercises_kind_check"' }, 400); }
     if (method === 'POST') {
       for (const row of [].concat(body() || [])) { const i = rows.findIndex(x => x.id === row.id); if (i >= 0) Object.assign(rows[i], row); else rows.push({ user_id: this.uid, ...row }); }
       return obj ? json(rows[rows.length - 1]) : route.fulfill({ status: 201, body: '' });

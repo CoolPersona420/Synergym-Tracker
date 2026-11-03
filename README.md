@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.21, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.22, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.21-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.22-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -49,6 +49,10 @@ The version lives in `package.json` (`0.1.21-alpha`) and shows in Settings › A
   missed, or mark a rest day. It's the one place past days change; sessions opened elsewhere are view-only.
 - **Bodyweight log**, **History** with search, and an **exercise library** of your own with editable
   muscle groups.
+- **Cardio:** add a run, ride, row, swim (or any cardio of your own) to any session. Time is always logged;
+  choose what else to track: distance with pace or speed worked out, heart rate, calories, effort 1–10.
+  Records for longest, farthest and fastest pace; a page per cardio exercise; cardio days in a split with the
+  minutes planned. Cardio counts toward the weekly target and streak (`src/lib/cardio.js`).
 - **Deleting a session:** swipe its row left in History or the Logbook (a bin beside the row on a computer), or
   **Delete session** in any session's ⋯ menu; a live session has **Discard session** under its notes. It always
   asks first.

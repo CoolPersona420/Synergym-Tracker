@@ -10,6 +10,28 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.22-alpha · 3 November 2026
+
+**Cardio**
+
+- **Cardio in any session.** Tap + and choose **Cardio**: Run, Walk, Cycle, Row, Elliptical, Stairs, Swim,
+  Jump rope or HIIT, or **Other cardio…** to name your own (assault bike, a class). Picking one adds it to your
+  exercise list.
+- **Time always, plus what you choose.** Under the name, **Track** turns on distance (with pace worked out, or
+  speed on a bike), average heart rate, calories and effort 1–10 (a ten-step scale). Your choice is remembered
+  for that exercise. Time takes 30, 30:15 or 1:05:00; distance is km (miles with lb), metres for rowing and
+  swimming, paced per 500 m and per 100 m.
+- **Records:** longest, farthest and fastest pace, shown as you type and when you tick the bout, like lifting
+  PRs. Each cardio exercise has its own page: records, minutes by session, totals and recent bouts.
+- **Cardio days.** Add cardio to a split day and set its minutes; a day of only cardio shows as a **Cardio
+  day** with the minutes planned, and starting it fills in the time.
+- **It counts.** Cardio sessions count toward the weekly target and streak, show on the heat map and in the
+  Logbook (shaded by effort), and appear in History as "35 min cardio". The coach keeps reading lifting only.
+- CSV export has time, distance, heart rate, calories and effort columns.
+- Database: exercises can now be of kind cardio (`c`); see `supabase/schema.sql`.
+
+---
+
 ## 0.1.21-alpha · 3 November 2026
 
 **Delete a session from anywhere**

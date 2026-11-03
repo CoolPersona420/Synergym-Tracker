@@ -1,5 +1,5 @@
 import { uuid } from './util.js';
-import { num, cleanSession, cleanDays } from './sanitize.js';
+import { num, cleanSession, cleanDays, cleanKind } from './sanitize.js';
 import { DEFAULT_PROFILE, profFromDb, profToDb, cleanArchive } from './profile.js';
 
 export const SPLIT_MAX = 6;
@@ -17,7 +17,7 @@ export function parseImport(d, fallbackBw = 75) {
     const name = String(x.name || '').trim().slice(0, 60); if (!name) continue;
     let e = byName.get(name.toLowerCase());
     if (!e) {
-      e = { id: uuid(), name, muscle: String(x.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: x.kind === 'bw' ? 'bw' : 'w', archived: !!x.archived, isDefault: !!x.isDefault, oneRm: num(x.oneRm) > 0 && num(x.oneRm) < 2000 ? num(x.oneRm) : null, oneRmAt: num(x.oneRmAt) };
+      e = { id: uuid(), name, muscle: String(x.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: cleanKind(x.kind), archived: !!x.archived, isDefault: !!x.isDefault, oneRm: num(x.oneRm) > 0 && num(x.oneRm) < 2000 ? num(x.oneRm) : null, oneRmAt: num(x.oneRmAt) };
       byName.set(name.toLowerCase(), e); library.push(e);
     }
     exId.set(String(x.id), e.id);

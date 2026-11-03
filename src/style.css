@@ -400,6 +400,37 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .chk .ico{width:20px;height:20px;stroke-width:2.2}
 .set.done .chk{background:var(--solid);box-shadow:none;color:var(--solid-ink)}
 .set.done input{background:transparent}
+/* a cardio bout: tiles for time and each tracked metric (pace or speed worked out), an effort scale of ten
+   steps, and the same tick as a set */
+.cx-m{display:flex;align-items:center;gap:6px;margin:0 0 var(--s-1);padding-left:4px}
+.cx-m .lbl{flex:none;margin-right:2px}
+.cx-m .chip{flex:none;padding:.28rem .7rem;font-size:.75rem}
+.bout{display:grid;gap:var(--s-1);border-radius:var(--r-sm);transition:background .25s}
+.cx-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.cx-t{display:flex;flex-direction:column;gap:4px;min-width:0;padding:8px 10px 6px;border-radius:var(--r-sm);background:var(--field);border:1px solid transparent;transition:border-color .15s,background .25s}
+.cx-t:focus-within{border-color:var(--accent)}
+.cx-t .lbl{font-size:var(--t-xs)}
+.cx-v{display:flex;align-items:baseline;gap:5px;min-width:0}
+.cx-v input{flex:1;min-width:0;width:100%;border:0;background:none;outline:none;padding:0;font-weight:700;font-size:1.25rem;font-variant-numeric:tabular-nums;color:var(--ink)}
+.cx-v input::placeholder{color:var(--muted);opacity:.75;font-weight:500}
+.cx-v i{font-style:normal;font-size:.78rem;color:var(--muted);flex:none}
+.cx-p{background:transparent;border:1px dashed var(--line)}
+.cx-p b{font-weight:700;font-size:1.1rem;line-height:1.45;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx-p b.hint{color:var(--muted);font-weight:500}
+.bout-f{display:grid;grid-template-columns:minmax(0,1fr) auto 2.6rem;gap:var(--s-1);align-items:center}
+.bout-n{font-size:.8rem;grid-column:1/3}
+.eff{display:flex;gap:3px;height:28px;min-width:0}
+.eff button{flex:1;min-width:0;border-radius:5px;background:var(--field);transition:background .18s,transform .18s}
+.eff button.on{background:color-mix(in srgb,var(--accent) calc(35% + var(--k,0) * 6.5%),var(--field))}
+.eff button.cur{background:var(--accent)}
+.eff button:not(:disabled):active{transform:scaleY(.86)}
+.eff-w{font-size:.78rem;color:var(--muted);white-space:nowrap;min-width:4.6rem;text-align:right}
+.eff-w b{color:var(--ink);font-size:.95rem;margin-right:2px}
+.bout.done .cx-t{background:transparent;border-color:var(--line)}
+.bout.done .chk{background:var(--solid);box-shadow:none;color:var(--solid-ink)}
+.bout .set-pr{margin-left:0}
+#view.s-locked .cx-t{background:transparent;border-color:var(--line)}
+@media (min-width:48rem){.cx-g{grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr))}}
 .linking .set{cursor:pointer}
 .linking .set input,.linking .set button{pointer-events:none}
 .linking .set.sel{box-shadow:0 0 0 1.5px var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
@@ -578,6 +609,10 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .dex input:focus{border-color:var(--accent)}
 .dex .ro{font-weight:700;text-align:center}
 .dex .iconbtn{width:2.3rem;height:2.3rem;background:transparent}
+/* a cardio exercise in a split day: its minutes across the sets and reps columns */
+.dex-min{grid-column:span 2;display:flex;align-items:center;gap:8px}
+.dex-min input{flex:1}
+span.dex-min{justify-content:center}
 .day-f{display:flex;gap:var(--s-1);flex-wrap:wrap;align-items:center}
 .share-row{display:flex;gap:var(--s-1)}
 .share-row .field{flex:1;min-width:0}
@@ -1684,6 +1719,8 @@ a.srow{color:inherit;text-decoration:none}
 .day.second{border-left:3px solid var(--accent);border-top-left-radius:var(--r-sm);border-bottom-left-radius:var(--r-sm)}
 .day-2nd{display:flex;align-items:center;gap:6px;color:var(--accent);margin:-2px 0 0}
 .day-2nd .ico{width:13px;height:13px}
+.day-c{color:var(--ink-2)}
+.recs .rec-top.rec-3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .day-two[aria-pressed="true"]{box-shadow:inset 0 0 0 1px var(--accent)}
 @media (max-width:47.99rem){.hero-cta .done-today{align-self:stretch;width:100%}.dt-field{width:100%}}
 
