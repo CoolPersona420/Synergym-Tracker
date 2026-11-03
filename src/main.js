@@ -2555,8 +2555,13 @@ function delSession(id) {
   if (S.edit && S.edit.id === id) S.edit = null;
   if (S.lbCtx === id) S.lbCtx = null;
   S.sessions.delete(id); queue('s:' + id, 0); if (!s.endedAt) { S.rest = null; S.link = null; }
-  /* from the session itself, back to where it was opened from; from a list, the list without it */
-  if (here) back(); else if (S.view === 'logbook') lbRefresh(); else render(false);
+  /* from the session itself, back to where it was opened from; from a list, the list without it, after its row
+     has folded away */
+  const redraw = () => { if (S.view === 'logbook') lbRefresh(); else render(false); };
+  const row = !here && $(`.rsw[data-sw="${id}"]`);
+  if (here) back();
+  else if (row && !reduced) { row.style.height = row.offsetHeight + 'px'; void row.offsetHeight; row.classList.add('gone'); row.style.height = '0px'; setTimeout(redraw, 420); }
+  else redraw();
   toast(s.endedAt ? 'Session deleted' : 'Session discarded');
   /* a saved 1RM that came from it goes back to the best estimate, if you agree */
   if (saved && saved.endedAt) { const ch = ormChanges(saved, { items: [] }); if (ch.length) setTimeout(() => offerOneRm(ch, saved, 'deleted'), here ? 450 : 0); }

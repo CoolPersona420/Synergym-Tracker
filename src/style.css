@@ -330,24 +330,36 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .list{display:flex;flex-direction:column}
 .row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s0);align-items:center;padding:var(--s0) 2px;border-bottom:1px solid var(--line);width:100%}
 .row:last-child{border-bottom:0}
-/* rows that can be deleted: on a phone the row swipes left over a red Delete that grows from the edge; on a
-   computer a bin slides in beside the row while it's hovered or focused */
-.rsw{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+/* rows that can be deleted. On a phone, swiping left makes room: the name keeps its place and shortens, the
+   score moves over, and a Delete pill grows in at the right (coloured like the app's chips, ink on colour).
+   --sw is how far open it is, 0 to 1 (a little past 1 while pulled further); swiperow.js eases it frame by frame.
+   On a computer a bin slides in beside the row while it's hovered or focused. */
+@property --sw{syntax:'<number>';inherits:true;initial-value:0}
+.rsw{--sw:0;position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
 .rsw:last-child{border-bottom:0}
-.rsw .row{position:relative;z-index:1;border-bottom:0}
-.rsw-del{position:absolute;top:6px;bottom:6px;right:0;width:calc(var(--sw,0) * 88px);opacity:var(--sw,0);z-index:0;overflow:hidden;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:14px;background:var(--bad);color:#fff;font-size:.72rem;font-weight:700;
-  transition:width .28s cubic-bezier(.2,.8,.2,1),opacity .2s}
-.rsw.drag .rsw-del{transition:none}
-.rsw-del .ico{width:20px;height:20px;flex:none}
+.rsw .row{position:relative;border-bottom:0;padding-right:calc(2px + var(--sw) * 114px)}
+.rsw-del{position:absolute;z-index:2;right:2px;top:50%;height:48px;width:96px;margin-top:-24px;padding:0 18px;display:flex;align-items:center;justify-content:center;gap:7px;
+  border-radius:999px;background:var(--bad);color:var(--bg);font-size:.86rem;font-weight:700;letter-spacing:-.005em;
+  /* uncovered from the right edge only as fast as the row makes room, so it never sits over the score */
+  clip-path:inset(0 0 0 calc((1 - min(1, var(--sw))) * 100%) round 999px);opacity:clamp(0, calc(var(--sw) * 4), 1);pointer-events:none}
+.rsw.sw-open .rsw-del{pointer-events:auto}
+/* its bin and word come in once there's room for them, never half cut */
+.rsw-del > *{opacity:clamp(0, calc((var(--sw) - .62) * 3.2), 1)}
+.rsw-del:active{filter:brightness(.92)}
+.rsw-del .ico{width:18px;height:18px;flex:none;stroke-width:2.2}
 @media (hover:hover) and (pointer:fine){
   .rsw{display:grid;grid-template-columns:minmax(0,1fr) 0px;transition:grid-template-columns .22s var(--ease)}
   .rsw:hover,.rsw:focus-within{grid-template-columns:minmax(0,1fr) 40px}
-  .rsw-del{position:static;width:auto;opacity:0;margin:8px 0;background:none;color:var(--muted);border-radius:10px;transition:opacity .18s,color .15s,background .15s}
+  .rsw .row{padding-right:2px}
+  .rsw-del{position:static;width:auto;height:auto;margin:8px 0;padding:0;clip-path:none;opacity:0;pointer-events:auto;background:none;color:var(--muted);border-radius:10px;transition:opacity .18s,color .15s,background .15s}
   .rsw:hover .rsw-del,.rsw:focus-within .rsw-del{opacity:1}
   .rsw-del:hover,.rsw-del:focus-visible{color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}
   .rsw-del span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .rsw-del .ico{width:20px;height:20px;stroke-width:inherit}
+  .rsw-del > *{opacity:1}
 }
+/* a deleted row folds away: it fades and slides a little, then the space closes up */
+.rsw.gone{pointer-events:none;overflow:hidden;transition:height .32s cubic-bezier(.4,0,.2,1) .1s,opacity .22s ease,transform .3s cubic-bezier(.4,0,.2,1),border-color .32s .1s;opacity:0;transform:translateX(-14px);border-color:transparent}
 @media (prefers-reduced-motion:reduce){.rsw,.rsw-del{transition:none}}
 .tri{width:0;height:0;border-left:10px solid var(--ink-2);border-block:6px solid transparent;transition:transform .4s var(--ease),border-color .3s}
 .row:hover .tri{transform:translateX(4px);border-left-color:var(--accent)}

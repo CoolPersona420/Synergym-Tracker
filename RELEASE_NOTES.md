@@ -10,6 +10,24 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.23-alpha · 3 November 2026
+
+**A cleaner swipe to delete**
+
+- Swiping a session left no longer slides the whole row off the screen. The row makes room instead: the name
+  keeps its place and shortens with "…", the score moves over, and a rounded **Delete** pill grows in from the
+  right edge, coloured like the app's chips (dark text on coral in dark themes, light on deep red in light
+  ones), so it reads clearly in every theme. Its bin and word fade in once there's room, never half cut.
+- More room: a wider pill, with clear space between it and the score.
+- Smooth all the way: while your finger is down the row follows it exactly; let go and it eases open or shut
+  frame by frame (the same on every phone, older iPhones included). Let go past half way, or flick, and it
+  stays open; anything less springs back. Push an open row back to shut it, or tap anywhere else. It never
+  covers the score while you swipe.
+- After you confirm, the deleted row fades, slides a little and folds away, and the rows below close the gap.
+  Deleting still asks first.
+
+---
+
 ## 0.1.22-alpha · 3 November 2026
 
 **Cardio**
