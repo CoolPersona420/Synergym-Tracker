@@ -37,7 +37,8 @@ export function weekSummary(sessions, weekFrom, now = Date.now()) {
   let count = 0, v = 0, lastV = 0;
   const now_ = new Map(), before = new Map();
   for (const s of sessions) {
-    if (!s.items || !s.items.some(it => it.sets.some(st => +st.r > 0))) continue;
+    /* a session counts with a set that has reps, or a cardio bout with time */
+    if (!s.items || !s.items.some(it => it.sets.some(st => +st.r > 0 || +st.t > 0))) continue;
     const t = s.startedAt;
     if (t >= weekFrom && t <= now) { count++; v += vol(s); }
     else if (t >= lastFrom && t < weekFrom) lastV += vol(s);
