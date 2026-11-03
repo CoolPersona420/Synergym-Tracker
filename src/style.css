@@ -1120,7 +1120,20 @@ html[data-nav="widget"]::view-transition-new(root){animation:fade .35s var(--eas
 @keyframes wf-out{30%,to{opacity:0}}
 @keyframes wf-in{0%,30%{opacity:0}}
 html[data-nav="widget"] #view.enter .wfull .rv{animation:none}
-/* closing the Logbook: the + button is already in place to shrink into */
+/* the Logbook: a circle grows from the capsule's knob to reveal it, and shrinks into the session button to close
+   it; the page underneath holds still, so there is never a moment with nothing on screen */
+html[data-nav="reveal"]::view-transition-old(root),html[data-nav="conceal"]::view-transition-new(root){animation:none}
+/* it opens fast and settles (it answers the moment you let go), and closes a little quicker, speeding into the button */
+html[data-nav="reveal"]::view-transition-new(root){animation:lb-reveal .6s cubic-bezier(.05,.7,.1,1) both}
+html[data-nav="conceal"]::view-transition-old(root){animation:lb-conceal .42s cubic-bezier(.3,0,.8,.15) both;z-index:1}
+@keyframes lb-reveal{from{clip-path:circle(0 at var(--rx) var(--ry))}to{clip-path:circle(var(--rr) at var(--rx) var(--ry))}}
+@keyframes lb-conceal{from{clip-path:circle(var(--rr) at var(--rx) var(--ry))}to{clip-path:circle(0 at var(--rx) var(--ry))}}
+/* on a phone the dock steps aside as the circle grows, and comes back once it has closed */
+@media (max-width:47.99rem){
+  html[data-nav="reveal"]::view-transition-old(nav){animation:fade-out .2s var(--ease) both}
+  html[data-nav="conceal"]::view-transition-new(nav){animation:fade .3s var(--ease) .3s both}
+}
+/* closing the Logbook: the + button is already in place for the circle to close on */
 body.vt-snap .nav,body.vt-snap .nav-train,body.vt-snap .nav-train .ring{transition:none!important}
 .no-vt #view.enter{animation:fade .35s var(--ease) both}
 @media (prefers-reduced-motion:reduce){

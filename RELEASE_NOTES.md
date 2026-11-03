@@ -10,6 +10,16 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.20-alpha · 3 November 2026
+
+**The Logbook opens with a circular reveal**
+
+- Let go of the capsule and the Logbook is uncovered by a circle growing from its knob, quick to start and
+  settling gently. The page underneath holds still, so there's no blank moment and nothing slides into place.
+  Closing it shrinks the circle back into the + button (Start session on a computer).
+
+---
+
 ## 0.1.19-alpha · 31 October 2026
 
 **Smoother opening, and a key for the Logbook**

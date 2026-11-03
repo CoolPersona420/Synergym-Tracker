@@ -49,13 +49,14 @@ test('months: back through your history, never into the future, and a day shows 
   await openLogbook(page);
   await expect(page.locator('.lb-next')).toBeDisabled();
   await expect(page.locator('.lb-d.fut').first()).toBeDisabled().catch(() => {});
-  await pickDay(page, Date.parse(last.started_at));
-  await expect(page.locator('#lb-day')).toContainText('Push');
+  /* from this month the one before is always open (whatever today's date), and next comes back */
   const title = await page.locator('.lb-mt b').innerText();
   await page.click('.lb-prev');
   await expect(page.locator('.lb-mt b')).not.toHaveText(title);
   await page.click('.lb-next');
   await expect(page.locator('.lb-mt b')).toHaveText(title);
+  await pickDay(page, Date.parse(last.started_at));
+  await expect(page.locator('#lb-day')).toContainText('Push');
 });
 
 test('a missed day: pick it, log a session, and it counts', async ({ page }) => {

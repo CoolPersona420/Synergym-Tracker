@@ -519,6 +519,14 @@ function parsePath() {
   }
 }
 const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', coach: '/coach' + (a ? '/' + a : ''), public: '/s/' + a, widget: '/w/' + a, logbook: '/logbook' })[v] || '/';
+/* where a circular reveal starts (or ends): an element's centre, else the bottom right corner; and the radius
+   that covers the whole screen from there */
+function circleAt(el) {
+  const r = el ? el.getBoundingClientRect() : { left: innerWidth - 48, top: innerHeight - 96, width: 0, height: 0 };
+  const x = r.left + r.width / 2, y = r.top + r.height / 2, st = document.documentElement.style;
+  st.setProperty('--rx', x.toFixed(1) + 'px'); st.setProperty('--ry', y.toFixed(1) + 'px');
+  st.setProperty('--rr', Math.ceil(Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))) + 'px');
+}
 function go(v, a = null, { replace = false } = {}) {
   const path = pathOf(v, a);
   if (replace) history.replaceState({ d: depth }, '', path); else { depth++; history.pushState({ d: depth, from: S.view }, '', path); }
@@ -557,19 +565,19 @@ function route(enter = true) {
   let morph = null;
   if (v === 'widget' && from === 'today') { dir = 'widget'; morph = document.querySelector(`#view [data-w="${CSS.escape(arg || '')}"]`); }
   else if (from === 'widget' && v === 'today' && dir !== 'swipe') { dir = 'widget'; S.morphW = fromArg; }
-  /* the Logbook grows out of the capsule it was opened from, and fades away as it closes */
-  else if (v === 'logbook' && S.lbFrom) { dir = 'widget'; morph = S.lbFrom; }
-  else if (from === 'logbook' && v !== 'session' && dir !== 'swipe') { dir = 'widget'; S.lbBack = true; }
+  /* the Logbook opens as a circle growing out of the capsule's knob, and closes as one shrinking into the
+     session button; the page under it holds still */
+  else if (v === 'logbook' && S.lbFrom) { dir = 'reveal'; circleAt(S.lbFrom.querySelector('.hc-knob') || S.lbFrom); }
+  else if (from === 'logbook' && v !== 'session' && dir !== 'swipe') { dir = 'conceal'; S.lbBack = true; }
   const pre = S.lbFrom ? (c => () => c.remove())(S.lbFrom) : null; S.lbFrom = null;
   if (v !== 'today' && v !== 'widget') S.homeRestore = null;
   if (enter && changed && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
     document.documentElement.dataset.nav = dir;
     if (morph) morph.style.viewTransitionName = 'wfocus';
-    /* the Logbook shrinks back into the session button it came from, held still at its full size meanwhile */
-    let ring = null;
+    /* closing the Logbook: the session button is held at its place and size, and the circle closes on it */
     const t = document.startViewTransition(() => { if (pre) pre(); render(true);
-      if (S.lbBack) { const r = $('#nav .nav-train .ring'); if (r && r.getBoundingClientRect().width) { document.body.classList.add('vt-snap'); ring = r; r.style.viewTransitionName = 'wfocus'; } } });
-    t.finished.finally(() => { S.lbBack = false; if (ring) { ring.style.viewTransitionName = ''; document.body.classList.remove('vt-snap'); }
+      if (S.lbBack) { document.body.classList.add('vt-snap'); const r = $('#nav .nav-train .ring'); circleAt(r && r.getBoundingClientRect().width ? r : null); } });
+    t.finished.finally(() => { if (S.lbBack) { S.lbBack = false; document.body.classList.remove('vt-snap'); }
       if (S.morphW) { S.morphW = null; const c = document.querySelector('#view [data-w][style*="wfocus"]'); if (c) c.style.viewTransitionName = ''; } });
   } else { if (pre) pre(); S.morphW = null; S.lbBack = false; render(enter); }
 }
@@ -756,7 +764,7 @@ function renderNav() {
   if (!fab) {
     nav.innerHTML = ''; fab = document.createElement('button'); fab.className = 'nav-train'; nav.appendChild(fab);
     /* hold it, then slide up (right, beside a computer's sidebar): the Logbook, the one place to log or change past days */
-    holdReveal(fab, { label: 'Logbook', icon: ICON.book, buzz, reduced, side: () => !phoneDash(), enabled: () => S.loaded && S.view !== 'logbook', open: cap => { cap.style.viewTransitionName = 'wfocus'; S.lbFrom = cap; go('logbook'); } });
+    holdReveal(fab, { label: 'Logbook', icon: ICON.book, buzz, reduced, side: () => !phoneDash(), enabled: () => S.loaded && S.view !== 'logbook', open: cap => { S.lbFrom = cap; go('logbook'); } });
   }
   for (const c of [...nav.children]) if (c !== fab) c.remove();
   /* on a rest day it shows a moon and stars; tapping it still asks to undo the rest day before anything starts */
@@ -2513,7 +2521,7 @@ const dayName = t => { const n = DAYS[new Date(t).getDay()]; return n[0] + n.sli
 const lbState = () => S.lb || (S.lb = { m: monthOf(Date.now()), k: dayKey(Date.now()) });
 function vLogbook() {
   const L = lbState();
-  return `<div class="wfull lb" style="view-transition-name:wfocus">
+  return `<div class="wfull lb">
     <header class="wf-top"><div><span class="lbl">Log or change any day</span><h1 class="h1">Logbook</h1></div>${xBtn('lb-close')}</header>
     <div class="lb-wrap"><section class="card lb-cal" id="lb-cal">${lbMonth(L)}</section><section class="lb-day" id="lb-day" aria-live="polite">${lbDay(L.k)}</section></div></div>`;
 }
