@@ -20,6 +20,7 @@ import { rubberBand } from './ui/rubber.js';
 import { edgeBack } from './ui/edgeback.js';
 import { topPanel } from './ui/toppanel.js';
 import { holdReveal } from './ui/hold.js';
+import { swipeRows } from './ui/swiperow.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
@@ -1091,7 +1092,7 @@ function nextBlock(nx, done, a) {
   <div class="btns"><button class="btn line" data-act="ts-go" data-to="split" data-id="${nx.sp.id}">Open split</button>${rest && !a && !done.length ? `<button class="btn line" data-act="ts-go" data-to="unrest">Undo rest day</button>` : ''}${canStart ? `<button class="btn" data-act="ts-go" data-to="start" data-sp="${nx.sp.id}" data-day="${nx.i}">Start ${dayLabel(nx.sp.days, nx.i)}</button>` : ''}</div>`;
 }
 /* the panel itself; pulling it down only starts from the top of Home */
-let TP = null;
+let TP = null, SW = null;
 function todayPanel() {
   TP = topPanel({
     content: todayContent, hintText: todayHint, reduced, buzz,
@@ -1573,6 +1574,8 @@ function editHome() {
   openSheet('', null); draw();
 }
 
+/* a session row that can be deleted: swiped left on a phone, or the bin beside it on a computer */
+const rowDel = (s, act = 'open') => `<div class="rsw" data-sw="${s.id}">${act === 'open' ? rowSession(s) : rowSession(s).replace('data-act="open"', `data-act="${act}"`)}<button class="rsw-del" data-act="row-del" data-id="${s.id}" aria-label="Delete ${esc(sessName(s))}, ${fmtDate(s.startedAt)}" title="Delete session">${ICON.trash}<span>Delete</span></button></div>`;
 function rowSession(s) {
   const a = S.A.sess.get(s.id) || { ex: 0, sets: 0, vol: 0, prs: [], int: 0 };
   const sp = splitOf(s.splitId);
@@ -1600,6 +1603,7 @@ function vSession() {
   <div class="items">${s.items.map(it => exCard(it, gmap)).join('') || `<div class="empty rv"><b>No exercises yet.</b>Tap + to add one from your library.</div>`}</div>
   <div class="groups" id="gsum">${groupsHTML(groups)}</div>
   <textarea class="notes rv" data-f="notes" placeholder="${ro ? 'No notes' : 'Notes: how it felt, sleep, anything worth remembering'}" maxlength="4000"${ro ? ' readonly' : ''}>${esc(s.notes || '')}</textarea>
+  ${live && !S.link ? `<div class="discard-bar rv"><button class="linkbtn discard" data-act="sess-del" data-id="${s.id}">${ICON.trash}Discard session</button></div>` : ''}
   ${live || ed ? '' : `<div class="done-bar rv"><button class="btn" data-act="repeat" data-id="${s.id}">${roll('Repeat this session')}</button>${S.lbCtx === s.id ? `<button class="btn ghost" data-act="edit-date">${roll('Change date')}</button>` : ''}</div>`}
   ${transport(s)}`;
 }
@@ -1739,7 +1743,7 @@ function historyList() {
   const by = new Map(); for (const s of list.slice(0, hShown)) { const k = mk(s); if (!by.has(k)) by.set(k, []); by.get(k).push(s); }
   let h = q || on ? `<div class="hf-n lbl">${plural(list.length, 'session')} found</div>` : '';
   for (const [k, ss] of by) { const t = tot.get(k);
-    h += `<div class="month"><span class="lbl">${MONTHS[k % 12]} ${Math.floor(k / 12)}</span><span class="lbl">${plural(t.n, 'session')} · ${fmtVol(t.vol)}</span></div><div class="list">${ss.map(rowSession).join('')}</div>`; }
+    h += `<div class="month"><span class="lbl">${MONTHS[k % 12]} ${Math.floor(k / 12)}</span><span class="lbl">${plural(t.n, 'session')} · ${fmtVol(t.vol)}</span></div><div class="list">${ss.map(x => rowDel(x)).join('')}</div>`; }
   if (list.length > hShown) h += `<div class="h-more"><button class="btn ghost sm" data-act="h-more">${roll(`Show older sessions (${list.length - hShown})`)}</button></div>`;
   return h;
 }
@@ -2378,10 +2382,26 @@ function finish() {
   queue('s:' + s.id, 0); compute(); const a = S.A.sess.get(s.id);
   render(true); toast(`Saved · intensity ${Math.round(a.int)}${a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : ''}`);
 }
+/* Deleting a session: from its ⋯ menu, the Discard button of a live one, or a row in History or the Logbook
+   (swipe it left on a phone, the bin beside it on a computer). It always asks first. */
+function askDelete(id) {
+  const s = S.sessions.get(id); if (!s) return;
+  if (!s.endedAt) return confirmSheet('Discard this session?', `Everything logged in it is deleted. It can’t be undone.`, 'Discard', () => delSession(id), 'Keep logging');
+  const saved = S.edit && S.edit.id === id && S.edit.orig ? S.edit.orig : s;
+  confirmSheet('Delete session?', `${sessName(saved)} on ${fmtDate(saved.startedAt)} and everything logged in it are deleted. Records and estimates are worked out again. It can’t be undone.`, 'Delete', () => delSession(id));
+}
 function delSession(id) {
-  const lb = S.lbCtx === id; if (S.edit && S.edit.id === id) S.edit = null;
-  S.sessions.delete(id); queue('s:' + id, 0); S.rest = null;
-  if (lb) back(); else go('today', null, { replace: true }); toast('Session deleted');
+  const s = S.sessions.get(id); if (!s) return;
+  /* while it's being edited, what was saved is what goes */
+  const saved = S.edit && S.edit.id === id ? S.edit.orig : s, here = S.view === 'session' && S.arg === id;
+  if (S.edit && S.edit.id === id) S.edit = null;
+  if (S.lbCtx === id) S.lbCtx = null;
+  S.sessions.delete(id); queue('s:' + id, 0); if (!s.endedAt) { S.rest = null; S.link = null; }
+  /* from the session itself, back to where it was opened from; from a list, the list without it */
+  if (here) back(); else if (S.view === 'logbook') lbRefresh(); else render(false);
+  toast(s.endedAt ? 'Session deleted' : 'Session discarded');
+  /* a saved 1RM that came from it goes back to the best estimate, if you agree */
+  if (saved && saved.endedAt) { const ch = ormChanges(saved, { items: [] }); if (ch.length) setTimeout(() => offerOneRm(ch, saved, 'deleted'), here ? 450 : 0); }
 }
 
 /* ---------- editing a finished session ----------
@@ -2482,13 +2502,13 @@ function ormChanges(before, after) {
   return out;
 }
 /* asks once for all of them; returns { undo } so the session's Undo takes the 1RM back with it */
-function offerOneRm(changes, s) {
+function offerOneRm(changes, s, how = 'corrected') {
   const prev = changes.map(c => ({ ex: c.ex, oneRm: c.ex.oneRm, oneRmAt: c.ex.oneRmAt })); let done = false;
   const h = { undo: () => { if (!done) return; done = false; for (const p of prev) { p.ex.oneRm = p.oneRm; p.ex.oneRmAt = p.oneRmAt; queue('x:' + p.ex.id, 0); } } };
   if (!changes.length) return h;
   const u = unit(), up = changes.every(c => c.up), down = changes.every(c => !c.up), val = c => c.to > 0 ? fmtW(c.to) : '–';
   const why = c => c.up ? `From your corrected ${fmtDate(s.startedAt)} session. Your saved 1RM is ${fmtW(c.ex.oneRm)} ${u} (+${fmtW(c.to - c.ex.oneRm)} ${u}).`
-    : `Your saved ${fmtW(c.ex.oneRm)} ${u} came from the session you just corrected. ${c.to > 0 ? 'Go back to your best estimate.' : 'Go back to estimating it from your sets.'}`;
+    : `Your saved ${fmtW(c.ex.oneRm)} ${u} came from the session you just ${how}. ${c.to > 0 ? 'Go back to your best estimate.' : 'Go back to estimating it from your sets.'}`;
   /* one lift: the same sheet as a 1RM PR during a workout; several: a short list */
   const one = changes.length === 1 && changes[0];
   openSheet(`<div class="sh-h"><h3>${up ? 'New 1RM PR?' : down ? 'Lower your 1RM?' : 'Update your 1RM?'}</h3>${xBtn()}</div>
@@ -2549,7 +2569,7 @@ function lbDay(k) {
   const t0 = dayStart(k), list = [...S.sessions.values()].filter(s => dayKey(s.startedAt) === k).sort((a, b) => a.startedAt - b.startedAt);
   const rest = (S.profile.restDays || []).includes(k), today = k === dayKey(Date.now()), dt = new Date(t0), full = list.filter(s => s.endedAt).length >= DAY_MAX;
   return `<div class="lb-dh"><div><span class="lbl">${DAYS[dt.getDay()]}${today ? ' · today' : ''}</span><b>${dt.getDate()} ${MONTHS[dt.getMonth()]}</b></div></div>
-  ${list.length ? `<div class="list">${list.map(s => rowSession(s).replace('data-act="open"', 'data-act="lb-open"')).join('')}</div>`
+  ${list.length ? `<div class="list">${list.map(s => rowDel(s, 'lb-open')).join('')}</div>`
     : rest ? `<div class="sec-done"><span class="dt-check rest" aria-hidden="true">${ICON.moon}</span><span><b>Rest day</b><span class="muted">Recovery counts.</span></span></div>`
     : `<p class="muted lb-none">Nothing logged on this day.</p>`}
   ${full ? `<p class="muted lb-none">${DAY_MAX} sessions is the most for one day.</p>` : ''}
@@ -2685,14 +2705,14 @@ function itemMenu(itemId) {
 }
 function sessMenu() {
   const s = cur(); if (!s) return;
-  if (editing(s)) return menuSheet(sessName(s), [{ label: 'Save', fn: saveEditSheet }, { label: 'Change date and time', fn: editDate }, { label: S.edit.orig ? 'Discard changes' : 'Discard this session', warn: true, fn: discardEdit }]);
+  if (editing(s)) return menuSheet(sessName(s), [{ label: 'Save', fn: saveEditSheet }, { label: 'Change date and time', fn: editDate }, { label: S.edit.orig ? 'Discard changes' : 'Discard this session', warn: true, fn: discardEdit }, ...(S.edit.orig ? [{ label: 'Delete session', warn: true, fn: () => askDelete(s.id) }] : [])]);
   /* a finished session opened outside the Logbook can be repeated, not changed */
-  if (s.endedAt && S.lbCtx !== s.id) return menuSheet(sessName(s), [{ label: 'Repeat this session', hint: 'start a new one like it', fn: () => repeatSession(s.id) }, { label: 'Change this session', hint: 'hold + and slide up to the Logbook', fn: lbHint }]);
+  if (s.endedAt && S.lbCtx !== s.id) return menuSheet(sessName(s), [{ label: 'Repeat this session', hint: 'start a new one like it', fn: () => repeatSession(s.id) }, { label: 'Change this session', hint: 'hold + and slide up to the Logbook', fn: lbHint }, { label: 'Delete session', warn: true, fn: () => askDelete(s.id) }]);
   menuSheet(sessName(s), [
     ...(s.endedAt ? [{ label: 'Edit session', hint: 'then save as today’s, or update this one', fn: startEdit }] : []),
     { label: 'Change date', fn: editDate },
     ...(s.endedAt ? [{ label: 'Repeat this session', fn: () => repeatSession(s.id) }, { label: 'Reopen as live', hint: 'resume logging', fn: () => { if (activeSession()) return toast('Another session is live'); s.endedAt = null; queue('s:' + s.id, 0); render(false); } }] : []),
-    { label: 'Delete session', warn: true, fn: () => confirmSheet('Delete session?', 'This removes the session and all its sets. It can’t be undone.', 'Delete', () => delSession(s.id)) }
+    { label: s.endedAt ? 'Delete session' : 'Discard session', warn: true, fn: () => askDelete(s.id) }
   ]);
 }
 
@@ -2972,6 +2992,8 @@ const ACT = {
   'bw-del': el => { S.profile.bwLog = unlogBw(S.profile.bwLog, el.dataset.d); const l = S.profile.bwLog; if (l.length) S.profile.bw = l[l.length - 1].kg; queue('p', 300); render(false); },
   'item-menu': el => itemMenu(el.dataset.item),
   'sess-menu': sessMenu,
+  'sess-del': el => askDelete(el.dataset.id),
+  'row-del': el => { SW && SW.close(false); askDelete(el.dataset.id); },
   'sess-edit': startEdit,
   'edit-save': saveEditSheet,
   'edit-discard': discardEdit,
@@ -3450,6 +3472,7 @@ function boot() {
   /* pulling past the top or bottom stretches the page and springs back, as on iOS */
   /* the today panel listens first, so a pull it takes isn't also stretched by the rubber band */
   todayPanel();
+  SW = swipeRows({ enabled: () => coarse.matches && S.loaded && $('#sheet').hidden, buzz, reduced });
   if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced, held: () => TP.dragging() });
   /* the app installed on an iPhone has no browser back: swipe in from the left edge instead */
   if (coarse.matches && isIOS() && navigator.standalone === true) edgeBack({ view: $('#view'), reduced, canBack: canSwipeBack, label: backLabel, onBack: () => { swipeNav = true; back(); }, held: () => TP.isOpen() || TP.dragging() });

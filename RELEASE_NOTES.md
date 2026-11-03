@@ -10,6 +10,21 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.21-alpha · 3 November 2026
+
+**Delete a session from anywhere**
+
+- **Swipe a session left** in History or on a Logbook day and a red **Delete** grows in from the edge; let go
+  past halfway and it stays open, tap anywhere else to close it. On a computer, a bin slides in beside the row
+  you hover.
+- **Every session's ⋯ menu** has **Delete session**, including sessions opened from History, which used to be
+  view-only. A live session also has a quiet **Discard session** under its notes.
+- **It always asks first**, naming the session and its date. Records, estimates, the coach and your widgets
+  update by themselves, and if a 1RM you saved came from the deleted session, Synergym offers to go back to
+  your best estimate.
+
+---
+
 ## 0.1.20-alpha · 3 November 2026
 
 **The Logbook opens with a circular reveal**

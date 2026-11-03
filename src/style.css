@@ -330,6 +330,25 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .list{display:flex;flex-direction:column}
 .row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s0);align-items:center;padding:var(--s0) 2px;border-bottom:1px solid var(--line);width:100%}
 .row:last-child{border-bottom:0}
+/* rows that can be deleted: on a phone the row swipes left over a red Delete that grows from the edge; on a
+   computer a bin slides in beside the row while it's hovered or focused */
+.rsw{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.rsw:last-child{border-bottom:0}
+.rsw .row{position:relative;z-index:1;border-bottom:0}
+.rsw-del{position:absolute;top:6px;bottom:6px;right:0;width:calc(var(--sw,0) * 88px);opacity:var(--sw,0);z-index:0;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:14px;background:var(--bad);color:#fff;font-size:.72rem;font-weight:700;
+  transition:width .28s cubic-bezier(.2,.8,.2,1),opacity .2s}
+.rsw.drag .rsw-del{transition:none}
+.rsw-del .ico{width:20px;height:20px;flex:none}
+@media (hover:hover) and (pointer:fine){
+  .rsw{display:grid;grid-template-columns:minmax(0,1fr) 0px;transition:grid-template-columns .22s var(--ease)}
+  .rsw:hover,.rsw:focus-within{grid-template-columns:minmax(0,1fr) 40px}
+  .rsw-del{position:static;width:auto;opacity:0;margin:8px 0;background:none;color:var(--muted);border-radius:10px;transition:opacity .18s,color .15s,background .15s}
+  .rsw:hover .rsw-del,.rsw:focus-within .rsw-del{opacity:1}
+  .rsw-del:hover,.rsw-del:focus-visible{color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}
+  .rsw-del span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+}
+@media (prefers-reduced-motion:reduce){.rsw,.rsw-del{transition:none}}
 .tri{width:0;height:0;border-left:10px solid var(--ink-2);border-block:6px solid transparent;transition:transform .4s var(--ease),border-color .3s}
 .row:hover .tri{transform:translateX(4px);border-left-color:var(--accent)}
 .row-m{min-width:0;display:flex;flex-direction:column;gap:3px}
@@ -392,6 +411,11 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .notes{width:100%;min-height:6rem;margin-top:var(--s0);border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface);padding:var(--s0);font-size:1rem;resize:vertical;outline:none}
 .notes:focus{border-color:var(--accent)}
 .done-bar{display:flex;flex-wrap:wrap;gap:var(--s-1);margin-top:var(--s1)}
+/* a live session's quiet way out: discard it (it asks first) */
+.discard-bar{display:flex;justify-content:center;margin-top:var(--s1)}
+.linkbtn.discard{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border-radius:999px;color:var(--bad);text-decoration:none;font-weight:600;transition:background .15s}
+.linkbtn.discard .ico{width:17px;height:17px}
+.linkbtn.discard:hover{background:color-mix(in srgb,var(--bad) 10%,transparent)}
 /* a finished session reads as it was logged until Edit: numbers sit as plain text, the adding controls step away */
 .s-edit{flex:none}
 .s-edit.nudge{animation:nudge .45s var(--ease)}

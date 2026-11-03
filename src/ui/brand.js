@@ -3,6 +3,7 @@ import { $$, esc } from '../lib/util.js';
 import { reduced } from '../lib/env.js';
 
 export const ICON={
+ trash:'<svg class="ico" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4.5h4V7M7 7l.9 12.1a1 1 0 0 0 1 .9h6.2a1 1 0 0 0 1-.9L17 7M10 11v5.5M14 11v5.5"/></svg>',
  home:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg>',
  today:'<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
  hist:'<svg class="ico" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h8"/></svg>',

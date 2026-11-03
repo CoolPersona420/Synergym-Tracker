@@ -25,7 +25,9 @@ test('opened anywhere but the Logbook, a finished session is view-only and point
   await expect(page.locator('#toast')).toContainText('Past sessions change in the Logbook');
   await page.click('[data-act="sess-menu"]');
   await expect(page.locator('#sheet')).toContainText('Repeat this session');
-  for (const t of ['Edit session', 'Change date', 'Reopen as live', 'Delete session']) await expect(page.locator('#sheet')).not.toContainText(t);
+  for (const t of ['Edit session', 'Change date', 'Reopen as live']) await expect(page.locator('#sheet')).not.toContainText(t);
+  /* deleting it is allowed anywhere (it asks first) */
+  await expect(page.locator('#sheet')).toContainText('Delete session');
   expect(row(fake, last.id).items[0].sets[0].w).toBe(80);
 });
 
