@@ -7,7 +7,7 @@
    Rows are .rsw: the row (.row) and its pill (.rsw-del). */
 const ease = t => 1 - Math.pow(1 - t, 4);
 
-export function swipeRows({ W = 114, enabled = () => true, buzz = () => {}, reduced = false }) {
+export function swipeRows({ W = 126, enabled = () => true, buzz = () => {}, reduced = false }) {
   let g = null, open = null, swallowUntil = 0;
   const raf = new WeakMap();
   const now = el => parseFloat(el.style.getPropertyValue('--sw')) || 0;

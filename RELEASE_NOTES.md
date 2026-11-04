@@ -10,6 +10,15 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.25-alpha · 4 November 2026
+
+**More room around Delete**
+
+- A swiped-open session row now leaves about 30px between the score and the Delete pill (it was about 18px),
+  so the two never feel crowded.
+
+---
+
 ## 0.1.24-alpha · 3 November 2026
 
 **Add your own exercise from any muscle group**

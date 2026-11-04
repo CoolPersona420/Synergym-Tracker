@@ -337,7 +337,7 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 @property --sw{syntax:'<number>';inherits:true;initial-value:0}
 .rsw{--sw:0;position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
 .rsw:last-child{border-bottom:0}
-.rsw .row{position:relative;border-bottom:0;padding-right:calc(2px + var(--sw) * 114px)}
+.rsw .row{position:relative;border-bottom:0;padding-right:calc(2px + var(--sw) * 126px)}
 .rsw-del{position:absolute;z-index:2;right:2px;top:50%;height:48px;width:96px;margin-top:-24px;padding:0 18px;display:flex;align-items:center;justify-content:center;gap:7px;
   border-radius:999px;background:var(--bad);color:var(--bg);font-size:.86rem;font-weight:700;letter-spacing:-.005em;
   /* uncovered from the right edge only as fast as the row makes room, so it never sits over the score */
