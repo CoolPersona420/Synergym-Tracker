@@ -974,7 +974,11 @@ button,a,label,input,select,textarea,[data-act]{touch-action:manipulation}
 }
 @media (max-width:47.99rem){
   /* themes: a swipeable strip instead of a long grid */
-  .sg .themes{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;margin:0 calc(var(--s0) * -1);padding:2px var(--s0);gap:var(--s-1)}
+  /* it runs to the card's edges, but its tiles start and end in line with the rows above and below: snapping
+     uses scroll-padding (padding alone is ignored, so the first tile was pulled to the edge), and a spacer
+     stands in for end padding, which Safari leaves out of a scroller */
+  .sg .themes{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;margin:0 calc(var(--s0) * -1);padding:2px 0 2px var(--s0);scroll-padding-inline:var(--s0);gap:var(--s-1)}
+  .sg .themes::after{content:"";flex:0 0 calc(var(--s0) - var(--s-1))}
   .sg .themes::-webkit-scrollbar{display:none}
   .sg .theme-card{flex:0 0 7.6rem;scroll-snap-align:start}
   .savebar #savemsg{display:none}

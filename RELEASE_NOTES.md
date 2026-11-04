@@ -10,6 +10,16 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.27-alpha · 4 November 2026
+
+**Theme picker spacing**
+
+- On a phone, the strip of themes in **Settings › Appearance** no longer starts flush against the card's edge:
+  the first theme lines up with "Theme" and "Home widgets", and scrolled to the end the last one keeps the same
+  space before the edge. (Snapping pulled the first tile to the edge, and Safari dropped the space at the end.)
+
+---
+
 ## 0.1.26-alpha · 4 November 2026
 
 **Edit a session straight from History**
