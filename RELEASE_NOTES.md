@@ -10,6 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.26-alpha · 4 November 2026
+
+**Edit a session straight from History**
+
+- Swiping a session left in History (or on a Logbook day) now shows two round buttons: a grey **pencil** and the
+  coral **bin**. They grow in one after the other as the row makes room, with clear space after the score.
+- The pencil opens the session already being edited, exactly as **Edit** does in the Logbook: change sets,
+  add or remove exercises, and nothing is saved until **Save** (as today's session, or as an update to this
+  one); ✕ or leaving puts it back as it was. A live session simply opens.
+- On a computer, the pencil and the bin appear beside a row while you hover it.
+- Opening a past session normally still shows it as logged, read-only; the pencil is the quick way in.
+
+---
+
 ## 0.1.25-alpha · 4 November 2026
 
 **More room around Delete**

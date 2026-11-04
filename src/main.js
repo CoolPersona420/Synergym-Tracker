@@ -1593,8 +1593,10 @@ function editHome() {
   openSheet('', null); draw();
 }
 
-/* a session row that can be deleted: swiped left on a phone, or the bin beside it on a computer */
-const rowDel = (s, act = 'open') => `<div class="rsw" data-sw="${s.id}">${act === 'open' ? rowSession(s) : rowSession(s).replace('data-act="open"', `data-act="${act}"`)}<button class="rsw-del" data-act="row-del" data-id="${s.id}" aria-label="Delete ${esc(sessName(s))}, ${fmtDate(s.startedAt)}" title="Delete session">${ICON.trash}<span>Delete</span></button></div>`;
+/* a session row with its actions: on a phone, swipe it left for Edit and Delete; on a computer they show beside
+   the row while it's hovered */
+const rowDel = (s, act = 'open') => { const name = `${esc(sessName(s))}, ${fmtDate(s.startedAt)}`;
+  return `<div class="rsw" data-sw="${s.id}">${act === 'open' ? rowSession(s) : rowSession(s).replace('data-act="open"', `data-act="${act}"`)}<div class="rsw-acts"><button class="rsw-edit" data-act="row-edit" data-id="${s.id}" aria-label="Edit ${name}" title="Edit session">${ICON.pen}</button><button class="rsw-del" data-act="row-del" data-id="${s.id}" aria-label="Delete ${name}" title="Delete session">${ICON.trash}</button></div></div>`; };
 /* sets and volume, cardio minutes, or both */
 const sessSum = a => [a.sets || !a.ct ? `${plural(a.sets, 'set')} · ${fmtVol(a.vol)}` : '', a.ct ? `${fmtMin(a.ct)} cardio${a.cd && !a.sets ? ` · ${fmtKm(a.cd)}` : ''}` : ''].filter(Boolean).join(' · ');
 const fmtKm = m => `${fmtDist(m, unit() === 'lb' ? 'mi' : 'km')} ${unit() === 'lb' ? 'mi' : 'km'}`;
@@ -2548,6 +2550,16 @@ function finish() {
 }
 /* Deleting a session: from its ⋯ menu, the Discard button of a live one, or a row in History or the Logbook
    (swipe it left on a phone, the bin beside it on a computer). It always asks first. */
+/* Edit on a History or Logbook row: the session opens already being edited, as Edit does in the Logbook, with the
+   same Save choices (as today's session, or update this one). A live session just opens. */
+function editFromRow(id) {
+  const s = S.sessions.get(id); if (!s) return;
+  if (!s.endedAt) return go('session', id);
+  if (S.edit && S.edit.id !== id) endEdit();
+  S.lbCtx = id;
+  if (!S.edit) S.edit = { id, orig: clone(s), dirty: false };
+  buzz(); go('session', id);
+}
 function askDelete(id) {
   const s = S.sessions.get(id); if (!s) return;
   if (!s.endedAt) return confirmSheet('Discard this session?', `Everything logged in it is deleted. It can’t be undone.`, 'Discard', () => delSession(id), 'Keep logging');
@@ -3172,6 +3184,7 @@ const ACT = {
   'sess-menu': sessMenu,
   'sess-del': el => askDelete(el.dataset.id),
   'row-del': el => { SW && SW.close(false); askDelete(el.dataset.id); },
+  'row-edit': el => { SW && SW.close(false); editFromRow(el.dataset.id); },
   'sess-edit': startEdit,
   'edit-save': saveEditSheet,
   'edit-discard': discardEdit,

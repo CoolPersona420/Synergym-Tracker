@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.25, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.26, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.25-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.26-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -46,15 +46,16 @@ The version lives in `package.json` (`0.1.25-alpha`) and shows in Settings › A
 - **Logbook:** hold the + button and slide up into the capsule that rises (on a computer, hold Start session and drag
   right into the capsule beside it). A month
   calendar of every day: open a past session and Edit it (save as today's or update it), log a session for a day you
-  missed, or mark a rest day. It's the one place past days change; sessions opened elsewhere are view-only.
+  missed, or mark a rest day. A logged session can also be edited from its row in History (swipe it, or the pencil
+  beside it on a computer); sessions simply opened elsewhere are view-only.
 - **Bodyweight log**, **History** with search, and an **exercise library** of your own with editable
   muscle groups.
 - **Cardio:** add a run, ride, row, swim (or any cardio of your own) to any session. Time is always logged;
   choose what else to track: distance with pace or speed worked out, heart rate, calories, effort 1–10.
   Records for longest, farthest and fastest pace; a page per cardio exercise; cardio days in a split with the
   minutes planned. Cardio counts toward the weekly target and streak (`src/lib/cardio.js`).
-- **Deleting a session:** swipe its row left in History or the Logbook (a bin beside the row on a computer), or
-  **Delete session** in any session's ⋯ menu; a live session has **Discard session** under its notes. It always
+- **Editing or deleting a session:** swipe its row left in History or the Logbook for Edit and Delete (both beside
+  the row on hover on a computer). Delete is also in any session's ⋯ menu; a live session has **Discard session** under its notes. It always
   asks first.
 - **Themes:** Auto (follows the device) plus eleven named palettes.
 - **Week start:** weeks start on Monday, Sunday or Saturday (**Settings › Training**), for the weekly

@@ -64,10 +64,11 @@ test('on a computer, a History row shows a bin while hovered; it asks, then the 
   const data = benchHistory(), fake = new FakeSupabase(data), last = data.sessions[0];
   await login(page, fake, 'A');
   await page.goto('/history');
-  const wrap = page.locator(`#hlist .rsw[data-sw="${last.id}"]`), bin = wrap.locator('.rsw-del');
-  await expect(bin).toHaveCSS('opacity', '0');
+  const wrap = page.locator(`#hlist .rsw[data-sw="${last.id}"]`), acts = wrap.locator('.rsw-acts'), bin = wrap.locator('.rsw-del');
+  await expect(acts).toHaveCSS('opacity', '0');
   await wrap.hover();
-  await expect(bin).toHaveCSS('opacity', '1');
+  await expect(acts).toHaveCSS('opacity', '1');
+  await expect(wrap.locator('.rsw-edit')).toBeVisible();
   await bin.click();
   await expect(page.locator('#sheet h3')).toHaveText('Delete session?');
   await confirm(page).click();
@@ -119,4 +120,40 @@ test('a day in the Logbook deletes its session from the row, and stays on the Lo
   await expect(page).toHaveURL(/\/logbook$/);
   await expect(page.locator('#lb-day')).toContainText('Nothing logged on this day');
   await expect.poll(() => row(fake, last.id)).toBeUndefined();
+});
+
+test('on a phone, the swiped row also has Edit: the session opens being edited, and Save updates it', async ({ page }, info) => {
+  test.skip(info.project.name !== 'phone', 'swiping is for a finger');
+  const data = benchHistory(), fake = new FakeSupabase(data), last = data.sessions[0];
+  await login(page, fake, 'A');
+  await page.goto('/history');
+  await page.waitForFunction(() => !document.getElementById('splash') && !document.getElementById('qsplash'));
+  const wrap = page.locator(`#hlist .rsw[data-sw="${last.id}"]`);
+  await swipeRow(page, `#hlist .rsw[data-sw="${last.id}"] .row`, -170);
+  await expect(wrap).toHaveClass(/sw-open/);
+  await wrap.locator('.rsw-edit').click();
+  await expect(page).toHaveURL(new RegExp('/session/' + last.id));
+  await expect(page.locator('.s-meta')).toContainText('editing');
+  const w = page.locator('[data-f="w"][data-set="s31"]');
+  await expect(w).not.toHaveAttribute('readonly', '');
+  await w.fill('85');
+  await page.click('[data-act="edit-save"]');
+  await page.locator('#sheet button', { hasText: /^Update/ }).click();
+  await expect.poll(() => row(fake, last.id).items[0].sets[0].w).toBe(85);
+});
+
+test('on a computer, the pencil beside a hovered row opens the session being edited', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'hover is for a mouse');
+  const data = benchHistory(), fake = new FakeSupabase(data), last = data.sessions[0];
+  await login(page, fake, 'A');
+  await page.goto('/history');
+  const wrap = page.locator(`#hlist .rsw[data-sw="${last.id}"]`);
+  await wrap.hover();
+  await wrap.locator('.rsw-edit').click();
+  await expect(page).toHaveURL(new RegExp('/session/' + last.id));
+  await expect(page.locator('[data-act="edit-save"]')).toBeVisible();
+  /* leaving without changes keeps it as it was */
+  await page.click('[data-act="edit-discard"]');
+  await expect(page.locator('.s-meta')).toContainText('completed');
+  expect(row(fake, last.id).items[0].sets[0].w).toBe(80);
 });

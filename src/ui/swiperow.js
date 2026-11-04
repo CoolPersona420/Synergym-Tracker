@@ -1,13 +1,13 @@
-/* Swipe a row left to open its Delete. The row makes room rather than sliding away: its name keeps its place
-   and shortens, the rest moves over, and the Delete pill is uncovered at the right (style.css, driven by --sw:
+/* Swipe a row left to open its actions (Edit, Delete). The row makes room rather than sliding away: its name keeps its place
+   and shortens, the rest moves over, and the actions are uncovered at the right (style.css, driven by --sw:
    0 shut, 1 open). While the finger is down it follows exactly; let go and it eases the rest of the way, frame by
    frame, so it's smooth on every phone (a CSS transition on a custom property isn't, on older iPhones).
    Let go past half way, or flick, and it stays open; anything less springs back. An open row can be pushed
    shut, and a tap anywhere else closes it (that tap does nothing else). Up and down is a scroll, not a swipe.
-   Rows are .rsw: the row (.row) and its pill (.rsw-del). */
+   Rows are .rsw: the row (.row) and its actions (.rsw-acts). */
 const ease = t => 1 - Math.pow(1 - t, 4);
 
-export function swipeRows({ W = 126, enabled = () => true, buzz = () => {}, reduced = false }) {
+export function swipeRows({ W = 142, enabled = () => true, buzz = () => {}, reduced = false }) {
   let g = null, open = null, swallowUntil = 0;
   const raf = new WeakMap();
   const now = el => parseFloat(el.style.getPropertyValue('--sw')) || 0;
@@ -27,8 +27,8 @@ export function swipeRows({ W = 126, enabled = () => true, buzz = () => {}, redu
   addEventListener('touchstart', e => {
     if (e.touches.length !== 1 || !enabled()) return;
     const el = e.target instanceof Element ? e.target.closest('.rsw') : null;
-    /* the open row's Delete does its own job */
-    if (open && el === open && e.target.closest('.rsw-del')) return;
+    /* the open row's Edit and Delete do their own jobs */
+    if (open && el === open && e.target.closest('.rsw-acts')) return;
     /* another row, or anywhere else: close the open one, and that touch does nothing more */
     if (open && el !== open) { close(); swallowUntil = performance.now() + 600; return; }
     if (!el) return;
@@ -66,7 +66,7 @@ export function swipeRows({ W = 126, enabled = () => true, buzz = () => {}, redu
   addEventListener('touchcancel', () => { if (g && g.on) { g.el.classList.remove('drag'); setOpen(g.el, open === g.el); } g = null; }, { passive: true });
   document.addEventListener('click', e => {
     if (performance.now() > swallowUntil) return;
-    if (e.target instanceof Element && e.target.closest('.rsw-del')) return;
+    if (e.target instanceof Element && e.target.closest('.rsw-acts')) return;
     e.preventDefault(); e.stopImmediatePropagation();
   }, true);
   /* a page that scrolls closes it */
