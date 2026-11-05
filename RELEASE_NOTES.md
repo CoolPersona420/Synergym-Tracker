@@ -10,6 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.31-alpha · 5 November 2026
+
+**Superset a set from its menu**
+
+- Tap a set's number and choose **Superset with…**. The session's other exercises are listed with their sets as
+  chips (weight × reps, or "empty"); tap the one to pair with and the two are linked as a superset, tagged
+  SS·A, SS·B and so on, with a note saying what was linked.
+- **+ New set** adds a set to that exercise (hinted like its last one) and links it in one go.
+- A set that's already in a superset shows its tag and an outline; picking it brings your set into that group,
+  so three exercises become a giant set. Unlink from group in the same menu still separates a set again.
+- The link button in the bottom bar still works for selecting several sets at once.
+
+---
+
 ## 0.1.30-alpha · 5 November 2026
 
 **The dock on Settings stretches into the +'s place**

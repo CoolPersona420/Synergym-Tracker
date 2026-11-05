@@ -330,6 +330,20 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .list{display:flex;flex-direction:column}
 .row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s0);align-items:center;padding:var(--s0) 2px;border-bottom:1px solid var(--line);width:100%}
 .row:last-child{border-bottom:0}
+/* Superset with…: the other exercises, each with its sets as chips */
+.ss-note{font-size:.88rem;margin:-4px 0 var(--s0)}
+.ss-note b{color:var(--ink);font-weight:600}
+.ss-list{display:grid;gap:var(--s0);max-height:min(60vh,30rem);overflow-y:auto;padding-bottom:4px}
+.ss-ex .lbl{display:block;margin-bottom:8px}
+.ss-sets{display:flex;flex-wrap:wrap;gap:8px}
+.ss-set{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:5.6rem;padding:9px 12px;border-radius:var(--r-sm);background:var(--surface-2);text-align:left;transition:transform .15s var(--ease),background .2s}
+.ss-set b{font-size:.9rem;font-weight:700}
+.ss-set span{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.ss-set .gtag{position:absolute;top:6px;right:6px;margin:0}
+.ss-set.in{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 55%,transparent)}
+.ss-set.ss-new{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line)}
+.ss-set:active{transform:scale(.96)}
+.ss-set:disabled{opacity:.4}
 /* session rows with actions. On a phone, swiping left makes room: the name keeps its place and shortens, the
    score moves over, and two round actions are uncovered at the right, Edit (quiet) and Delete (the theme's
    danger colour, ink on colour), each growing in as it's reached. --sw is how far open it is, 0 to 1 (a little

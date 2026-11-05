@@ -2874,11 +2874,45 @@ function setMenu(setId) {
   const w = st.w ?? st.pw, ex = exOf(f.it.exId);
   const plates = ex && ex.kind !== 'bw' ? [{ label: 'Plate calculator', hint: w > 0 ? `${fmtW(w)} ${unit()}` : '', fn: () => plateSheet(w) }] : [];
   if (locked(s)) return S.lbCtx === s.id ? menuSheet(`${ex?.name || 'Set'} · set ${f.i + 1}`, [...plates, { label: 'Edit session', hint: 'to change this set', fn: startEdit }]) : plates.length ? plateSheet(w) : nudgeEdit();
-  const items = [...plates, { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
+  const items = [...plates, ...(isCardio(ex) ? [] : [{ label: 'Superset with…', hint: 'a set of another exercise', fn: () => supersetSheet(setId) }]),
+    { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
     { label: 'Duplicate set', fn: () => { f.it.sets.splice(f.i + 1, 0, { ...clone(st), id: sid(), done: false, g: null }); queue('s:' + s.id, 300); render(false); } }];
   if (st.g) items.push({ label: 'Unlink from group', fn: () => { st.g = null; cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
   items.push({ label: 'Delete set', warn: true, fn: () => { f.it.sets.splice(f.i, 1); cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
   menuSheet(`${exOf(f.it.exId)?.name || 'Set'} · set ${f.i + 1}`, items);
+}
+/* Superset with…: the session's other exercises, each with its sets as chips; tapping one links it with this set.
+   A set that's already in a group brings this one into it (three exercises make a giant set). + New set adds a
+   set to that exercise, hinted like the last one, and links it. */
+function supersetSheet(setId) {
+  const s = cur(), f = s && findSet(s, setId); if (!f) return;
+  const others = s.items.filter(it => it !== f.it && !isCardio(exOf(it.exId)));
+  if (!others.length) return toast('Add another exercise to this session first, then superset with it');
+  const gm = new Map(); for (const g of groupsOf(s)) for (const x of g.m) gm.set(x.st.id, g);
+  const num = v => v == null ? null : v;
+  const chip = (st, i) => { const g = gm.get(st.id), w = num(st.w ?? st.pw), r = num(st.r ?? st.pr);
+    return `<button class="ss-set${g ? ' in' : ''}" data-ss="${st.id}" aria-label="Set ${i + 1}${g ? `, in ${g.type.toLowerCase()} ${g.letter}` : ''}"><b>Set ${i + 1}</b><span>${w != null || r != null ? `${fmtW(+w || 0)}×${r ?? '–'}` : 'empty'}</span>${g ? `<i class="gtag">${g.ab}·${g.letter}</i>` : ''}</button>`; };
+  openSheet(`<div class="sh-h"><h3>Superset with…</h3>${xBtn()}</div>
+  <p class="muted ss-note"><b>${esc(exOf(f.it.exId)?.name || 'This exercise')} · set ${f.i + 1}</b> pairs with the set you tap.</p>
+  <div class="ss-list">${others.map(it => `<div class="ss-ex"><span class="lbl">${esc(exOf(it.exId)?.name || 'Exercise')}</span><div class="ss-sets">${it.sets.map(chip).join('')}<button class="ss-set ss-new" data-ss-new="${it.id}"${it.sets.length >= 40 ? ' disabled' : ''}><b>+ New set</b><span>and link it</span></button></div></div>`).join('')}</div>`, r => {
+    r.querySelector('.ss-list').onclick = e => {
+      const b = e.target.closest('[data-ss],[data-ss-new]'); if (!b) return;
+      const s2 = cur(), a = s2 && findSet(s2, setId); if (!a) return closeSheet();
+      let t;
+      if (b.dataset.ssNew) { const it = s2.items.find(x => x.id === b.dataset.ssNew); if (!it) return; const p = it.sets[it.sets.length - 1];
+        t = { id: sid(), w: null, r: null, pw: p ? (p.w ?? p.pw) : null, pr: p ? (p.r ?? p.pr) : null, done: false, g: null }; it.sets.push(t); }
+      else t = findSet(s2, b.dataset.ss)?.st;
+      if (!t) return;
+      closeSheet(); linkSets(s2, a.st, t);
+    };
+  });
+}
+function linkSets(s, a, b) {
+  /* join the chosen set's group if it has one, else this set's, else a new pair; whatever is left alone unlinks */
+  const g = b.g || a.g || sid(); a.g = g; b.g = g; cleanGroups(s);
+  queue('s:' + s.id, 300); render(false); buzz(12);
+  const grp = groupsOf(s).find(x => x.g === g);
+  if (grp) toast(`${grp.type} ${grp.letter}: ${[...new Set(grp.m.map(x => `${exOf(x.it.exId)?.name || 'Exercise'} ${x.si + 1}`))].join(' + ')}`);
 }
 function itemMenu(itemId) {
   const s = cur(); if (!s) return; const i = s.items.findIndex(x => x.id === itemId); if (i < 0) return; const it = s.items[i];
