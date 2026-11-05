@@ -12,7 +12,7 @@ import { CARDIO, METRICS, howOf, defaultMetrics, parseTime, fmtDur, fmtMin, dist
 import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
 import { parseImport, SPLIT_MAX } from './lib/importer.js';
 import { ICON, brand, lockup, big, disp, countUp } from './ui/brand.js';
-import { THEMES, themePref, isDark, applyTheme, themePicker } from './ui/themes.js';
+import { THEMES, themePref, isDark, applyTheme, markDark, themePicker } from './ui/themes.js';
 import { SPL, QS, setSplashHooks, splashIn, splashOut, quickIn, quickOut } from './ui/splash.js';
 import { TEMPLATES, recommendTemplate } from './data/templates.js';
 import { QUOTES } from './data/quotes.js';
@@ -778,7 +778,7 @@ let navKey = null;
 function renderNav() {
   const a = activeSession(), on = v => S.view === v || (v === 'exercises' && S.view === 'exercise') || (v === 'splits' && (S.view === 'split' || S.view === 'shared')) || (v === 'prefs' && S.view === 'guide');
   const key = ['today', 'splits', 'exercises', 'history', 'coach', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
-  const it = (v, l, i) => `<button class="nav-i${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}">${i}${roll(l)}</button>`;
+  const it = (v, l, i) => `<button class="nav-i${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}" aria-label="${l}"${on(v) ? ' aria-current="page"' : ''}>${i}${roll(l)}</button>`;
   /* the session button is kept across renders (only its contents change), so hiding and showing it can animate */
   const nav = $('#nav'); let fab = nav.querySelector(':scope > .nav-train');
   if (!fab) {
@@ -786,7 +786,13 @@ function renderNav() {
     /* hold it, then slide up (right, beside a computer's sidebar): the Logbook, the one place to log or change past days */
     holdReveal(fab, { label: 'Logbook', icon: ICON.book, buzz, reduced, side: () => !phoneDash(), enabled: () => S.loaded && S.view !== 'logbook', open: cap => { S.lbFrom = cap; go('logbook'); } });
   }
-  for (const c of [...nav.children]) if (c !== fab) c.remove();
+  /* on a phone the dock is icons only, and a soft raised circle glides to the tab you're on (style.css: --ni is
+     that tab's place among the five) */
+  let glow = nav.querySelector(':scope > .nav-glow');
+  if (!glow) { glow = document.createElement('i'); glow.className = 'nav-glow'; glow.setAttribute('aria-hidden', 'true'); nav.prepend(glow); }
+  const ni = ['today', 'splits', 'exercises', 'history', 'prefs'].indexOf(key);
+  if (ni >= 0) { nav.style.setProperty('--ni', ni); nav.dataset.ni = ni; } else delete nav.dataset.ni;
+  for (const c of [...nav.children]) if (c !== fab && c !== glow) c.remove();
   /* on a rest day it shows a moon and stars; tapping it still asks to undo the rest day before anything starts */
   const rest = !a && S.loaded && isRestToday(), mode = a ? 'live:' + a.id : rest ? 'rest' : 'idle';
   if (fab.dataset.mode !== mode) {
@@ -796,7 +802,7 @@ function renderNav() {
     fab.innerHTML = `<span class="ring">${a ? ICON.play : rest ? ICON.rest : ICON.plus}</span><span class="nl">${roll(a ? 'Resume session' : rest ? 'Rest day' : 'Start session')}</span>`;
   }
   fab.insertAdjacentHTML('beforebegin', `<div class="nav-brand">${brand()}</div>${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}`);
-  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}${coachOn() ? `<button class="nav-i nav-desk nav-coach${on('coach') ? ' on' : ''}" data-act="nav" data-v="coach">${ICON.coach}${roll('Coach')}</button>` : ''}<button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs">${ICON.prefs}${roll('Settings')}</button>`);
+  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}${coachOn() ? `<button class="nav-i nav-desk nav-coach${on('coach') ? ' on' : ''}" data-act="nav" data-v="coach">${ICON.coach}${roll('Coach')}</button>` : ''}<button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs" aria-label="Settings"${on('prefs') ? ' aria-current="page"' : ''}>${ICON.prefs}${roll('Settings')}</button>`);
 }
 function pageTop(title, extra = '', logo = false) {
   return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div>${extra ? `<div class="hx">${extra}</div>` : ''}</header>`;
@@ -3665,7 +3671,8 @@ function boot() {
   /* reminders were removed in 0.1.7: a phone that had signed up for them stops listening */
   navigator.serviceWorker?.getRegistration?.().then(r => r && r.pushManager && r.pushManager.getSubscription()).then(sub => sub && sub.unsubscribe()).catch(() => {});
   document.body.insertAdjacentHTML('beforeend', '<div id="net" role="status" hidden></div>');
-  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (themePref() === 'auto') render(false); });
+  markDark();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { markDark(); if (themePref() === 'auto') render(false); });
   history.replaceState({ d: 0 }, '', location.pathname + location.search + location.hash);
   lockAppZoom();
   /* pulling past the top or bottom stretches the page and springs back, as on iOS */

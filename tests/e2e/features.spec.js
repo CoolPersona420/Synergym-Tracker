@@ -48,12 +48,18 @@ test('the user guide opens from Settings and switches between phone and desktop'
   await expect(page.locator('.tour')).toBeVisible();
 });
 
-test('phone: floating dock, and the session button animates away on Settings', async ({ page }, info) => {
+test('phone: a compact icon dock with the session button beside it; on Settings the button goes and the dock spreads', async ({ page }, info) => {
   phoneOnly(info);
   const fake = new FakeSupabase(benchHistory());
   await login(page, fake, 'A');
-  const nav = await page.locator('#nav').evaluate(n => { const c = getComputedStyle(n); return { left: c.left, radius: parseFloat(c.borderTopLeftRadius), bottom: n.getBoundingClientRect().bottom, vh: innerHeight }; });
-  expect(nav.left).toBe('10px'); expect(nav.radius).toBeGreaterThan(20); expect(nav.vh - nav.bottom).toBeGreaterThanOrEqual(10);
+  await page.waitForTimeout(700);
+  const geo = () => page.evaluate(() => { const n = document.querySelector('#nav'), r = n.getBoundingClientRect(), f = n.querySelector('.nav-train .ring').getBoundingClientRect(), g = n.querySelector('.nav-glow').getBoundingClientRect(), on = n.querySelector('.nav-i.on').getBoundingClientRect();
+    return { left: r.left, right: innerWidth - r.right, dockRight: r.right, radius: parseFloat(getComputedStyle(n).borderTopLeftRadius), bottom: innerHeight - r.bottom, fabLeft: f.left, fabMid: f.top + f.height / 2, mid: r.top + r.height / 2, glow: g.left + g.width / 2, onMid: on.left + on.width / 2, label: getComputedStyle(n.querySelector('.nav-i .roll')).width }; });
+  const home = await geo();
+  /* centred as a group, a pill, floating; the button sits just right of it, level with it; names hidden */
+  expect(home.left).toBeGreaterThan(10); expect(home.radius).toBeGreaterThan(20); expect(home.bottom).toBeGreaterThanOrEqual(10);
+  expect(home.fabLeft).toBeGreaterThan(home.dockRight); expect(Math.abs(home.fabMid - home.mid)).toBeLessThan(2);
+  expect(Math.abs(home.glow - home.onMid)).toBeLessThan(2); expect(home.label).toBe('1px');
   await page.locator('.nav-train').evaluate(el => { el.dataset.mark = 'same'; });
   await page.click('#nav [data-act="nav"][data-v="prefs"]');
   const mid = await page.waitForFunction(() => { const o = +getComputedStyle(document.querySelector('.nav-train')).opacity; return o > 0 && o < 1 ? o : null; }, null, { timeout: 2000 }).then(h => h.jsonValue(), () => null);
@@ -62,9 +68,13 @@ test('phone: floating dock, and the session button animates away on Settings', a
   expect(after.mark).toBe('same');
   expect(after.op).toBe('0'); expect(after.vis).toBe('hidden');
   expect(mid).not.toBeNull();
+  /* on Settings the dock spreads to the full width, and the raised circle follows the tab */
+  const prefs = await geo();
+  expect(prefs.left).toBe(10); expect(prefs.right).toBe(10); expect(Math.abs(prefs.glow - prefs.onMid)).toBeLessThan(2);
   await page.click('#nav [data-act="nav"][data-v="today"]');
   await page.waitForTimeout(700);
   expect(await page.locator('.nav-train').evaluate(el => getComputedStyle(el).opacity)).toBe('1');
+  expect((await geo()).left).toBeGreaterThan(10);
 });
 
 test('phone: Home widgets are all the same size and fill down to the dock and its floating button', async ({ page }, info) => {

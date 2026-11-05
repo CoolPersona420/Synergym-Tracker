@@ -10,6 +10,21 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.28-alpha · 5 November 2026
+
+**A new dock on phones**
+
+- The dock is now a compact pill of icons (Home, Splits, Exercises, History, Settings) with the round **+**
+  beside it, level with it, instead of a full-width bar of labelled tabs with the + floating above. The names
+  are gone from view but still read out by screen readers.
+- The tab you're on sits in a soft raised circle (white on grey in light themes, a lighter tone in dark ones)
+  that glides to the next tab when you switch. Tabs dip slightly when pressed.
+- On **Settings**, which has no + button, the + shrinks into the dock as the dock spreads across the full width,
+  and comes back when you leave.
+- Home's widgets now fill down to the dock itself, since the + no longer floats above it.
+
+---
+
 ## 0.1.27-alpha · 4 November 2026
 
 **Theme picker spacing**
