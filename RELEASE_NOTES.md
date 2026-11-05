@@ -10,6 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.29-alpha · 5 November 2026
+
+**Polish from a full check across every theme**
+
+- Checked every theme (Auto in light and dark, and all twelve named ones) on Home, History with a row swiped open,
+  a session with a lift and a run, the exercise picker, Settings, and the Logbook's hold, reveal and close,
+  plus the computer's sidebar: no errors anywhere, and the layouts hold.
+- **Fixed:** right after switching theme in Settings, the dock kept the previous theme's light or dark tones
+  until the app was reopened. It now changes with the theme.
+- **Clearer dock icons in light themes:** the icons of the tabs you're not on were a pale grey on the grey dock;
+  they're a little darker now (comfortably readable in Mono Light, Solarized Light, Gruvbox Light and Sage).
+
+---
+
 ## 0.1.28-alpha · 5 November 2026
 
 **A new dock on phones**

@@ -19,12 +19,13 @@ export const THEMES = [
 ];
 export const themePref = () => document.documentElement.dataset.theme || 'auto';
 export const isDark = () => { const t = THEMES.find(x => x.id === themePref()); return t && t.dark != null ? t.dark : matchMedia('(prefers-color-scheme: dark)').matches; };
-/* html.is-dark: the theme in use is dark (Auto follows the device) */
-export const markDark = () => document.documentElement.classList.toggle('is-dark', isDark());
+/* html.is-dark: the theme in use is dark (Auto follows the device). Given the theme being applied, it doesn't
+   depend on the saved choice, which is written after */
+export const markDark = (id = themePref()) => { const t = THEMES.find(x => x.id === id); document.documentElement.classList.toggle('is-dark', t && t.dark != null ? t.dark : matchMedia('(prefers-color-scheme: dark)').matches); };
 export function applyTheme(t) {
   if (!THEMES.some(x => x.id === t)) t = 'auto';
   if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
-  markDark();
+  markDark(t);
   try { t === 'auto' ? localStorage.removeItem('sg-theme') : localStorage.setItem('sg-theme', t); } catch {}
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   for (const m of $$('meta[name="theme-color"]')) m.content = bg || (isDark() ? '#050505' : '#EDEDED');

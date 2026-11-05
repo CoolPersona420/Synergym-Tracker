@@ -1691,6 +1691,8 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   .nav-i svg{width:23px;height:23px;padding:0;background:none!important;animation:none!important}
   .nav-i.on{color:var(--ink)}
   .nav-i.on svg{stroke-width:2.25}
+  /* idle icons: a touch darker in light themes, where the muted grey on the grey dock was under 3:1 */
+  :root:not(.is-dark) .nav-i:not(.on){color:color-mix(in srgb,var(--muted) 68%,var(--ink))}
   .nav-glow{display:block;position:absolute;z-index:0;top:6px;bottom:6px;width:3rem;border-radius:999px;background:var(--dock-on);
     left:calc(6px + (var(--ni,0) + .5) * (100% - 12px) / 5 - 1.5rem);
     box-shadow:0 .25rem .75rem rgba(0,0,0,.1),inset 0 0 0 1px color-mix(in srgb,var(--ink) 6%,transparent);

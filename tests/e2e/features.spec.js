@@ -213,3 +213,13 @@ test('tapping the Home quote deals another: each quote once before any repeats, 
   await expect(page.locator('[data-act="rest-undo"]')).toBeVisible();
   expect((await now())[0]).toBe(kept);
 });
+
+test('switching theme updates the dock at once: the dark marker follows the theme just chosen', async ({ page }, info) => {
+  phoneOnly(info);
+  await login(page, new FakeSupabase(benchHistory()), 'A');
+  await page.goto('/settings'); await page.waitForTimeout(600);
+  const dark = () => page.evaluate(() => document.documentElement.classList.contains('is-dark'));
+  await page.click('[data-act="d-theme"][data-t="volt"]'); await expect.poll(dark).toBe(true);
+  await page.click('[data-act="d-theme"][data-t="light"]'); await expect.poll(dark).toBe(false);
+  await page.click('[data-act="d-theme"][data-t="nord"]'); await expect.poll(dark).toBe(true);
+});
