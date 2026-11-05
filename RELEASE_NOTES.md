@@ -10,6 +10,16 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.30-alpha · 5 November 2026
+
+**The dock on Settings stretches into the +'s place**
+
+- On **Settings** the dock no longer jumps to the full width of the screen. Its left edge stays where it is and
+  only its right end slides over as the **+** shrinks away, so the dock is exactly as long as the dock and the +
+  were together. Leaving Settings brings the + back the same way.
+
+---
+
 ## 0.1.29-alpha · 5 November 2026
 
 **Polish from a full check across every theme**

@@ -1676,7 +1676,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 
 /* ---------- phone dock: icons only, in a compact pill with the session button beside it, level with it. A soft
    raised circle glides to the tab you're on. On Settings, which has no session button, the button sinks into the
-   dock and the dock spreads to the full width. Tab names stay for screen readers. ---------- */
+   dock and the dock stretches into its place. Tab names stay for screen readers. ---------- */
 .nav-glow{display:none}
 :root{--dock:color-mix(in srgb,var(--surface-2) 86%,transparent);--dock-on:var(--surface)}
 :root.is-dark{--dock:color-mix(in srgb,var(--surface) 86%,transparent);--dock-on:color-mix(in srgb,var(--ink) 15%,var(--surface))}
@@ -1684,7 +1684,9 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   .nav{--dw:17rem;--fw:3.75rem;--fg:10px;--side:max(10px,calc(50% - (var(--dw) + var(--fg) + var(--fw)) / 2));
     left:var(--side);right:calc(var(--side) + var(--fw) + var(--fg));height:var(--fw);padding:6px;gap:0;justify-content:stretch;border-radius:999px;background:var(--dock);
     transition:left .55s var(--ease),right .55s var(--ease),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
-  body.on-prefs .nav{left:10px;right:10px}
+  /* on Settings the left edge stays put and the right end slides over to take the +'s place: the dock is as long
+     as the dock and the + were together */
+  body.on-prefs .nav{right:var(--side)}
   .nav-i{position:relative;z-index:1;flex:1 1 0;min-width:0;height:100%;padding:0;gap:0;display:grid;place-items:center;border-radius:999px;color:var(--muted);transition:color .3s,transform .2s var(--ease)}
   .nav-i:active{transform:scale(.88)}
   .nav-i .roll{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -1701,8 +1703,8 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   /* the session button: beside the dock, the same height, centred on it */
   .nav-train{left:calc(100% + var(--fg));right:auto;top:50%;bottom:auto;transform:translateY(-50%)}
   .nav-train .ring{width:var(--fw);height:var(--fw);box-shadow:0 .5rem 1.3rem rgba(0,0,0,.26)}
-  /* gone on Settings: it shrinks into the right end of the dock as the dock spreads under it */
-  body.on-prefs .nav-train,body.in-full .nav-train{transform:translate(-64px,-50%) scale(.25)}
+  /* gone on Settings: it shrinks into the dock's right end as the dock stretches into its place */
+  body.on-prefs .nav-train,body.in-full .nav-train{transform:translate(-48px,-50%) scale(.3)}
   /* its first-run hint floats above it now that the dock sits to its left */
   .nav-train .nl{right:0;top:auto;bottom:calc(100% + 12px);transform:translateY(8px)}
   body.fab-hint .nav-train .nl{transform:none}
