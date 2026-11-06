@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.33, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.34, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.33-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.34-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -57,7 +57,9 @@ The version lives in `package.json` (`0.1.33-alpha`) and shows in Settings › A
 - **Editing or deleting a session:** swipe its row left in History or the Logbook for Edit and Delete (both beside
   the row on hover on a computer). Delete is also in any session's ⋯ menu; a live session has **Discard session** under its notes. It always
   asks first.
-- **Themes:** Auto (follows the device) plus eleven named palettes.
+- **Themes:** Auto (follows the device) plus eleven named palettes. Every theme has the same glass finish:
+  light catches the top edge of cards, the dock and the + button, and pools softly up from the bottom of cards.
+  Only light is added, so each theme keeps its own colours.
 - **Week start:** weeks start on Monday, Sunday or Saturday (**Settings › Training**), for the weekly
   target, streaks, charts and the today panel.
 - **Phone app:** install it to the Home Screen. It opens without a connection, has a floating icon dock you can tap or drag along (the + session button beside it; on Settings the dock stretches into the +'s place) and a
@@ -82,7 +84,8 @@ progression, more set types, warm-ups, muscle balance and more.
   Splits are shared only through checked database functions. Strict security headers (CSP, HSTS, no
   framing) come from `vercel.json`.
 - **Look:** spacing, type sizes and two-column splits follow the golden ratio (φ = 1.618); the scale and
-  theme tokens are at the top of `src/style.css`. The wolf mascot is the logo, the splash and the app icon
+  theme tokens are at the top of `src/style.css`, and the glass finish (its own tokens, light only) at the end.
+  The wolf mascot is the logo, the splash and the app icon
   (`public/icon.svg` and the PNG icons). The wordmark is Teko Bold, slanted 12°.
 
 ## Deploy (about 10 minutes)

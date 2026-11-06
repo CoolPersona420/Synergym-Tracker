@@ -10,6 +10,19 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.34-alpha · 6 November 2026
+
+**A glass finish, in every theme**
+
+- **Light on the edges:** cards, exercise cards in a session and split cards now catch a rim of light along
+  their top edge, with a soft sheen under it and a little light pooling up from the bottom, like a glass card.
+- **The dock and the + too:** the dock, the highlight on the tab you're on and the + button get the same lit top
+  edge; the + also has a gentle gloss.
+- **Your colours stay yours:** only light is added (white on dark themes, a faint shade on light ones), so every
+  theme keeps its colours, and nothing moves or changes size.
+
+---
+
 ## 0.1.33-alpha · 6 November 2026
 
 **Drag along the dock, and a calmer + on Settings**
