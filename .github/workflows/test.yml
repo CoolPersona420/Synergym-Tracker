@@ -11,7 +11,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-24.04  # Playwright 1.56 installs its browser deps on 24.04; "latest" moved to 26
-    timeout-minutes: 20
+    # the browser suite takes ~13 min; installing the browser's system packages is usually 1-2 min but has taken
+    # 10 on a slow mirror day, so leave room for both
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -22,6 +24,7 @@ jobs:
       - name: Lint and unit tests
         run: npm run lint && npm test
       - name: Install the browser
+        timeout-minutes: 20
         run: npx playwright install --with-deps chromium
       - name: Browser tests (Supabase is faked, no secrets needed)
         run: npm run e2e
