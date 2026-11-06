@@ -1691,33 +1691,40 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 /* ---------- phone dock: icons only, in a compact pill with the session button beside it, level with it. A soft
    raised circle glides to the tab you're on. On Settings, which has no session button, the button sinks into the
    dock and the dock stretches into its place. Tab names stay for screen readers. ---------- */
-.nav-glow{display:none}
-/* the dock's moving parts: --pr the room kept for the + (the pill's end, the tabs' spread and the highlight all
-   follow it), --nif the highlight's place among the tabs (fractional while you drag) */
-@property --pr{syntax:'<length>';inherits:true;initial-value:0px}
-@property --nif{syntax:'<number>';inherits:true;initial-value:0}
+.nav-glow,.nav-end{display:none}
 :root{--dock:color-mix(in srgb,var(--surface-2) 86%,transparent);--dock-on:var(--surface)}
 :root.is-dark{--dock:color-mix(in srgb,var(--surface) 86%,transparent);--dock-on:color-mix(in srgb,var(--ink) 15%,var(--surface))}
 @media (max-width:47.99rem){
   /* The dock's box always spans the pill and the button, and never changes size: a page change snapshots the dock
-     and would stretch that picture to a new size, squeezing everything in it. The pill you see is drawn by ::before;
-     on Settings only the pill stretches into the button's place (--pr: the room kept for the button), the tabs
-     spread with it, and the button shrinks where it stands. */
-  .nav{--dw:17rem;--fw:3.75rem;--fg:10px;--xr:calc(var(--fw) + var(--fg));--pr:var(--xr);--nif:var(--ni,0);--side:max(10px,calc(50% - (var(--dw) + var(--xr)) / 2));
-    left:var(--side);right:var(--side);height:var(--fw);padding:6px calc(6px + var(--pr)) 6px 6px;gap:0;justify-content:stretch;
+     and would stretch that picture to a new size, squeezing everything in it. Everything that moves when the dock
+     stretches on Settings moves by transform, which phones run smoothly at their full frame rate even while the
+     page changes: the pill's right end (.nav-end) slides out from under it, the tabs glide apart, the highlight
+     goes with its tab, and the + minimizes where it stands. --sp is how much each tab's slot widens, --tail where
+     the pill's end sits, --st the timing of the stretch (back from Settings, at once). Its sides are whole pixels,
+     so the pill's two parts meet on a pixel's edge and the join can't show. */
+  .nav{--dw:17rem;--fw:3.75rem;--fg:10px;--xr:calc(var(--fw) + var(--fg));--sp:0px;--tail:calc(-1 * var(--xr));--st:.55s cubic-bezier(.4,0,.2,1);
+    --nif:var(--ni,0);--side:round(down,max(10px,calc(50% - (var(--dw) + var(--xr)) / 2)),1px);
+    left:var(--side);right:var(--side);height:var(--fw);padding:6px calc(6px + var(--xr)) 6px 6px;gap:0;justify-content:stretch;container-type:inline-size;
     border-radius:0;background:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;touch-action:none;
-    /* back from Settings the pill shrinks first, then the + grows into the space (its own delay, below) */
-    transition:--pr .55s cubic-bezier(.4,0,.2,1),--nif .55s var(--ease),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
-  .nav::before{content:"";position:absolute;z-index:0;left:0;top:0;bottom:0;right:var(--pr);border-radius:999px;background:var(--dock);
-    -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
-    box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent);
-  }
-  /* to Settings the + minimizes first; only then does the pill stretch into its place */
-  body.on-prefs .nav{--pr:0px;transition:--pr .6s cubic-bezier(.4,0,.2,1) .42s,--nif .55s var(--ease),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
+    transition:transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
+  /* to Settings the + minimizes first; only then (0.42 s) does the pill stretch into its place */
+  body.on-prefs .nav{--sp:calc(var(--xr) / 5);--tail:0px;--st:.6s cubic-bezier(.4,0,.2,1) .42s}
+  /* the pill: its left part is drawn here and never moves; it is cut where its right end (.nav-end) takes over */
+  .nav::before,.nav-end > i{background:var(--dock);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
+    box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent)}
+  .nav::before{content:"";position:absolute;z-index:0;left:0;top:0;bottom:0;width:calc(100% - var(--xr) - var(--fw) / 2 + 2px);border-radius:999px 0 0 999px;
+    clip-path:inset(-3rem 2px -3rem -3rem)}
+  /* the pill's right end: a window from that cut to past the button (room for the shadow), and in it the end,
+     which sits under the pill's left part and slides out into the button's place on Settings */
+  .nav-end{display:block;position:absolute;left:calc(100% - var(--xr) - var(--fw) / 2);right:-3rem;top:-3rem;bottom:-3rem;overflow:hidden;pointer-events:none}
+  .nav-end > i{position:absolute;top:3rem;bottom:3rem;right:3rem;width:calc(var(--xr) + var(--fw) / 2 + 2px);border-radius:0 999px 999px 0;
+    translate:var(--tail) 0;transition:translate var(--st)}
   /* Ocean's surfaces are see-through, and lite devices have no blur: the pill is painted solid */
   :root[data-theme="ocean"] .nav,html.lite .nav{background:none}
-  :root[data-theme="ocean"] .nav::before,html.lite .nav::before{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
-  .nav-i{position:relative;z-index:1;flex:1 1 0;min-width:0;height:100%;padding:0;gap:0;display:grid;place-items:center;border-radius:999px;color:var(--muted);transition:color .3s,transform .2s var(--ease)}
+  :root[data-theme="ocean"] .nav::before,:root[data-theme="ocean"] .nav-end > i,html.lite .nav::before,html.lite .nav-end > i{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
+  .nav-i{position:relative;z-index:1;flex:1 1 0;min-width:0;height:100%;padding:0;gap:0;display:grid;place-items:center;border-radius:999px;color:var(--muted);
+    translate:calc((var(--i) + .5) * var(--sp)) 0;transition:translate var(--st),color .3s,transform .2s var(--ease)}
+  .nav-i[data-v="today"]{--i:0}.nav-i[data-v="splits"]{--i:1}.nav-i[data-v="exercises"]{--i:2}.nav-i[data-v="history"]{--i:3}.nav-i[data-v="prefs"]{--i:4}
   .nav-i:active{transform:scale(.88)}
   .nav-i .roll{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .nav-i svg{width:23px;height:23px;padding:0;background:none!important;animation:none!important}
@@ -1725,14 +1732,16 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   .nav-i.on svg{stroke-width:2.25}
   /* idle icons: a touch darker in light themes, where the muted grey on the grey dock was under 3:1 */
   :root:not(.is-dark) .nav-i:not(.on){color:color-mix(in srgb,var(--muted) 68%,var(--ink))}
+  /* the highlight: --nif is its tab (fractional while dragging). It glides between tabs (translate: a fifth of the
+     tabs' row, 20cqw, per tab), and on Settings rides out with its tab as the slots widen (transform) */
   .nav-glow{display:block;position:absolute;z-index:0;top:6px;bottom:6px;width:3rem;border-radius:999px;background:var(--dock-on);
-    left:calc(6px + (var(--nif) + .5) * (100% - 12px - var(--pr)) / 5 - 1.5rem);
+    left:calc(6px + 10cqw - 1.5rem);translate:calc(var(--nif) * 20cqw) 0;transform:translateX(calc((var(--nif) + .5) * var(--sp)));
     box-shadow:0 .25rem .75rem rgba(0,0,0,.1),inset 0 0 0 1px color-mix(in srgb,var(--ink) 6%,transparent);
-    transition:opacity .25s,transform .22s var(--ease),box-shadow .22s}
+    transition:translate .55s var(--ease),transform var(--st),opacity .25s,scale .22s var(--ease),box-shadow .22s}
   .nav:not([data-ni]):not(.drag) .nav-glow{opacity:0}
   /* dragging along the dock, as on iPhone: the circle lifts and follows the finger, the tab under it lights up */
-  .nav.drag,body.on-prefs .nav.drag{transition:--pr .55s cubic-bezier(.4,0,.2,1),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
-  .nav.drag .nav-glow{opacity:1;transform:scale(1.14);box-shadow:0 .55rem 1.3rem rgba(0,0,0,.2),inset 0 0 0 1px color-mix(in srgb,var(--ink) 9%,transparent)}
+  .nav.drag .nav-glow{opacity:1;scale:1.14;box-shadow:0 .55rem 1.3rem rgba(0,0,0,.2),inset 0 0 0 1px color-mix(in srgb,var(--ink) 9%,transparent);
+    transition:opacity .25s,scale .22s var(--ease),box-shadow .22s}
   .nav.drag .nav-i{transform:none}
   .nav.drag .nav-i.on:not(.hot){color:color-mix(in srgb,var(--muted) 68%,var(--ink))}
   .nav.drag .nav-i.hot{color:var(--ink)}
@@ -1754,7 +1763,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   body.fab-hint .nav-train .nl{transform:none}
 }
 @media (max-width:47.99rem) and (hover:hover){.nav-train:hover .nl{transform:none}}
-@media (prefers-reduced-motion:reduce){.nav-glow,.nav-i,.nav-train,body.on-prefs .nav-train,body.in-full .nav-train,.nav-train .ring .ico{transition:none}}
+@media (prefers-reduced-motion:reduce){.nav-glow,.nav-i,.nav-end > i,.nav-train,body.on-prefs .nav-train,body.in-full .nav-train,.nav-train .ring .ico{transition:none}}
 
 /* ---------- phone Home: every widget the same size, filling the space to the dock ---------- */
 @media (max-width:47.99rem){

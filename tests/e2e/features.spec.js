@@ -54,20 +54,23 @@ test('phone: a compact icon dock with the session button beside it; on Settings 
   await login(page, fake, 'A');
   await page.waitForTimeout(700);
   const geo = () => page.evaluate(() => { const n = document.querySelector('#nav'), r = n.getBoundingClientRect(), f = n.querySelector('.nav-train .ring').getBoundingClientRect(), g = n.querySelector('.nav-glow').getBoundingClientRect(), on = n.querySelector('.nav-i.on').getBoundingClientRect();
-    /* the pill is the dock's ::before: the box keeps room for the button on its right */
-    const pill = parseFloat(getComputedStyle(n, '::before').right) || 0;
-    return { left: r.left, right: innerWidth - r.right, dockRight: r.right - pill, fabRight: f.right, radius: parseFloat(getComputedStyle(n, '::before').borderTopLeftRadius), bottom: innerHeight - r.bottom, fabLeft: f.left, fabMid: f.top + f.height / 2, mid: r.top + r.height / 2, glow: g.left + g.width / 2, onMid: on.left + on.width / 2, label: getComputedStyle(n.querySelector('.nav-i .roll')).width }; });
+    /* the pill is the dock's ::before and its right end (.nav-end), which slides out on Settings */
+    const end = n.querySelector('.nav-end > i').getBoundingClientRect();
+    return { left: r.left, right: innerWidth - r.right, dockRight: end.right, fabRight: f.right, radius: parseFloat(getComputedStyle(n, '::before').borderTopLeftRadius), bottom: innerHeight - r.bottom, fabLeft: f.left, fabMid: f.top + f.height / 2, mid: r.top + r.height / 2, glow: g.left + g.width / 2, onMid: on.left + on.width / 2, label: getComputedStyle(n.querySelector('.nav-i .roll')).width }; });
   const home = await geo();
   /* centred as a group, a pill, floating; the button sits just right of it, level with it; names hidden */
   expect(home.left).toBeGreaterThan(10); expect(home.radius).toBeGreaterThan(20); expect(home.bottom).toBeGreaterThanOrEqual(10);
   expect(home.fabLeft).toBeGreaterThan(home.dockRight); expect(Math.abs(home.fabMid - home.mid)).toBeLessThan(2);
   expect(Math.abs(home.glow - home.onMid)).toBeLessThan(2); expect(home.label).toBe('1px');
   await page.locator('.nav-train').evaluate(el => { el.dataset.mark = 'same'; });
+  /* the tabs are the same buttons on every page, so they can glide apart */
+  await page.locator('#nav [data-v="history"]').evaluate(el => { el.dataset.mark = 'kept'; });
   await page.click('#nav [data-act="nav"][data-v="prefs"]');
   const mid = await page.waitForFunction(() => { const o = +getComputedStyle(document.querySelector('.nav-train')).opacity; return o > 0 && o < 1 ? o : null; }, null, { timeout: 2000 }).then(h => h.jsonValue(), () => null);
   await page.waitForTimeout(1300);
   const after = await page.locator('.nav-train').evaluate(el => ({ mark: el.dataset.mark, op: getComputedStyle(el).opacity, vis: getComputedStyle(el).visibility }));
   expect(after.mark).toBe('same');
+  expect(await page.locator('#nav [data-v="history"]').getAttribute('data-mark')).toBe('kept');
   expect(after.op).toBe('0'); expect(after.vis).toBe('hidden');
   expect(mid).not.toBeNull();
   /* on Settings the left edge stays and the right end takes the +'s place; the raised circle follows the tab */
@@ -135,9 +138,11 @@ test('in the Ocean theme the phone dock is solid, not see-through', async ({ pag
   test.skip(info.project.name !== 'phone', 'phone only');
   await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'ocean' } }), 'A');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'ocean');
-  const bg = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('#nav'), '::before'); return { color: c.backgroundColor, image: c.backgroundImage }; });
-  expect(bg.color).toBe('rgb(5, 41, 76)');
-  expect(bg.image).toContain('linear-gradient');
+  for (const part of ['::before', '.nav-end > i']) {
+    const bg = await page.evaluate(part => { const c = part[0] === ':' ? getComputedStyle(document.querySelector('#nav'), part) : getComputedStyle(document.querySelector('#nav ' + part)); return { color: c.backgroundColor, image: c.backgroundImage }; }, part);
+    expect(bg.color).toBe('rgb(5, 41, 76)');
+    expect(bg.image).toContain('linear-gradient');
+  }
 });
 
 test('every theme paints its page background on one fixed layer, so the safe areas and scroll bounce match it', async ({ page }) => {
@@ -231,19 +236,26 @@ test('phone: the + minimizes before the dock stretches; back, the dock shrinks b
   phoneOnly(info);
   await login(page, new FakeSupabase(benchHistory()), 'A');
   await page.waitForTimeout(800);
-  /* sample the + (scale) and the pill's end (its room for the +) every frame across the switch */
+  /* sample the + (scale) and the pill's end (its room for the +) every frame across the switch, and what is
+     animating: everything that moves goes by transform, which phones run smoothly even when the page is busy */
   const sample = () => page.evaluate(async () => {
-    const n = document.querySelector('#nav'), f = n.querySelector('.nav-train'), out = [], t0 = performance.now();
-    await new Promise(r => { const step = () => { const m = new DOMMatrix(getComputedStyle(f).transform); out.push({ t: performance.now() - t0, s: Math.hypot(m.a, m.b), pr: parseFloat(getComputedStyle(n, '::before').right) }); if (performance.now() - t0 < 1500) requestAnimationFrame(step); else r(); }; requestAnimationFrame(step); });
-    return out;
+    const n = document.querySelector('#nav'), f = n.querySelector('.nav-train'), end = n.querySelector('.nav-end > i'), out = [], t0 = performance.now(), props = new Set();
+    await new Promise(r => { const step = () => {
+      const m = new DOMMatrix(getComputedStyle(f).transform);
+      out.push({ t: performance.now() - t0, s: Math.hypot(m.a, m.b), pr: n.getBoundingClientRect().right - end.getBoundingClientRect().right });
+      for (const a of n.getAnimations({ subtree: true })) props.add(a.transitionProperty || a.animationName);
+      if (performance.now() - t0 < 1500) requestAnimationFrame(step); else r(); }; requestAnimationFrame(step); });
+    return { out, props: [...props] };
   });
   const going = page.evaluate(() => new Promise(r => setTimeout(r, 30))).then(() => page.click('#nav [data-v="prefs"]'));
-  const out = await sample(); await going;
+  const { out, props } = await sample(); await going;
+  expect(props.length).toBeGreaterThan(0);
+  for (const p of props) expect(['transform', 'translate', 'opacity', 'visibility', 'color', 'scale', 'box-shadow']).toContain(p);
   /* the pill hasn't moved while the + is still more than half its size */
   for (const x of out) if (x.s > 0.5) expect(x.pr).toBeGreaterThan(65);
   expect(out[out.length - 1].pr).toBeLessThan(1);
   const back = page.evaluate(() => new Promise(r => setTimeout(r, 30))).then(() => page.click('#nav [data-v="today"]'));
-  const ret = await sample(); await back;
+  const ret = (await sample()).out; await back;
   /* the + only grows once the pill has made its room again */
   for (const x of ret) if (x.s > 0.3) expect(x.pr).toBeGreaterThan(60);
   expect(ret[ret.length - 1].s).toBeGreaterThan(0.95);

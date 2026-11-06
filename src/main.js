@@ -779,7 +779,7 @@ let navKey = null;
 function renderNav() {
   const a = activeSession(), on = v => S.view === v || (v === 'exercises' && S.view === 'exercise') || (v === 'splits' && (S.view === 'split' || S.view === 'shared')) || (v === 'prefs' && S.view === 'guide');
   const key = ['today', 'splits', 'exercises', 'history', 'coach', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
-  const it = (v, l, i) => `<button class="nav-i${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}" aria-label="${l}"${on(v) ? ' aria-current="page"' : ''}>${i}${roll(l)}</button>`;
+  const it = (v, l, i, x = '') => `<button class="nav-i${x}${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}" aria-label="${l}"${on(v) ? ' aria-current="page"' : ''}>${i}${roll(l)}</button>`;
   /* the session button is kept across renders (only its contents change), so hiding and showing it can animate */
   const nav = $('#nav'); let fab = nav.querySelector(':scope > .nav-train');
   if (!fab) {
@@ -793,7 +793,17 @@ function renderNav() {
   if (!glow) { glow = document.createElement('i'); glow.className = 'nav-glow'; glow.setAttribute('aria-hidden', 'true'); nav.prepend(glow); }
   const ni = ['today', 'splits', 'exercises', 'history', 'prefs'].indexOf(key);
   if (ni >= 0) { nav.style.setProperty('--ni', ni); nav.dataset.ni = ni; } else delete nav.dataset.ni;
-  for (const c of [...nav.children]) if (c !== fab && c !== glow) c.remove();
+  /* the pill's right end, which slides out on Settings (style.css): kept, like the highlight */
+  let end = nav.querySelector(':scope > .nav-end');
+  if (!end) { end = document.createElement('i'); end.className = 'nav-end'; end.setAttribute('aria-hidden', 'true'); end.innerHTML = '<i></i>'; nav.prepend(end); }
+  /* the tabs are kept too, so they can glide when the dock stretches; only which one is on changes */
+  const sig = coachOn() ? 'coach' : '-', tabs = [...nav.querySelectorAll(':scope > .nav-i')];
+  if (nav.dataset.sig === sig && tabs.length) {
+    for (const b of tabs) {
+      const o = on(b.dataset.v); b.classList.toggle('on', o); b.classList.toggle('pop', o && pop);
+      if (o) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    }
+  } else { buildTabs(nav, fab, glow, end, it); nav.dataset.sig = sig; }
   /* on a rest day it shows a moon and stars; tapping it still asks to undo the rest day before anything starts */
   const rest = !a && S.loaded && isRestToday(), mode = a ? 'live:' + a.id : rest ? 'rest' : 'idle';
   if (fab.dataset.mode !== mode) {
@@ -802,8 +812,11 @@ function renderNav() {
     fab.setAttribute('aria-label', a ? 'Resume session' : rest ? 'Rest day: undo it to start a session' : 'Start session');
     fab.innerHTML = `<span class="ring">${a ? ICON.play : rest ? ICON.rest : ICON.plus}</span><span class="nl">${roll(a ? 'Resume session' : rest ? 'Rest day' : 'Start session')}</span>`;
   }
+}
+function buildTabs(nav, fab, glow, end, it) {
+  for (const c of [...nav.children]) if (c !== fab && c !== glow && c !== end) c.remove();
   fab.insertAdjacentHTML('beforebegin', `<div class="nav-brand">${brand()}</div>${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}`);
-  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}${coachOn() ? `<button class="nav-i nav-desk nav-coach${on('coach') ? ' on' : ''}" data-act="nav" data-v="coach">${ICON.coach}${roll('Coach')}</button>` : ''}<button class="nav-i nav-desk${on('prefs') ? ' on' : ''}" data-act="nav" data-v="prefs" aria-label="Settings"${on('prefs') ? ' aria-current="page"' : ''}>${ICON.prefs}${roll('Settings')}</button>`);
+  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}${coachOn() ? it('coach', 'Coach', ICON.coach, ' nav-desk nav-coach') : ''}${it('prefs', 'Settings', ICON.prefs, ' nav-desk')}`);
 }
 function pageTop(title, extra = '', logo = false) {
   return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div>${extra ? `<div class="hx">${extra}</div>` : ''}</header>`;

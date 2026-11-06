@@ -10,6 +10,19 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.34-alpha · 6 November 2026
+
+**A smooth dock, even when the phone is busy**
+
+- **No more stutter going to Settings and back:** the dock's stretch and the highlight used to be drawn by the
+  page itself, so whenever the phone was busy (drawing the new page as it slides in) they froze for a moment and
+  jumped. Now every moving part of the dock (the pill's end, the tabs, the highlight and the +) moves by
+  transform, which phones run smoothly at their full frame rate, up to 120 fps, whatever the page is doing.
+- **Same look, same timing:** the + still minimizes first and the dock then stretches into its place; back, the
+  dock shrinks and the + grows in. Nothing about how it looks has changed.
+
+---
+
 ## 0.1.33-alpha · 6 November 2026
 
 **Drag along the dock, and a calmer + on Settings**
