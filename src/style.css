@@ -1704,16 +1704,19 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
      on Settings only the pill stretches into the button's place (--pr: the room kept for the button), the tabs
      spread with it, and the button shrinks where it stands. */
   .nav{--dw:17rem;--fw:3.75rem;--fg:10px;--xr:calc(var(--fw) + var(--fg));--pr:var(--xr);--nif:var(--ni,0);--side:max(10px,calc(50% - (var(--dw) + var(--xr)) / 2));
+    --mv:cubic-bezier(.4,0,.6,1);
     left:var(--side);right:var(--side);height:var(--fw);padding:6px calc(6px + var(--pr)) 6px 6px;gap:0;justify-content:stretch;
     border-radius:0;background:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;touch-action:none;
-    /* back from Settings the pill shrinks first, then the + grows into the space (its own delay, below) */
-    transition:--pr .55s cubic-bezier(.4,0,.2,1),--nif .55s var(--ease),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
+    /* back from Settings it all runs in reverse: the pill shrinks first, and the + grows back in as it lands (its
+       own delay, below) */
+    transition:--pr .73s var(--mv),--nif .73s var(--ease),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
   .nav::before{content:"";position:absolute;z-index:0;left:0;top:0;bottom:0;right:var(--pr);border-radius:999px;background:var(--dock);
     -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
     box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent);
   }
-  /* to Settings the + minimizes first; only then does the pill stretch into its place */
-  body.on-prefs .nav{--pr:0px;transition:--pr .6s cubic-bezier(.4,0,.2,1) .42s,--nif .55s var(--ease),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
+  /* to Settings the + minimizes first, and as it goes the pill follows it into its place: one motion, 1.07 s in
+     all (the + 0 to 0.57 s, the pill 0.34 to 1.07 s); the highlight glides to Settings and rides out with it */
+  body.on-prefs .nav{--pr:0px;transition:--pr .73s var(--mv) .34s,--nif .73s var(--ease),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
   /* Ocean's surfaces are see-through, and lite devices have no blur: the pill is painted solid */
   :root[data-theme="ocean"] .nav,html.lite .nav{background:none}
   :root[data-theme="ocean"] .nav::before,html.lite .nav::before{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
@@ -1731,24 +1734,25 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
     transition:opacity .25s,transform .22s var(--ease),box-shadow .22s}
   .nav:not([data-ni]):not(.drag) .nav-glow{opacity:0}
   /* dragging along the dock, as on iPhone: the circle lifts and follows the finger, the tab under it lights up */
-  .nav.drag,body.on-prefs .nav.drag{transition:--pr .55s cubic-bezier(.4,0,.2,1),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
+  .nav.drag,body.on-prefs .nav.drag{transition:--pr .73s var(--mv),transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
   .nav.drag .nav-glow{opacity:1;transform:scale(1.14);box-shadow:0 .55rem 1.3rem rgba(0,0,0,.2),inset 0 0 0 1px color-mix(in srgb,var(--ink) 9%,transparent)}
   .nav.drag .nav-i{transform:none}
   .nav.drag .nav-i.on:not(.hot){color:color-mix(in srgb,var(--muted) 68%,var(--ink))}
   .nav.drag .nav-i.hot{color:var(--ink)}
   /* the session button: at the right end of the dock's box, the pill's height, centred on it */
   .nav-train{left:auto;right:0;top:50%;bottom:auto;transform:translateY(-50%) scale(1);
-    transition:transform .6s cubic-bezier(.34,1.3,.5,1) .42s,opacity .14s linear .42s,visibility 0s .42s}
+    transition:transform .57s var(--mv) .5s,opacity .18s linear .5s,visibility 0s .5s}
   .nav-train .ring{width:var(--fw);height:var(--fw);box-shadow:0 .5rem 1.3rem rgba(0,0,0,.26)}
   /* gone on Settings (and under a full-screen widget), it minimizes: it shrinks and drifts a little to the right,
-     as if stepping off the end of the dock, the + turning a quarter, solid until nearly gone; then the pill
-     stretches into its place. Back on another tab the pill shrinks first and the + grows in from the right with
-     a little overshoot. */
+     as if stepping off the end of the dock, the + turning a quarter, solid until nearly gone, while the pill
+     follows it. Back on another tab it is the same film run backwards: the pill shrinks, and the + grows out of
+     its end, drifting back left and turning back, on the same curve (symmetric, so reversed it is the same), with
+     no bounce. */
   body.on-prefs .nav-train,body.in-full .nav-train{transform:translate(28px,-50%) scale(.08);opacity:0;
-    transition:transform .48s cubic-bezier(.45,0,.35,1),opacity .14s linear .34s,visibility 0s .48s}
+    transition:transform .57s var(--mv),opacity .18s linear .39s,visibility 0s .57s}
   /* one transform per rule: the CSS build folds separate scale / rotate into transform, which would skip the transition */
-  .nav-train .ring .ico{transition:transform .55s var(--ease) .42s}
-  body.on-prefs .nav-train:not(.live):not(.rest) .ring .ico{transform:rotate(90deg);transition:transform .48s cubic-bezier(.45,0,.35,1)}
+  .nav-train .ring .ico{transition:transform .57s var(--mv) .5s}
+  body.on-prefs .nav-train:not(.live):not(.rest) .ring .ico{transform:rotate(90deg);transition:transform .57s var(--mv)}
   /* its first-run hint floats above it */
   .nav-train .nl{right:0;top:auto;bottom:calc(100% + 12px);transform:translateY(8px)}
   body.fab-hint .nav-train .nl{transform:none}
