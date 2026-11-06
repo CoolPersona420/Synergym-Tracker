@@ -10,6 +10,18 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.32-alpha · 6 November 2026
+
+**The + minimizes on Settings**
+
+- Tapping **Settings** now minimizes the **+**: it shrinks into its own centre where it stands, the + turning a
+  quarter, while the dock's end slides in underneath it. Leaving Settings, it grows back out of the dock with a
+  slight bounce and turns upright again.
+- Before, the + was pushed to the right by the stretching dock and faded out, so it looked like it blinked away.
+  The dock's frame now keeps one size and only its pill stretches, so page changes never squeeze the dock either.
+
+---
+
 ## 0.1.31-alpha · 5 November 2026
 
 **Superset a set from its menu**

@@ -54,7 +54,9 @@ test('phone: a compact icon dock with the session button beside it; on Settings 
   await login(page, fake, 'A');
   await page.waitForTimeout(700);
   const geo = () => page.evaluate(() => { const n = document.querySelector('#nav'), r = n.getBoundingClientRect(), f = n.querySelector('.nav-train .ring').getBoundingClientRect(), g = n.querySelector('.nav-glow').getBoundingClientRect(), on = n.querySelector('.nav-i.on').getBoundingClientRect();
-    return { left: r.left, right: innerWidth - r.right, dockRight: r.right, fabRight: f.right, radius: parseFloat(getComputedStyle(n).borderTopLeftRadius), bottom: innerHeight - r.bottom, fabLeft: f.left, fabMid: f.top + f.height / 2, mid: r.top + r.height / 2, glow: g.left + g.width / 2, onMid: on.left + on.width / 2, label: getComputedStyle(n.querySelector('.nav-i .roll')).width }; });
+    /* the pill is the dock's ::before: the box keeps room for the button on its right */
+    const pill = parseFloat(getComputedStyle(n, '::before').right) || 0;
+    return { left: r.left, right: innerWidth - r.right, dockRight: r.right - pill, fabRight: f.right, radius: parseFloat(getComputedStyle(n, '::before').borderTopLeftRadius), bottom: innerHeight - r.bottom, fabLeft: f.left, fabMid: f.top + f.height / 2, mid: r.top + r.height / 2, glow: g.left + g.width / 2, onMid: on.left + on.width / 2, label: getComputedStyle(n.querySelector('.nav-i .roll')).width }; });
   const home = await geo();
   /* centred as a group, a pill, floating; the button sits just right of it, level with it; names hidden */
   expect(home.left).toBeGreaterThan(10); expect(home.radius).toBeGreaterThan(20); expect(home.bottom).toBeGreaterThanOrEqual(10);
@@ -133,7 +135,7 @@ test('in the Ocean theme the phone dock is solid, not see-through', async ({ pag
   test.skip(info.project.name !== 'phone', 'phone only');
   await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'ocean' } }), 'A');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'ocean');
-  const bg = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('#nav')); return { color: c.backgroundColor, image: c.backgroundImage }; });
+  const bg = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('#nav'), '::before'); return { color: c.backgroundColor, image: c.backgroundImage }; });
   expect(bg.color).toBe('rgb(5, 41, 76)');
   expect(bg.image).toContain('linear-gradient');
 });
