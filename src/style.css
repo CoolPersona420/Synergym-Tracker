@@ -1714,10 +1714,10 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
     box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent)}
   .nav::before{content:"";position:absolute;z-index:0;left:0;top:0;bottom:0;width:calc(100% - var(--xr) - var(--fw) / 2 + 2px);border-radius:999px 0 0 999px;
     clip-path:inset(-3rem 2px -3rem -3rem)}
-  /* the pill's right end: a window from that cut to past the button (room for the shadow), and in it the end,
+  /* the pill's right end: a window from that cut to the screen's edge (room for the shadow), and in it the end,
      which sits under the pill's left part and slides out into the button's place on Settings */
-  .nav-end{display:block;position:absolute;left:calc(100% - var(--xr) - var(--fw) / 2);right:-3rem;top:-3rem;bottom:-3rem;overflow:hidden;pointer-events:none}
-  .nav-end > i{position:absolute;top:3rem;bottom:3rem;right:3rem;width:calc(var(--xr) + var(--fw) / 2 + 2px);border-radius:0 999px 999px 0;
+  .nav-end{display:block;position:absolute;left:calc(100% - var(--xr) - var(--fw) / 2);right:calc(-1 * var(--side));top:-3rem;bottom:-3rem;overflow:hidden;pointer-events:none}
+  .nav-end > i{position:absolute;top:3rem;bottom:3rem;right:var(--side);width:calc(var(--xr) + var(--fw) / 2 + 2px);border-radius:0 999px 999px 0;
     translate:var(--tail) 0;transition:translate var(--st)}
   /* Ocean's surfaces are see-through, and lite devices have no blur: the pill is painted solid */
   :root[data-theme="ocean"] .nav,html.lite .nav{background:none}
