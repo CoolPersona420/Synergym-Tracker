@@ -10,6 +10,18 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.33-alpha · 6 November 2026
+
+**Drag along the dock, and a calmer + on Settings**
+
+- **Drag the dock, as on iPhone:** press on the dock and slide. The highlight lifts and follows your finger, each
+  tab lights up as you pass it with a light tick, and the tab you let go on opens. Tapping a tab still works.
+- **One thing at a time on Settings, and calmer:** the + now minimizes first (about half a second), drifting to
+  the right as it shrinks, and only then does the dock stretch gently into its place. Leaving Settings is the
+  mirror: the dock shrinks back first, then the + grows in from the right with a soft bounce.
+
+---
+
 ## 0.1.32-alpha · 6 November 2026
 
 **The + minimizes on Settings**

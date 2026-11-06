@@ -22,6 +22,7 @@ import { edgeBack } from './ui/edgeback.js';
 import { topPanel } from './ui/toppanel.js';
 import { holdReveal } from './ui/hold.js';
 import { swipeRows } from './ui/swiperow.js';
+import { dockDrag } from './ui/dockdrag.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
@@ -3713,6 +3714,7 @@ function boot() {
   /* the today panel listens first, so a pull it takes isn't also stretched by the rubber band */
   todayPanel();
   SW = swipeRows({ enabled: () => coarse.matches && S.loaded && $('#sheet').hidden, buzz, reduced });
+  dockDrag($('#nav'), { enabled: () => phoneDash() && S.loaded && $('#sheet').hidden, onPick: el => go(el.dataset.v), buzz });
   if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced, held: () => TP.dragging() });
   /* the app installed on an iPhone has no browser back: swipe in from the left edge instead */
   if (coarse.matches && isIOS() && navigator.standalone === true) edgeBack({ view: $('#view'), reduced, canBack: canSwipeBack, label: backLabel, onBack: () => { swipeNav = true; back(); }, held: () => TP.isOpen() || TP.dragging() });

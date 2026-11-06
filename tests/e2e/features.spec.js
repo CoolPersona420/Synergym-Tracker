@@ -65,7 +65,7 @@ test('phone: a compact icon dock with the session button beside it; on Settings 
   await page.locator('.nav-train').evaluate(el => { el.dataset.mark = 'same'; });
   await page.click('#nav [data-act="nav"][data-v="prefs"]');
   const mid = await page.waitForFunction(() => { const o = +getComputedStyle(document.querySelector('.nav-train')).opacity; return o > 0 && o < 1 ? o : null; }, null, { timeout: 2000 }).then(h => h.jsonValue(), () => null);
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(1300);
   const after = await page.locator('.nav-train').evaluate(el => ({ mark: el.dataset.mark, op: getComputedStyle(el).opacity, vis: getComputedStyle(el).visibility }));
   expect(after.mark).toBe('same');
   expect(after.op).toBe('0'); expect(after.vis).toBe('hidden');
@@ -75,7 +75,7 @@ test('phone: a compact icon dock with the session button beside it; on Settings 
   expect(Math.abs(prefs.left - home.left)).toBeLessThan(1); expect(Math.abs(prefs.dockRight - home.fabRight)).toBeLessThan(1.5);
   expect(Math.abs(prefs.glow - prefs.onMid)).toBeLessThan(2);
   await page.click('#nav [data-act="nav"][data-v="today"]');
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(1100);
   expect(await page.locator('.nav-train').evaluate(el => getComputedStyle(el).opacity)).toBe('1');
   expect((await geo()).left).toBeGreaterThan(10);
 });
@@ -225,4 +225,47 @@ test('switching theme updates the dock at once: the dark marker follows the them
   await page.click('[data-act="d-theme"][data-t="volt"]'); await expect.poll(dark).toBe(true);
   await page.click('[data-act="d-theme"][data-t="light"]'); await expect.poll(dark).toBe(false);
   await page.click('[data-act="d-theme"][data-t="nord"]'); await expect.poll(dark).toBe(true);
+});
+
+test('phone: the + minimizes before the dock stretches; back, the dock shrinks before the + returns', async ({ page }, info) => {
+  phoneOnly(info);
+  await login(page, new FakeSupabase(benchHistory()), 'A');
+  await page.waitForTimeout(800);
+  /* sample the + (scale) and the pill's end (its room for the +) every frame across the switch */
+  const sample = () => page.evaluate(async () => {
+    const n = document.querySelector('#nav'), f = n.querySelector('.nav-train'), out = [], t0 = performance.now();
+    await new Promise(r => { const step = () => { const m = new DOMMatrix(getComputedStyle(f).transform); out.push({ t: performance.now() - t0, s: Math.hypot(m.a, m.b), pr: parseFloat(getComputedStyle(n, '::before').right) }); if (performance.now() - t0 < 1500) requestAnimationFrame(step); else r(); }; requestAnimationFrame(step); });
+    return out;
+  });
+  const going = page.evaluate(() => new Promise(r => setTimeout(r, 30))).then(() => page.click('#nav [data-v="prefs"]'));
+  const out = await sample(); await going;
+  /* the pill hasn't moved while the + is still more than half its size */
+  for (const x of out) if (x.s > 0.5) expect(x.pr).toBeGreaterThan(65);
+  expect(out[out.length - 1].pr).toBeLessThan(1);
+  const back = page.evaluate(() => new Promise(r => setTimeout(r, 30))).then(() => page.click('#nav [data-v="today"]'));
+  const ret = await sample(); await back;
+  /* the + only grows once the pill has made its room again */
+  for (const x of ret) if (x.s > 0.3) expect(x.pr).toBeGreaterThan(60);
+  expect(ret[ret.length - 1].s).toBeGreaterThan(0.95);
+});
+
+test('phone: drag along the dock: the circle follows, the tab you let go on opens; a tap still opens too', async ({ page }, info) => {
+  phoneOnly(info);
+  await login(page, new FakeSupabase(benchHistory()), 'A');
+  await page.waitForTimeout(800);
+  const box = async v => page.locator(`#nav [data-v="${v}"]`).boundingBox();
+  const home = await box('today'), hist = await box('history'), y = home.y + home.height / 2;
+  await page.mouse.move(home.x + home.width / 2, y); await page.mouse.down();
+  const steps = 12; for (let i = 1; i <= steps; i++) await page.mouse.move(home.x + home.width / 2 + (hist.x - home.x) * i / steps, y);
+  /* mid-drag: the dock is in its drag state and the tab under the finger is lit */
+  await expect(page.locator('#nav')).toHaveClass(/drag/);
+  await expect(page.locator('#nav [data-v="history"]')).toHaveClass(/hot/);
+  const glow = await page.locator('#nav .nav-glow').boundingBox();
+  expect(Math.abs(glow.x + glow.width / 2 - (hist.x + hist.width / 2))).toBeLessThan(8);
+  await page.mouse.up();
+  await expect(page).toHaveURL(/\/history$/);
+  await expect(page.locator('#nav')).not.toHaveClass(/drag/);
+  /* a plain tap */
+  await page.click('#nav [data-v="splits"]');
+  await expect(page).toHaveURL(/\/splits$/);
 });
