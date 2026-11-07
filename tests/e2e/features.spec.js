@@ -134,20 +134,31 @@ test('widget sizes are offered on wider screens only', async ({ page }, info) =>
   await expect(page.locator('.wf-size')).toHaveCount(phone ? 0 : 1);
 });
 
-test('in the Ocean theme the phone dock is solid, not see-through', async ({ page }, info) => {
+test('on a lite device (no blur) the phone dock is painted solid, not see-through', async ({ page }, info) => {
   test.skip(info.project.name !== 'phone', 'phone only');
-  await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'ocean' } }), 'A');
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'ocean');
+  await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'nord' } }), 'A');
+  await page.evaluate(() => document.documentElement.classList.add('lite'));
   for (const part of ['::before', '.nav-end > i']) {
     const bg = await page.evaluate(part => { const c = part[0] === ':' ? getComputedStyle(document.querySelector('#nav'), part) : getComputedStyle(document.querySelector('#nav ' + part)); return { color: c.backgroundColor, image: c.backgroundImage }; }, part);
-    expect(bg.color).toBe('rgb(5, 41, 76)');
+    expect(bg.color).toBe('rgb(46, 52, 64)');
     expect(bg.image).toContain('linear-gradient');
   }
 });
 
+test('Ocean is retired: it is gone from the theme picker, and someone who had it chosen gets Auto', async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('sg-theme', 'ocean'); } catch {} });
+  await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'ocean' } }), 'A');
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme', /./);
+  expect(await page.evaluate(() => { try { return localStorage.getItem('sg-theme'); } catch { return 'x'; } })).toBeNull();
+  await page.goto('/settings');
+  await expect(page.locator('[data-act="d-theme"][data-t="ocean"]')).toHaveCount(0);
+  await expect(page.locator('[data-act="d-theme"]')).toHaveCount(11);
+  await expect(page.locator('[data-act="d-theme"][data-t="auto"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('every theme paints its page background on one fixed layer, so the safe areas and scroll bounce match it', async ({ page }) => {
   await login(page, new FakeSupabase(benchHistory()), 'A');
-  const themes = ['light', 'dark', 'solarized-light', 'solarized-dark', 'gruvbox-light', 'gruvbox-dark', 'nord', 'dracula', 'ocean', 'sage', 'volt'];
+  const themes = ['light', 'dark', 'solarized-light', 'solarized-dark', 'gruvbox-light', 'gruvbox-dark', 'nord', 'dracula', 'sage', 'volt'];
   for (const t of themes) {
     const r = await page.evaluate(t => {
       document.documentElement.setAttribute('data-theme', t);
@@ -159,7 +170,7 @@ test('every theme paints its page background on one fixed layer, so the safe are
     expect(r.pos, t).toBe('fixed');
     expect(r.z, t).toBe('-1');
     expect(r.color, t).toBe(r.canvas);
-    if (t === 'ocean') expect(r.image, t).toContain('linear-gradient'); else expect(r.image, t).toBe('none');
+    expect(r.image, t).toBe('none');
   }
 });
 
@@ -184,15 +195,11 @@ test('phone: a compact greeting, so the first widget starts in the top 40% of th
   }
 });
 
-test('Ocean: a widget opened full screen and the today panel show the page’s gradient, not a flat block', async ({ page }) => {
-  await page.addInitScript(() => { try { localStorage.setItem('sg-theme', 'ocean'); } catch {} });
-  await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'ocean' } }), 'A');
+test('a widget opened full screen shows the page itself, not a flat block', async ({ page }) => {
+  await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'nord' } }), 'A');
   await page.goto('/w/week');
   await expect(page.locator('.wfull')).toBeVisible();
   expect(await page.locator('.wfull').evaluate(e => { const c = getComputedStyle(e); return [c.backgroundColor, c.backgroundImage]; })).toEqual(['rgba(0, 0, 0, 0)', 'none']);
-  await page.goto('/');
-  await page.locator('.ts-open').click();
-  expect(await page.locator('.tsh-panel').evaluate(e => getComputedStyle(e).backgroundImage)).toContain('linear-gradient');
 });
 
 test('tapping the Home quote deals another: each quote once before any repeats, with its own author, by key too', async ({ page }, info) => {

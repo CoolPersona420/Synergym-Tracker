@@ -13,7 +13,6 @@ export const THEMES = [
   { id: 'gruvbox-dark', name: 'Gruvbox Dark', note: 'Retro charcoal and amber', dark: true, pair: 'gruvbox-light', c: ['#282828', '#32302F', '#EBDBB2', '#FABD2F', '#1D2021'] },
   { id: 'nord', name: 'Nord', note: 'Arctic blue-grey', dark: true, pair: 'light', c: ['#2E3440', '#3B4252', '#ECEFF4', '#88C0D0', '#3B4252'] },
   { id: 'dracula', name: 'Dracula', note: 'Night with violet', dark: true, pair: 'light', c: ['#282A36', '#303341', '#F8F8F2', '#BD93F9', '#21222C'] },
-  { id: 'ocean', name: 'Ocean', note: 'The deep blue original', dark: true, pair: 'light', c: ['#073F6F', '#0E4C7E', '#FFFFFF', '#8CDDF2', '#0A5690'] },
   { id: 'sage', name: 'Sage', note: 'Olive with terracotta', dark: false, pair: 'volt', c: ['#C3C6B1', '#CED1BD', '#1F241D', '#C9583A', '#DE6F4E'] },
   { id: 'volt', name: 'Volt', note: 'Black with electric lime', dark: true, pair: 'sage', c: ['#0A0A0A', '#161616', '#F2F2F2', '#D4F25A', '#161616'] }
 ];
@@ -23,6 +22,7 @@ export const isDark = () => { const t = THEMES.find(x => x.id === themePref()); 
    depend on the saved choice, which is written after */
 export const markDark = (id = themePref()) => { const t = THEMES.find(x => x.id === id); document.documentElement.classList.toggle('is-dark', t && t.dark != null ? t.dark : matchMedia('(prefers-color-scheme: dark)').matches); };
 export function applyTheme(t) {
+  /* a theme that no longer exists (Ocean, retired in 0.1.36) falls back to Auto */
   if (!THEMES.some(x => x.id === t)) t = 'auto';
   if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   markDark(t);

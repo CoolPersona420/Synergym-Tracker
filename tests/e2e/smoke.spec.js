@@ -16,7 +16,7 @@ test('no errors on any screen or common action', async ({ page }, info) => {
   await page.goto('/'); await page.locator('.ts-open').click(); await page.waitForTimeout(400); await page.keyboard.press('Escape');
   await page.goto('/history'); await page.locator('.search').fill('Push'); await page.locator('.search').fill(''); await page.click('[data-act="hf-toggle"]');
   await page.goto('/settings'); await page.click('[data-act="how"]'); await page.keyboard.press('Escape');
-  await page.click('[data-act="d-week"][data-v="0"]'); await page.click('[data-act="d-theme"][data-t="ocean"]'); await page.click('[data-act="d-theme"][data-t="auto"]');
+  await page.click('[data-act="d-week"][data-v="0"]'); await page.click('[data-act="d-theme"][data-t="nord"]'); await page.click('[data-act="d-theme"][data-t="auto"]');
   await page.goto('/'); await page.evaluate(() => document.querySelector('[data-act="start-day"]')?.click()); await page.waitForTimeout(800);
   if (page.url().includes('/session/')) {
     await page.locator('#view [data-f="w"]').first().fill('82.5'); await page.locator('#view [data-f="r"]').first().fill('9');

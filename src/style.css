@@ -91,14 +91,6 @@
   --heat0:#3A3D4F; --heat-ink:#BD93F9;
   --hero-bg:#21222C; --hero-deep:#191A21; --hero-ink:#F8F8F2; --hero-ink-2:#B7BCD6; --hero-accent:#FF79C6; --hero-line:rgba(248,248,242,.12);
   --orb-solid:#BD93F9; --orb-glass:rgba(248,248,242,.12); color-scheme:dark}
-:root[data-theme="ocean"]{
-  --bg:#05294C; --page:linear-gradient(160deg,#04274A 0%,#073F6F 48%,#0B6A83 100%); --surface:rgba(255,255,255,.07); --surface-2:rgba(255,255,255,.12); --field:rgba(255,255,255,.08); --line:rgba(255,255,255,.14);
-  --ink:#FFFFFF; --ink-2:#CDE2F0; --muted:#8FB2CA;
-  --accent:#8CDDF2; --on-accent:#05284A; --solid:#FFFFFF; --solid-ink:#05284A;
-  --good:#7FE0B0; --bad:#FF9E8C; --glass:rgba(5,41,76,.72); --shadow:0 .618rem 1.618rem rgba(0,0,0,.18);
-  --heat0:rgba(255,255,255,.08); --heat-ink:#8CDDF2;
-  --hero-bg:linear-gradient(150deg,#05305A 0%,#0A5690 52%,#0E7F93 100%); --hero-deep:#05305A; --hero-ink:#FFFFFF; --hero-ink-2:#C6DEEE; --hero-accent:#8CDDF2; --hero-line:rgba(255,255,255,.16);
-  --orb-solid:#04274A; --orb-glass:rgba(255,255,255,.14); color-scheme:dark}
 :root[data-theme="sage"]{
   --bg:#C3C6B1; --page:#C3C6B1; --surface:#CED1BD; --surface-2:#B6BAA3; --field:#D4D7C4; --line:#A7AB94;
   --ink:#1F241D; --ink-2:#3E4539; --muted:#666C5E;
@@ -122,15 +114,15 @@
 html{-webkit-text-size-adjust:100%;background:var(--bg)}
 /* the page background is a layer fixed to the screen, behind everything. On body it stopped short of the safe
    areas (the strip by the iPhone home bar) and of what a scroll bounce reveals, which then showed the plain
-   colour; in Ocean, the only theme with a gradient, that was a dark band. iOS doesn't fix backgrounds, hence a layer. */
+   colour (a band, with a gradient page). iOS doesn't fix backgrounds, hence a layer. */
 html::after{content:"";position:fixed;left:0;right:0;top:-10vh;bottom:-10vh;z-index:-1;pointer-events:none;background:var(--bg);background-image:var(--page)}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 body{margin:0;min-height:100vh;background:transparent;color:var(--ink);font-family:var(--font-ui);font-size:var(--t0);line-height:1.55;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
 /* Surfaces that are the page itself (the strip under the status bar, the splash, the today panel, a widget opening
    full screen) draw the page's background laid out exactly as on the page layer above: full width, from 10vh above
-   the screen to 10vh below. In Ocean, the one theme with a gradient, it then lines up with what's around them
-   instead of showing a flat block; other themes are one colour, so nothing changes for them. */
+   the screen to 10vh below, so a theme with a gradient page lines up with what's around them instead of showing a
+   flat block (every theme now is one colour, for which this changes nothing). */
 body::before{background-image:var(--page);background-size:100vw 120vh;background-position:0 -10vh;background-repeat:no-repeat}
 img{max-width:100%}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
@@ -1672,8 +1664,8 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
     background:color-mix(in srgb,var(--surface) 80%,transparent);
     box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 1px 0 var(--rim-hi),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent);
     visibility:visible;transition:transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
-  /* Ocean's surfaces are see-through, and lite devices have no blur: paint the dock solid, its surface over the page colour */
-  :root[data-theme="ocean"] .nav,html.lite .nav{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
+  /* lite devices have no blur: paint the dock solid, its surface over the page colour */
+  html.lite .nav{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
   body.in-session .nav{display:flex;transform:translateY(calc(100% + 24px + env(safe-area-inset-bottom,0px)));opacity:0;pointer-events:none;visibility:hidden;transition:transform .45s var(--ease),opacity .3s,visibility 0s .45s}
 }
 @media (max-width:47.99rem){
@@ -1719,9 +1711,9 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   .nav-end{display:block;position:absolute;left:calc(100% - var(--xr) - var(--fw) / 2);right:calc(-1 * var(--side));top:-3rem;bottom:-3rem;overflow:hidden;pointer-events:none}
   .nav-end > i{position:absolute;top:3rem;bottom:3rem;right:var(--side);width:calc(var(--xr) + var(--fw) / 2 + 2px);border-radius:0 999px 999px 0;
     translate:var(--tail) 0;transition:translate var(--st)}
-  /* Ocean's surfaces are see-through, and lite devices have no blur: the pill is painted solid */
-  :root[data-theme="ocean"] .nav,html.lite .nav{background:none}
-  :root[data-theme="ocean"] .nav::before,:root[data-theme="ocean"] .nav-end > i,html.lite .nav::before,html.lite .nav-end > i{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
+  /* lite devices have no blur: the pill is painted solid */
+  html.lite .nav{background:none}
+  html.lite .nav::before,html.lite .nav-end > i{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
   .nav-i{position:relative;z-index:1;flex:1 1 0;min-width:0;height:100%;padding:0;gap:0;display:grid;place-items:center;border-radius:999px;color:var(--muted);
     translate:calc((var(--i) + .5) * var(--sp)) 0;transition:translate var(--st),color .3s,transform .2s var(--ease)}
   .nav-i[data-v="today"]{--i:0}.nav-i[data-v="splits"]{--i:1}.nav-i[data-v="exercises"]{--i:2}.nav-i[data-v="history"]{--i:3}.nav-i[data-v="prefs"]{--i:4}
