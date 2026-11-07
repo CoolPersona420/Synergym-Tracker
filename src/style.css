@@ -2097,3 +2097,37 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
 /* the Logbook is in a computer's sidebar; on phones and tablets it's the hold on the session button */
 @media (max-width:59.99rem){.nav-lb{display:none!important}}
 
+
+/* ---------- the Logbook on a computer: a calendar like a calendar app's month, each day showing what was trained,
+   and beside it the day you picked and the month in numbers. Phones keep the compact square days. ---------- */
+.lb-ev{display:none}
+.lb-side{display:contents}
+.lb-sum{display:none}
+@media (min-width:60rem){
+  .lb-wrap{grid-template-columns:minmax(0,1fr) 20rem;align-items:start}
+  .lb-side{display:grid;gap:var(--s0);align-content:start;position:sticky;top:var(--s1)}
+  .lb-day,.lb-sum{display:block;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s1);
+    background-image:linear-gradient(180deg,var(--sheen),transparent 38%),radial-gradient(120% 70% at 50% 125%,var(--glow),transparent 62%);
+    box-shadow:inset 0 1px 0 var(--rim-hi),inset 0 -1px 0 var(--rim-lo)}
+  .lb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(5.5rem,1fr));gap:var(--s0)}
+  .lb-stats b{display:block;margin-top:4px;font-family:var(--font-display);font-size:1.55rem;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+  .lb-kinds{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s0)}
+  .lb-cal{padding:var(--s0)}
+  .lb-wk,.lb-grid{gap:6px}
+  .lb-wk .lbl{text-align:left;padding-left:9px}
+  .lb-d{aspect-ratio:auto;height:5.6rem;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:5px;padding:8px 9px;
+    border-radius:10px;text-align:left;background:color-mix(in srgb,var(--ink) 3%,transparent);overflow:hidden}
+  .lb-d.l1,.lb-d.l2,.lb-d.l3,.lb-d.l4{background:color-mix(in srgb,var(--ink) 3%,transparent);color:var(--ink)}
+  .lb-d.sel{transform:none}
+  .lb-two{display:none}
+  .lb-ev{display:block;padding:3px 7px;border-radius:6px;font-size:11.5px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    background:color-mix(in srgb,var(--heat-ink) 45%,var(--heat0));color:var(--ink)}
+  .lb-ev small{display:block;font-size:10px;font-weight:500;opacity:.75}
+  .lb-d.l2 .lb-ev{background:color-mix(in srgb,var(--heat-ink) 62%,var(--heat0));color:var(--bg)}
+  .lb-d.l3 .lb-ev{background:color-mix(in srgb,var(--heat-ink) 80%,var(--heat0));color:var(--bg)}
+  .lb-d.l4 .lb-ev{background:var(--heat-ink);color:var(--bg)}
+  .lb-ev.more{background:none!important;color:var(--muted)!important;padding:0 2px;font-weight:500}
+  .lb-d.rd::after{content:"Rest";font-size:11px;font-weight:500;color:var(--muted)}
+  /* the day card is narrow: its buttons stack, full width */
+  .lb-side .lb-acts .btn{flex:1 1 100%}
+}

@@ -47,3 +47,27 @@ test('a year of Consistency on a phone is two rows of half a year, each day twic
   expect(big.width).toBeGreaterThan(8);
   expect(big.width).toBeLessThan(one.width);
 });
+
+test('the Logbook on a computer: each day shows what was trained, and the month is summed up beside it', async ({ page }, info) => {
+  const data = benchHistory(), last = data.sessions[0], phone = info.project.name === 'phone';
+  await login(page, new FakeSupabase(data), 'A');
+  await page.goto('/logbook'); await page.waitForTimeout(1200);
+  const k = await page.evaluate(iso => { const d = new Date(iso); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }, last.started_at);
+  if (!(await page.locator(`.lb-d[data-k="${k}"]`).count())) await page.click('.lb-prev');
+  const chip = page.locator(`.lb-d[data-k="${k}"] .lb-ev`);
+  if (phone) {
+    /* a phone keeps its compact days and no summary */
+    await expect(chip).toBeHidden(); await expect(page.locator('#lb-sum')).toBeHidden(); return;
+  }
+  await expect(chip).toBeVisible();
+  await expect(chip).toContainText('Push');
+  await expect(chip).toContainText('kg');
+  const sum = page.locator('#lb-sum');
+  await expect(sum).toBeVisible();
+  await expect(sum).toContainText('This month');
+  await expect(sum).toContainText('Sessions');
+  /* the summary follows the month on show */
+  const before = await sum.innerText();
+  await page.click('.lb-prev');
+  await expect.poll(() => sum.innerText()).not.toBe(before);
+});

@@ -2773,7 +2773,29 @@ function vLogbook() {
   const L = lbState();
   return `<div class="wfull lb">
     <header class="wf-top"><div><span class="lbl">Log or change any day</span><h1 class="h1">Logbook</h1></div>${xBtn('lb-close')}</header>
-    <div class="lb-wrap"><section class="card lb-cal" id="lb-cal">${lbMonth(L)}</section><section class="lb-day" id="lb-day" aria-live="polite">${lbDay(L.k)}</section></div></div>`;
+    <div class="lb-wrap"><section class="card lb-cal" id="lb-cal">${lbMonth(L)}</section>
+      <div class="lb-side"><section class="lb-day" id="lb-day" aria-live="polite">${lbDay(L.k)}</section><section class="card lb-sum" id="lb-sum">${lbSum(L)}</section></div></div></div>`;
+}
+/* on a computer each day of the calendar shows what was trained, as a calendar app's month does: the session and
+   its volume (or its cardio time), two at most; a phone shows only the shade (style.css hides these there) */
+function lbChips(k) {
+  const list = sessOn(k), out = list.slice(0, 2).map(s => { const a = S.A?.sess.get(s.id), sub = a ? (a.sets ? fmtVol(a.vol) : a.ct ? fmtMin(a.ct) : '') : '';
+    return `<span class="lb-ev" aria-hidden="true">${esc(sessName(s))}${sub ? `<small>${sub}</small>` : ''}</span>`; });
+  if (list.length > 2) out.push(`<span class="lb-ev more" aria-hidden="true">+${list.length - 2} more</span>`);
+  return out.join('');
+}
+/* beside the calendar on a computer: the month in numbers and what was trained in it */
+function lbSum(L) {
+  const m0 = new Date(L.m), end = new Date(m0.getFullYear(), m0.getMonth() + 1, 1).getTime();
+  const list = [...S.sessions.values()].filter(s => s.endedAt && s.startedAt >= L.m && s.startedAt < end);
+  const days = new Set(list.map(s => dayKey(s.startedAt))).size, rest = (S.profile.restDays || []).filter(k => { const t = dayStart(k); return t >= L.m && t < end; }).length;
+  let vol = 0, ct = 0; const names = new Map();
+  for (const s of list) { const a = S.A?.sess.get(s.id); if (a) { vol += a.vol || 0; ct += a.ct || 0; } const n = sessName(s); names.set(n, (names.get(n) || 0) + 1); }
+  const stat = (l, v) => `<div><span class="lbl">${l}</span><b>${v}</b></div>`;
+  const stats = [stat('Sessions', list.length), stat('Training days', days), vol ? stat('Volume', fmtVol(vol)) : '', ct ? stat('Cardio', fmtMin(ct)) : '', rest ? stat('Rest days', rest) : ''].filter(Boolean).join('');
+  return `<div class="card-h"><span class="lbl">This month</span><span class="lbl">${MONTHS[m0.getMonth()]}</span></div>`
+    + (list.length ? `<div class="lb-stats">${stats}</div><div class="lb-kinds">${[...names].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([n, c]) => `<span class="co-pill">${esc(n)} × ${c}</span>`).join('')}</div>`
+      : `<p class="muted">Nothing logged in ${MONTHS[m0.getMonth()]}${rest ? ` but ${plural(rest, 'rest day')}` : ''}.</p>`);
 }
 function lbMonth(L) {
   const m0 = new Date(L.m), y = m0.getFullYear(), mo = m0.getMonth(), days = new Date(y, mo + 1, 0).getDate(), now = Date.now(), tk = dayKey(now);
@@ -2784,7 +2806,7 @@ function lbMonth(L) {
     const dt = new Date(y, mo, d), k = dayKey(dt), fut = dt.getTime() > now, v = di.get(k), cnt = sessOn(k).length;
     n += cnt; if (rd.has(k)) rest++;
     const c = fut ? 'fut' : v != null ? (v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1') : cnt ? 'l1' : rd.has(k) ? 'rd' : '';
-    cells += `<button class="lb-d ${c}${k === tk ? ' today' : ''}${k === L.k ? ' sel' : ''}" data-act="lb-pick" data-k="${k}"${fut ? ' disabled' : ''} aria-label="${dayName(dt)} ${d} ${MONTHS[mo]}${cnt ? ', ' + plural(cnt, 'session') : rd.has(k) ? ', rest day' : ''}"${k === L.k ? ' aria-pressed="true"' : ''}><span>${d}</span>${cnt > 1 ? '<i class="lb-two"></i>' : ''}</button>`;
+    cells += `<button class="lb-d ${c}${k === tk ? ' today' : ''}${k === L.k ? ' sel' : ''}" data-act="lb-pick" data-k="${k}"${fut ? ' disabled' : ''} aria-label="${dayName(dt)} ${d} ${MONTHS[mo]}${cnt ? ', ' + plural(cnt, 'session') : rd.has(k) ? ', rest day' : ''}"${k === L.k ? ' aria-pressed="true"' : ''}><span>${d}</span>${cnt > 1 ? '<i class="lb-two"></i>' : ''}${cnt ? lbChips(k) : ''}</button>`;
   }
   const head = Array.from({ length: 7 }, (_, i) => DAYS[(w0 + i) % 7].slice(0, 1)).map(x => `<span class="lbl">${x}</span>`).join('');
   const first = sorted().length ? monthOf(sorted()[sorted().length - 1].startedAt) : L.m, canBack = L.m > Math.min(first, monthOf(now) - 1), canFwd = L.m < monthOf(now);
@@ -2806,7 +2828,7 @@ function lbDay(k) {
   <div class="btns lb-acts">${rest ? `<button class="btn line" data-act="lb-rest" data-k="${k}" data-on="0">${ICON.moon}Undo rest day</button>`
     : list.length ? '' : `<button class="btn line" data-act="lb-rest" data-k="${k}" data-on="1">${ICON.moon}Rest day</button>`}${!rest && !full ? `<button class="btn" data-act="lb-log" data-k="${k}">${ICON.plus}${list.length ? 'Log another' : 'Log a session'}</button>` : ''}</div>`;
 }
-function lbRefresh() { const L = lbState(), c = $('#lb-cal'), p = $('#lb-day'); if (c) { c.innerHTML = lbMonth(L); wireLogbook(); } if (p) p.innerHTML = lbDay(L.k); }
+function lbRefresh() { const L = lbState(), c = $('#lb-cal'), p = $('#lb-day'), m = $('#lb-sum'); if (c) { c.innerHTML = lbMonth(L); wireLogbook(); } if (p) p.innerHTML = lbDay(L.k); if (m) m.innerHTML = lbSum(L); }
 /* another month: the grid slides out one way and the new month in from the other */
 function lbMove(d) {
   const L = lbState(), m = new Date(L.m); m.setMonth(m.getMonth() + d); const t = m.getTime();
@@ -2814,6 +2836,7 @@ function lbMove(d) {
   const cal = $('#lb-cal'); if (!cal) return;
   L.m = t; buzz(6);
   cal.innerHTML = lbMonth(L); wireLogbook();
+  const sum = $('#lb-sum'); if (sum) sum.innerHTML = lbSum(L);
   const g = cal.querySelector('.lb-grid'); if (!reduced) g.classList.add(d > 0 ? 'in-r' : 'in-l');
 }
 function lbPick(k) {
