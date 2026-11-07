@@ -1176,22 +1176,9 @@ html[data-nav="tab-back"]::view-transition-new(root){animation:tab-in-l .55s var
 @keyframes tab-out-r{to{opacity:0;transform:translateX(4%)}}
 @keyframes tab-in-r{from{opacity:0;transform:translateX(5%)}}
 @keyframes tab-in-l{from{opacity:0;transform:translateX(-5%)}}
-html[data-nav="widget"]::view-transition-old(root){animation:fade-out .3s var(--ease) both}
-html[data-nav="widget"]::view-transition-new(root){animation:fade .35s var(--ease) .15s both}
-/* one surface grows out of what you tapped (a widget's card, the Logbook's capsule) and shrinks back into it on
-   close: what was on it fades out early, what will be fades in once it has mostly grown, so the two never show
-   through each other; and the page's own entrance waits, so everything lands at once */
-::view-transition-group(wfocus){animation-duration:.5s;animation-timing-function:var(--ease-io);overflow:clip;border-radius:var(--r-lg);
-  background:var(--bg);background-image:var(--page);background-size:100vw 120vh;background-position:0 -10vh;background-repeat:no-repeat}
-::view-transition-old(wfocus),::view-transition-new(wfocus){height:100%;object-fit:none;object-position:0 0;mix-blend-mode:normal}
-::view-transition-old(wfocus){animation:wf-out .5s linear both}
-::view-transition-new(wfocus){animation:wf-in .5s linear both}
-@keyframes wf-out{30%,to{opacity:0}}
-@keyframes wf-in{0%,30%{opacity:0}}
-html[data-nav="widget"] #view.enter .wfull .rv{animation:none}
 .no-vt #view.enter{animation:fade .35s var(--ease) both}
 @media (prefers-reduced-motion:reduce){
-  html[data-nav]::view-transition-old(root),html[data-nav]::view-transition-new(root),::view-transition-group(wfocus),::view-transition-old(wfocus),::view-transition-new(wfocus){animation-duration:.01s!important}
+  html[data-nav]::view-transition-old(root),html[data-nav]::view-transition-new(root){animation-duration:.01s!important}
   .seg.pill::before,.toggle::after{transition-duration:.01s}
 }
 .card.w .card-h{flex-wrap:nowrap;align-items:center}
@@ -2097,3 +2084,14 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
 .lb-top{align-items:flex-end;flex-wrap:wrap;row-gap:var(--s-1);margin-bottom:var(--s0)}
 .lb-top > div{min-width:0}
 .lb-mode{flex:none}
+/* flipping the Logbook between Calendar and List: the header (title, switch, the count above) holds still while the
+   page under it slides sideways, the same motion as changing tabs; the dock holds still as always */
+html.lb-swap .lb-top{view-transition-name:lbhead}
+html.lb-swap header.top{view-transition-name:lbbar}
+::view-transition-group(lbhead),::view-transition-group(lbbar){animation:none}
+::view-transition-old(lbhead),::view-transition-old(lbbar){display:none}
+::view-transition-new(lbhead),::view-transition-new(lbbar){animation:none}
+html[data-nav="lb-fwd"]::view-transition-old(root){animation:tab-out-l .38s var(--ease) both}
+html[data-nav="lb-fwd"]::view-transition-new(root){animation:tab-in-r .55s var(--ease) both}
+html[data-nav="lb-back"]::view-transition-old(root){animation:tab-out-r .38s var(--ease) both}
+html[data-nav="lb-back"]::view-transition-new(root){animation:tab-in-l .55s var(--ease) both}

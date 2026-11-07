@@ -569,12 +569,19 @@ function lbMode(v) {
   if (v) { try { localStorage.setItem('sg-lbmode', v); } catch {} return v; }
   try { const m = localStorage.getItem('sg-lbmode'); return LB_VIEWS.has(m) ? m : 'history'; } catch { return 'history'; }
 }
+/* the switch's pill, back where it was for a frame, then let go: it glides to the side just picked */
+function lbGlide(v) {
+  const m = $('.lb-mode', v), p = S.lbPill; S.lbPill = null; if (!m || !p || !p[1]) return;
+  const x = m.style.getPropertyValue('--x'), w = m.style.getPropertyValue('--w');
+  m.classList.add('nt'); m.style.setProperty('--x', p[0]); m.style.setProperty('--w', p[1]); void m.offsetWidth;
+  m.classList.remove('nt'); m.style.setProperty('--x', x); m.style.setProperty('--w', w);
+}
 /* the tab's header, the same in both views so nothing moves when it flips */
 const lbHead = (on, cls = '') => `<header class="wf-top lb-top ${cls}"><div><span class="lbl">Every session, any day</span><h1 class="h1">Logbook</h1></div>${lbSwitch(on)}</header>`;
 const lbSwitch = on => `<span class="seg lb-mode" role="tablist" aria-label="Logbook view">${[['logbook', 'Calendar'], ['history', 'List']].map(([v, l]) => `<button role="tab" class="${on === v ? 'on' : ''}" aria-selected="${on === v}" data-act="lb-mode" data-v="${v}">${l}</button>`).join('')}</span>`;
 function route(enter = true) {
   const [v, a] = parsePath();
-  const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg, from = S.view, fromArg = S.arg;
+  const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg, from = S.view;
   if (S.edit && (v !== 'session' || arg !== S.edit.id)) endEdit();
   /* a finished session can only be changed when it was opened from the Logbook */
   if (!(v === 'session' && arg === S.lbCtx)) S.lbCtx = null;
@@ -583,20 +590,21 @@ function route(enter = true) {
   /* tab to tab: a sideways slide in the direction of the tab bar (the Logbook's Calendar sits in History's place) */
   const tab = x => TABS.indexOf(x === 'logbook' ? 'history' : x), ti = tab(from), tj = tab(v);
   if (ti >= 0 && tj >= 0 && ti !== tj) dir = tj > ti ? 'tab-fwd' : 'tab-back';
-  /* a widget card grows into its full view, and shrinks back on close */
-  let morph = null;
-  if (v === 'widget' && from === 'today') { dir = 'widget'; morph = document.querySelector(`#view [data-w="${CSS.escape(arg || '')}"]`); }
-  else if (from === 'widget' && v === 'today' && dir !== 'swipe') { dir = 'widget'; S.morphW = fromArg; }
   /* the Logbook's Calendar and List are one tab: flipping between them swaps the page in place */
   const lbSwap = LB_VIEWS.has(from) && LB_VIEWS.has(v);
   if (LB_VIEWS.has(v)) lbMode(v);
   if (v !== 'today' && v !== 'widget') S.homeRestore = null;
-  if (enter && changed && !lbSwap && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
+  /* Calendar to List and back: the switch's pill glides from where it was, the page under the header slides
+     sideways (Calendar is on the left, List on the right), as a tab change does, and nothing rises in again */
+  if (lbSwap) { const m = $('#view .lb-mode'); S.lbPill = m ? [m.style.getPropertyValue('--x'), m.style.getPropertyValue('--w')] : null; S.lbSwap = true; dir = v === 'history' ? 'lb-fwd' : 'lb-back'; }
+  if (enter && changed && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
     document.documentElement.dataset.nav = dir;
-    if (morph) morph.style.viewTransitionName = 'wfocus';
+    /* every page, a widget opened full screen included, rises in the same way (style.css: vt-rise), and goes back down
+       the same way */
+    if (lbSwap) document.documentElement.classList.add('lb-swap');
     const t = document.startViewTransition(() => render(true));
-    t.finished.finally(() => { if (S.morphW) { S.morphW = null; const c = document.querySelector('#view [data-w][style*="wfocus"]'); if (c) c.style.viewTransitionName = ''; } });
-  } else { S.morphW = null; render(enter); }
+    if (lbSwap) t.finished.finally(() => document.documentElement.classList.remove('lb-swap'));
+  } else render(enter);
 }
 
 /* ================= rendering ================= */
@@ -682,6 +690,9 @@ function render(enter) {
   S.animate = false;
   const keepX = enter ? null : KEEPX.map(q => $$(q, v).map(el => el.scrollLeft)), fprev = enter ? null : fluidCapture(v);
   v.innerHTML = html;
+  /* a widget opened full screen comes in as the Coach does: its header, options and each section rise one after
+     another (playEnter staggers every .rv) */
+  if (S.view === 'widget') for (const el of $$('.wfull > .wf-top, .wfull > .wf-opts, .wf-body > *', v)) el.classList.add('rv');
   fluidApply(v, fprev);
   if (keepX) KEEPX.forEach((q, i) => $$(q, v).forEach((el, j) => { if (keepX[i][j]) el.scrollLeft = keepX[i][j]; }));
   v.classList.toggle('linking', !!S.link);
@@ -694,7 +705,8 @@ function render(enter) {
   if (enter) {
     const hr = S.view === 'today' && S.homeRestore;
     if (hr) { const d = $('#dash', v); if (d) d.scrollLeft = hr.x; scrollTo(0, hr.y); S.homeRestore = null; } else scrollTo(0, 0);
-    if (!SPL.el && !QS.el) playEnter(v);
+    if (S.lbSwap) { S.lbSwap = false; v.classList.remove('enter'); lbGlide(v); }
+    else if (!SPL.el && !QS.el) playEnter(v);
   }
   else { v.classList.remove('enter'); scrollTo(0, y); }
   if (app) renderNav();
@@ -1364,13 +1376,13 @@ const kvs = pairs => `<div class="kv wf-kv">${pairs.map(([k, v]) => `<div><span 
 const wSect = (t, html) => `<section class="card wf-sec"><div class="card-h"><span class="lbl">${t}</span></div>${html}</section>`;
 const nothing = t => `<div class="empty">${t}</div>`;
 function wCard(id, size = 'm', span = WSPAN[size]) {
-  const W = WIDGETS[id], open = !!(W.full || W.link), focus = S.morphW === id;
-  return `<section class="card w w-${size}${focus ? '' : ' rv'}" data-w="${id}"${open ? ` data-act="${W.link ? 'nav' : 'w-open'}" ${W.link ? `data-v="${W.link}"` : `data-id="${id}"`} role="button" tabindex="0" aria-label="Open ${esc(W.title)}"` : ''} style="--span:${span}${focus ? ';view-transition-name:wfocus' : ''}">${W.card(open, size)}</section>`;
+  const W = WIDGETS[id], open = !!(W.full || W.link);
+  return `<section class="card w w-${size} rv" data-w="${id}"${open ? ` data-act="${W.link ? 'nav' : 'w-open'}" ${W.link ? `data-v="${W.link}"` : `data-id="${id}"`} role="button" tabindex="0" aria-label="Open ${esc(W.title)}"` : ''} style="--span:${span}">${W.card(open, size)}</section>`;
 }
 function vWidget() {
   const id = S.arg, W = WIDGETS[id]; if (!W || !W.full) return vMissing('That widget doesn’t exist.');
   const o = wopt(id), ent = homeEntries().find(e => e.id === id);
-  return `<div class="wfull" style="view-transition-name:wfocus">
+  return `<div class="wfull">
     <header class="wf-top"><div><span class="lbl">${esc(W.desc)}</span><h1 class="h1">${esc(W.title)}</h1></div>${xBtn('w-close')}</header>
     <div class="wf-opts">${W.opts ? `<span class="seg" role="group" aria-label="Range">${W.opts.map(([v, l]) => `<button class="${o === v ? 'on' : ''}" data-act="w-opt" data-id="${id}" data-v="${v}">${l}</button>`).join('')}</span>` : ''}
     ${ent && !phoneDash() ? `<span class="wf-size"><span class="lbl">Size on home</span><span class="seg" role="group" aria-label="Size on home">${WSIZES.map(([z, l, t]) => `<button class="${ent.size === z ? 'on' : ''}" data-act="w-size" data-id="${id}" data-v="${z}" aria-label="${t}">${l}</button>`).join('')}</span></span>` : ''}</div>

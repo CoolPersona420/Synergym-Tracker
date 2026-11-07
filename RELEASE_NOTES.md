@@ -10,6 +10,18 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.39-alpha · 7 November 2026
+
+**Widgets open like the Coach, and a smoother Logbook flip**
+
+- **Every widget opens like the Coach:** the page rises over Home as Home sinks back, then its title, options and each
+  section come in one after another. Closing plays it in reverse and puts you back where you were on Home. (Before,
+  the card grew into the page.)
+- **Calendar and List flip smoothly:** the Logbook's title and switch hold still, the switch's pill glides across, and
+  the page underneath slides sideways toward the side you picked, the same motion as changing tabs.
+
+---
+
 ## 0.1.38-alpha · 7 November 2026
 
 **One Logbook: History and the Logbook are now the same tab**
