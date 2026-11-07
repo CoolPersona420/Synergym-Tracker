@@ -12,8 +12,12 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ## 0.1.36-alpha · 7 November 2026
 
-**Ocean retired**
+**Slide along any switch, and Ocean retired**
 
+- **Slide to choose, like the dock:** every switch in the app (Units, Week starts on, the Coach tabs, a widget's
+  range and size, the plate calculator's bar, the guide's Phone and Desktop) can now be slid along as well as
+  tapped. Press, slide, and the pill follows your finger; each option lights up with a light tick as you pass it,
+  and letting go picks it. Sliding up or down still scrolls the page, and a tap still works as before.
 - **The Ocean theme is gone:** Auto plus ten named themes remain. If you had Ocean chosen, Synergym switches you to
   Auto (it follows your phone's light or dark setting); pick any theme in **Settings › Appearance**.
 - **Nothing else changes:** your data, other themes, the dock and the glass finish are as they were.

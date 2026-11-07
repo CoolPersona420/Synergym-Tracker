@@ -62,7 +62,7 @@ The version lives in `package.json` (`0.1.36-alpha`) and shows in Settings › A
   Only light is added, so each theme keeps its own colours.
 - **Week start:** weeks start on Monday, Sunday or Saturday (**Settings › Training**), for the weekly
   target, streaks, charts and the today panel.
-- **Phone app:** install it to the Home Screen. It opens without a connection, has a floating icon dock you can tap or drag along (the + session button beside it; on Settings the dock stretches into the +'s place, all of it moving by
+- **Phone app:** install it to the Home Screen. It opens without a connection, has a floating icon dock you can tap or drag along (every switch in the app slides the same way) (the + session button beside it; on Settings the dock stretches into the +'s place, all of it moving by
   transform so it stays smooth while the phone is busy) and a
   quick opening splash, never zooms, and the page stretches and springs back at the top and bottom like
   iOS (native on iPhone, recreated on Android). Installed on an iPhone, which has no browser back, you swipe

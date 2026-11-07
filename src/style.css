@@ -1172,6 +1172,15 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
 .seg.pill button.on{background:transparent!important;color:var(--solid-ink)}
 .seg.pill::before{content:"";position:absolute;z-index:-1;top:3px;bottom:3px;left:0;width:var(--w,0);transform:translateX(var(--x,0));border-radius:999px;background:var(--solid);box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform .6s var(--spring),width .6s var(--spring)}
 .seg.nt::before{transition:none}
+/* sliding along a switch (segdrag.js): the pill follows the finger at once, a little lifted; the option under the
+   finger takes the pill's colours, the one that was on lets them go. Vertical moves stay the page's to scroll */
+.seg{touch-action:pan-y}
+.seg.drag::before{transition:none;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.seg.drag button{transform:none}
+.seg.pill.drag button.on:not(.hot){color:var(--ink-2)}
+.seg.pill.drag button.hot{color:var(--solid-ink)}
+.seg:not(.pill).drag button.on:not(.hot){background:none;color:var(--ink-2)}
+.seg:not(.pill).drag button.hot{background:var(--solid);color:var(--solid-ink)}
 .toggle{transition:background .4s var(--ease),box-shadow .4s}
 .toggle::after{transition:transform .6s var(--spring),width .3s var(--ease),background .35s}
 .toggle:active::after{width:1.95rem}

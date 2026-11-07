@@ -23,6 +23,7 @@ import { topPanel } from './ui/toppanel.js';
 import { holdReveal } from './ui/hold.js';
 import { swipeRows } from './ui/swiperow.js';
 import { dockDrag } from './ui/dockdrag.js';
+import { segDrag } from './ui/segdrag.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
@@ -614,7 +615,8 @@ const KEEPX = ['#dash', '.hscroll', '.themes'];
 const POPSEL = '.chip,.daysel button,.opt,.theme-card';
 function fluidCapture(root) {
   return {
-    seg: $$('.seg, .auth-tabs', root).map(s => { const b = s.querySelector('button.on'); return b ? [b.offsetLeft, b.offsetWidth] : null; }),
+    /* a switch let go mid-drag (segdrag.js) starts its pill from where the finger left it */
+    seg: $$('.seg, .auth-tabs', root).map(s => { if (s.dataset.dragAt) return s.dataset.dragAt.split(',').map(Number); const b = s.querySelector('button.on'); return b ? [b.offsetLeft, b.offsetWidth] : null; }),
     tog: $$('.toggle', root).map(t => t.classList.contains('on')),
     pop: $$(POPSEL, root).map(e => e.classList.contains('on'))
   };
@@ -3728,6 +3730,8 @@ function boot() {
   todayPanel();
   SW = swipeRows({ enabled: () => coarse.matches && S.loaded && $('#sheet').hidden, buzz, reduced });
   dockDrag($('#nav'), { enabled: () => phoneDash() && S.loaded && $('#sheet').hidden, onPick: el => go(el.dataset.v), buzz });
+  /* every switch can be slid along too */
+  segDrag({ buzz });
   if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced, held: () => TP.dragging() });
   /* the app installed on an iPhone has no browser back: swipe in from the left edge instead */
   if (coarse.matches && isIOS() && navigator.standalone === true) edgeBack({ view: $('#view'), reduced, canBack: canSwipeBack, label: backLabel, onBack: () => { swipeNav = true; back(); }, held: () => TP.isOpen() || TP.dragging() });
