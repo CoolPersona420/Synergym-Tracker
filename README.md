@@ -86,8 +86,7 @@ progression, more set types, warm-ups, muscle balance and more.
   Splits are shared only through checked database functions. Strict security headers (CSP, HSTS, no
   framing) come from `vercel.json`.
 - **Look:** spacing, type sizes and two-column splits follow the golden ratio (φ = 1.618); the scale and
-  theme tokens are at the top of `src/style.css`, and the glass finish (its own tokens, light only) and the titles'
-  chromatic aberration (a fine red and cyan edge that settles as a page opens) at the end.
+  theme tokens are at the top of `src/style.css`, and the glass finish (its own tokens, light only) at the end.
   The wolf mascot is the logo, the splash and the app icon
   (`public/icon.svg` and the PNG icons). The wordmark is Teko Bold, slanted 12°.
 

@@ -713,8 +713,6 @@ function render(enter) {
 let rvObs = null;
 function playEnter(v) {
   if (rvObs) { rvObs.disconnect(); rvObs = null; }
-  /* the titles' red and cyan edges come in wider and settle, like a lens finding focus (style.css: .ca-start) */
-  if (!reduced) { const ts = $$('.display, .h1', v); ts.forEach(t => t.classList.add('ca-start')); requestAnimationFrame(() => requestAnimationFrame(() => ts.forEach(t => t.classList.remove('ca-start')))); }
   const vh = innerHeight, late = [], io = 'IntersectionObserver' in window && !reduced;
   /* every position is read before anything is changed: reading after a change makes the browser lay the page out
      again, once per element, which on a long list took most of a second */

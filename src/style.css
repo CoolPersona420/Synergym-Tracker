@@ -2097,13 +2097,3 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
 /* the Logbook is in a computer's sidebar; on phones and tablets it's the hold on the session button */
 @media (max-width:59.99rem){.nav-lb{display:none!important}}
 
-/* ---------- chromatic aberration: a fine red and cyan edge on the big titles and the wordmark, as a lens leaves on
-   a bright edge. 1px (1.5px on a computer), fainter on light themes, where it would read as misprint. As a page
-   opens the edge comes in wider and settles (playEnter adds .ca-start for one frame). Titles only. ---------- */
-:root{--ca-r:rgba(255,48,96,.55);--ca-b:rgba(0,204,255,.55);--ca:1px}
-:root:not(.is-dark){--ca-r:rgba(255,0,72,.26);--ca-b:rgba(0,140,255,.26)}
-@media (min-width:60rem){:root{--ca:1.5px}}
-.display,.h1,.wordmark{text-shadow:calc(-1 * var(--ca)) 0 var(--ca-r),var(--ca) 0 var(--ca-b)}
-.display,.h1{transition:text-shadow 1.1s var(--ease) .12s}
-.display.ca-start,.h1.ca-start{text-shadow:-5px 0 var(--ca-r),5px 0 var(--ca-b);transition:none}
-@media (prefers-reduced-motion:reduce){.display,.h1{transition:none}}

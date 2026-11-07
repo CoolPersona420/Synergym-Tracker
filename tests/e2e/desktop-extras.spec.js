@@ -1,5 +1,5 @@
-/* The Logbook from a computer's sidebar, the L key and the Consistency map; a year of Consistency on a phone in two
-   rows; and the titles' fine colour edge. */
+/* The Logbook from a computer's sidebar, the L key and the Consistency map; and a year of Consistency on a phone in
+   two rows. */
 import { test, expect } from '@playwright/test';
 import { FakeSupabase, login, benchHistory } from './fake-supabase.js';
 
@@ -46,12 +46,4 @@ test('a year of Consistency on a phone is two rows of half a year, each day twic
   const big = await page.locator('.heat-rows .heat i').first().boundingBox();
   expect(big.width).toBeGreaterThan(8);
   expect(big.width).toBeLessThan(one.width);
-});
-
-test('big titles carry a fine red and cyan edge', async ({ page }) => {
-  await login(page, new FakeSupabase({ ...benchHistory(), profile: { theme: 'volt' } }), 'A');
-  await page.goto('/history'); await page.waitForTimeout(1600);
-  const sh = await page.locator('#view .h1').first().evaluate(e => getComputedStyle(e).textShadow);
-  expect(sh).toContain('rgba(255, 48, 96, 0.55)');
-  expect(sh).toContain('rgba(0, 204, 255, 0.55)');
 });

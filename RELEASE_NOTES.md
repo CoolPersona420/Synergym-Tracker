@@ -12,7 +12,7 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ## 0.1.37-alpha · 7 November 2026
 
-**Coach made for a computer, the Logbook one click away, a bigger year, and a lens edge on titles**
+**Coach made for a computer, the Logbook one click away, and a bigger year**
 
 - **Coach on a computer:** the whole page at once, no tabs. Today's call is one wide banner (the call, its reason
   and the Start button), then the next session and your goals beside recovery, which stays in view as you scroll.
@@ -21,9 +21,6 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
   any day of the Consistency map opens that day in it. Holding Start session still works.
 - **A year of Consistency on a phone:** 52 weeks now show as two rows of half a year, older on top, so each day
   is twice the size it was.
-- **A lens edge on titles:** big titles and the wordmark carry a fine red and cyan edge, like a camera lens on a
-  bright edge, and as a page opens it comes in a little wider and settles. Fainter on light themes, and still when
-  you've asked your device for less motion.
 
 ---
 
