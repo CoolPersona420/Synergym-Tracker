@@ -5,34 +5,34 @@ import { openLogbook, pickDay, openInLogbook } from './logbook.js';
 /* bench press: 80×8 three times three days ago (sets s31–s33), 77.5×8 ten days ago */
 const exRow = (fake, id) => fake.exercises.find(e => e.id === id);
 const ago = n => Date.now() - n * 864e5;
-const hold = async (page, ms) => { const b = await page.locator('#nav .nav-train .ring').boundingBox(); await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await page.waitForTimeout(ms); return b; };
-
-test('hold the session button, slide into the capsule (up on a phone, right on a computer), and the Logbook opens; a plain tap still starts a session', async ({ page }, info) => {
+test('the Logbook is one tab in History’s place: List and Calendar behind a switch, opening on the last one used; holding + does nothing special', async ({ page }) => {
   await login(page, new FakeSupabase(benchHistory()), 'A');
-  /* a tap is a tap */
-  await page.locator('#nav .nav-train').click();
-  await expect(page.locator('#sheet')).toContainText('Start a session');
-  await page.keyboard.press('Escape');
-  /* a hold let go without sliding leaves the capsule to tap */
-  await hold(page, 650); await page.mouse.up();
-  await expect(page.locator('.holdcap.in')).toBeVisible();
-  /* beside the button on a computer, above it on a phone */
-  const cb = await page.locator('.holdcap').boundingBox(), rb = await page.locator('#nav .nav-train').boundingBox();
-  if (info.project.name === 'desktop') expect(cb.x).toBeGreaterThan(rb.x + rb.width); else expect(cb.y + cb.height).toBeLessThan(rb.y + 20);
-  await expect(page.locator('#sheet')).toBeHidden();
-  await page.locator('.holdcap').click();
+  /* the tab where History was, named Logbook, with the book */
+  const tab = page.locator('#nav .nav-i[data-v="history"]');
+  await expect(tab).toHaveAttribute('aria-label', 'Logbook');
+  await tab.click();
+  await expect(page).toHaveURL(/\/history$/);
+  await expect(page.locator('#view h1')).toHaveText('Logbook');
+  await expect(page.locator('#hlist')).toBeVisible();
+  /* the switch flips to the calendar, in place, and the tab stays on */
+  await page.locator('[data-act="lb-mode"][data-v="logbook"]').click();
   await expect(page).toHaveURL(/\/logbook$/);
-  await page.click('[data-act="lb-close"]');
-  await expect(page).not.toHaveURL(/logbook/);
-  /* sliding only part of the way springs back */
-  const b = await hold(page, 650), x = b.x + b.width / 2, y = b.y + b.height / 2, side = info.project.name === 'desktop';
-  await page.mouse.move(side ? x + 20 : x, side ? y : y - 20); await page.mouse.up();
-  await expect(page).not.toHaveURL(/logbook/);
-  await page.mouse.click(5, 300);
-  await expect(page.locator('.holdcap')).toHaveCount(0);
-  /* the whole way opens it */
-  await openLogbook(page);
+  await expect(page.locator('#lb-cal')).toBeVisible();
+  await expect(tab).toHaveClass(/\bon\b/);
   await expect(page.locator('.lb-d.today')).toHaveClass(/sel/);
+  /* away and back: it opens on Calendar, the one used last */
+  await page.locator('#nav .nav-i[data-v="today"]').click();
+  await expect(page).toHaveURL(/\/$/);
+  await tab.click();
+  await expect(page).toHaveURL(/\/logbook$/);
+  /* holding the session button is just a press: no capsule, and letting go starts a session */
+  await page.locator('#nav .nav-i[data-v="today"]').click();
+  await expect(page).toHaveURL(/\/$/); await page.waitForTimeout(1200);
+  const b = await page.locator('#nav .nav-train .ring').boundingBox();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await page.waitForTimeout(700);
+  await expect(page.locator('.holdcap')).toHaveCount(0);
+  await page.mouse.up();
+  await expect(page.locator('#sheet')).toContainText('Start a session');
 });
 
 test('the Logbook is the only way in: the heat map and History have no logging of their own', async ({ page }) => {

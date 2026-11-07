@@ -486,33 +486,10 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 .transport.ed-bar{animation:bar-up .4s var(--ease) both}
 @keyframes bar-up{from{transform:translate(-50%,calc(100% + 1rem));opacity:0}}
 @media (prefers-reduced-motion:reduce){.s-edit.nudge,#view.s-editing .set input,#view.s-editing .notes,.transport.ed-bar{animation:none}}
-/* ---------- holding the session button: a capsule rises; slide up into it for the Logbook ---------- */
+/* ---------- the session button ---------- */
 .nav-train{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-.nav-train.holding .ring{transform:scale(.88)}
-@media (max-width:47.99rem){.nav-train.holding .nl{opacity:0!important}}
 .nav-train.nudge .ring{animation:nudge .45s var(--ease)}
-.holdcap{position:fixed;z-index:70;height:9.5rem;border-radius:999px;overflow:hidden;background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow);display:flex;flex-direction:column;align-items:center;padding:12px 6px 6px;color:var(--ink);touch-action:none;
-  transform-origin:50% 100%;transform:translateY(18px) scale(.4);opacity:0;transition:transform .5s var(--spring),opacity .2s,background .25s,color .25s}
-.holdcap.in{transform:none;opacity:1}
-.holdcap.out{transform:translateY(12px) scale(.6);opacity:0;transition:transform .25s var(--ease),opacity .2s}
-.hc-up{width:10px;height:10px;margin-top:4px;border-left:2px solid currentColor;border-top:2px solid currentColor;opacity:calc(1 - var(--p,0) * 1.6);animation:hc-up 1.2s var(--ease) infinite}
-@keyframes hc-up{0%,100%{translate:0 2px}50%{translate:0 -3px}}
-.hc-up{rotate:45deg}
-.hc-t{margin-top:8px;font-family:var(--font-mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);opacity:calc(1 - var(--p,0) * 1.6)}
-.hc-knob{margin-top:auto;width:100%;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:var(--solid);color:var(--solid-ink);box-shadow:var(--shadow);transition:transform .45s var(--spring),background .25s,color .25s}
-.hc-knob .ico{width:20px;height:20px}
-.holdcap.drag .hc-knob{transition:background .25s,color .25s}
-.holdcap.armed{background:var(--accent);color:var(--on-accent)}
-.holdcap.armed .hc-knob{background:var(--on-accent);color:var(--accent)}
-/* on a computer it pops out beside Start session and you drag right */
-.holdcap.h{flex-direction:row;align-items:center;padding:6px 14px 6px 6px;background:var(--surface);transform-origin:0 50%;transform:translateX(-16px) scale(.5)}
-.holdcap.h.in{transform:none}
-.holdcap.h.out{transform:translateX(-10px) scale(.7)}
-.holdcap.h .hc-knob{order:-1;flex:none;width:auto;height:100%;margin:0}
-.holdcap.h .hc-t{margin:0 0 0 auto;font-size:.66rem}
-.holdcap.h .hc-up{order:2;margin:0 2px 0 10px;rotate:135deg;animation-name:hc-right}
-@keyframes hc-right{0%,100%{translate:-2px 0}50%{translate:3px 0}}
-@media (prefers-reduced-motion:reduce){.holdcap,.hc-knob{transition:none}.hc-up{animation:none}}
+
 
 /* ---------- the Logbook: a month to tap through, and the day you picked ---------- */
 .lb-wrap{display:grid;gap:var(--s0);margin-top:var(--s0)}
@@ -1212,21 +1189,6 @@ html[data-nav="widget"]::view-transition-new(root){animation:fade .35s var(--eas
 @keyframes wf-out{30%,to{opacity:0}}
 @keyframes wf-in{0%,30%{opacity:0}}
 html[data-nav="widget"] #view.enter .wfull .rv{animation:none}
-/* the Logbook: a circle grows from the capsule's knob to reveal it, and shrinks into the session button to close
-   it; the page underneath holds still, so there is never a moment with nothing on screen */
-html[data-nav="reveal"]::view-transition-old(root),html[data-nav="conceal"]::view-transition-new(root){animation:none}
-/* it opens fast and settles (it answers the moment you let go), and closes a little quicker, speeding into the button */
-html[data-nav="reveal"]::view-transition-new(root){animation:lb-reveal .6s cubic-bezier(.05,.7,.1,1) both}
-html[data-nav="conceal"]::view-transition-old(root){animation:lb-conceal .42s cubic-bezier(.3,0,.8,.15) both;z-index:1}
-@keyframes lb-reveal{from{clip-path:circle(0 at var(--rx) var(--ry))}to{clip-path:circle(var(--rr) at var(--rx) var(--ry))}}
-@keyframes lb-conceal{from{clip-path:circle(var(--rr) at var(--rx) var(--ry))}to{clip-path:circle(0 at var(--rx) var(--ry))}}
-/* on a phone the dock steps aside as the circle grows, and comes back once it has closed */
-@media (max-width:47.99rem){
-  html[data-nav="reveal"]::view-transition-old(nav){animation:fade-out .2s var(--ease) both}
-  html[data-nav="conceal"]::view-transition-new(nav){animation:fade .3s var(--ease) .3s both}
-}
-/* closing the Logbook: the + button is already in place for the circle to close on */
-body.vt-snap .nav,body.vt-snap .nav-train,body.vt-snap .nav-train .ring{transition:none!important}
 .no-vt #view.enter{animation:fade .35s var(--ease) both}
 @media (prefers-reduced-motion:reduce){
   html[data-nav]::view-transition-old(root),html[data-nav]::view-transition-new(root),::view-transition-group(wfocus),::view-transition-old(wfocus),::view-transition-new(wfocus){animation-duration:.01s!important}
@@ -2094,8 +2056,6 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
 .heat-rows .lbl{display:block;margin-bottom:6px}
 .heat i[data-act]{cursor:pointer}
 .heat i[data-act]:hover{outline:2px solid var(--ink);outline-offset:1px}
-/* the Logbook is in a computer's sidebar; on phones and tablets it's the hold on the session button */
-@media (max-width:59.99rem){.nav-lb{display:none!important}}
 
 
 /* ---------- the Logbook on a computer: a calendar like a calendar app's month, each day showing what was trained,
@@ -2131,3 +2091,7 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
   /* the day card is narrow: its buttons stack, full width */
   .lb-side .lb-acts .btn{flex:1 1 100%}
 }
+
+/* ---------- the Logbook tab: one title, and a Calendar | List switch beside it (List is the old History) ---------- */
+.lb-top{align-items:flex-end;margin-bottom:var(--s0)}
+.lb-mode{flex:none}

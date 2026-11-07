@@ -7,18 +7,21 @@ test('on a computer the Logbook is in the sidebar and on the L key, and a day on
   test.skip(info.project.name !== 'desktop', 'sidebar and mouse');
   const data = benchHistory(), last = data.sessions[0];
   await login(page, new FakeSupabase(data), 'A');
-  const item = page.locator('#nav .nav-i[data-v="logbook"]');
+  /* one Logbook item, where History was */
+  const item = page.locator('#nav .nav-i[data-v="history"]');
   await expect(item).toBeVisible();
+  await expect(item).toContainText('Logbook');
+  await expect(page.locator('#nav .nav-i:visible', { hasText: 'History' })).toHaveCount(0);
   await item.click();
-  await expect(page).toHaveURL(/\/logbook$/);
-  await expect(item).toHaveClass(/\bon\b/);
-  await page.goto('/history'); await page.waitForTimeout(600);
-  await page.keyboard.press('l');
-  await expect(page).toHaveURL(/\/logbook$/);
-  /* typing an l in a text box is just typing */
-  await page.goto('/history'); await page.locator('.hsearch input').fill('l');
   await expect(page).toHaveURL(/\/history$/);
-  /* the day of the last session, from its square */
+  await expect(item).toHaveClass(/\bon\b/);
+  /* L, from anywhere that isn't a text box, opens the tab */
+  await page.goto('/exercises'); await page.waitForTimeout(600);
+  await page.keyboard.press('l');
+  await expect(page).toHaveURL(/\/history$/);
+  await page.goto('/exercises'); await page.locator('#view input').first().fill('l');
+  await expect(page).toHaveURL(/\/exercises$/);
+  /* the day of the last session, from its square: the Calendar, on that day */
   await page.goto('/w/consistency');
   const t = await page.evaluate(iso => { const d = new Date(iso); d.setHours(12); return [...document.querySelectorAll('.heat i[data-act="lb-day"]')].find(e => new Date(+e.dataset.t).toDateString() === d.toDateString())?.dataset.t; }, last.started_at);
   expect(t).toBeTruthy();
@@ -27,10 +30,10 @@ test('on a computer the Logbook is in the sidebar and on the L key, and a day on
   await expect(page.locator('#lb-day')).toContainText('Push');
 });
 
-test('a phone keeps the Logbook off its dock', async ({ page }, info) => {
+test('a phone’s dock has the Logbook in History’s place, and five tabs', async ({ page }, info) => {
   test.skip(info.project.name !== 'phone', 'phone dock');
   await login(page, new FakeSupabase(benchHistory()), 'A');
-  await expect(page.locator('#nav .nav-i[data-v="logbook"]')).toBeHidden();
+  await expect(page.locator('#nav .nav-i[data-v="history"]')).toHaveAttribute('aria-label', 'Logbook');
   await expect(page.locator('#nav .nav-i:visible')).toHaveCount(5);
 });
 

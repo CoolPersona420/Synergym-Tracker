@@ -10,6 +10,24 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.38-alpha · 7 November 2026
+
+**One Logbook: History and the Logbook are now the same tab**
+
+- **One place for every session:** History is now the **Logbook**, in the same spot on the dock and in the sidebar,
+  with a book for its icon. A **Calendar | List** switch at the top flips between the month calendar and the list of
+  every session (search and filters as before), and the tab opens on the one you used last. The title and switch
+  stay put as you flip.
+- **No more hold on +:** the + button only starts a session now; the Logbook is simply its tab. On a computer the
+  **L** key and a click on any day of the Consistency map still take you there.
+- **A calendar made for a computer:** each day shows what you trained and its volume, as a calendar app's month does;
+  beside it are the day you picked and **This month** (sessions, training days, volume, cardio, rest days, and what
+  you trained). Phones keep the compact calendar.
+- **Logged for a past day, counted everywhere:** a session you log for an earlier day shows in your week, the
+  Consistency map, recent sessions, the exercise's page, records and the coach, as any other does (now tested).
+
+---
+
 ## 0.1.37-alpha · 7 November 2026
 
 **Coach made for a computer, the Logbook one click away, and a bigger year**

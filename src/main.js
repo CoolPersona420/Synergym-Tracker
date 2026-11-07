@@ -20,7 +20,6 @@ import { guideSections, tourSlides } from './ui/guide.js';
 import { rubberBand } from './ui/rubber.js';
 import { edgeBack } from './ui/edgeback.js';
 import { topPanel } from './ui/toppanel.js';
-import { holdReveal } from './ui/hold.js';
 import { swipeRows } from './ui/swiperow.js';
 import { dockDrag } from './ui/dockdrag.js';
 import { segDrag } from './ui/segdrag.js';
@@ -541,14 +540,6 @@ function parsePath() {
   }
 }
 const pathOf = (v, a) => ({ today: '/', history: '/history', exercises: '/exercises', exercise: '/exercises/' + a, splits: '/splits', split: '/splits/' + a, shared: '/splits/shared/' + a, session: '/session/' + a, prefs: '/settings', guide: '/guide', coach: '/coach' + (a ? '/' + a : ''), public: '/s/' + a, widget: '/w/' + a, logbook: '/logbook' })[v] || '/';
-/* where a circular reveal starts (or ends): an element's centre, else the bottom right corner; and the radius
-   that covers the whole screen from there */
-function circleAt(el) {
-  const r = el ? el.getBoundingClientRect() : { left: innerWidth - 48, top: innerHeight - 96, width: 0, height: 0 };
-  const x = r.left + r.width / 2, y = r.top + r.height / 2, st = document.documentElement.style;
-  st.setProperty('--rx', x.toFixed(1) + 'px'); st.setProperty('--ry', y.toFixed(1) + 'px');
-  st.setProperty('--rr', Math.ceil(Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))) + 'px');
-}
 function go(v, a = null, { replace = false } = {}) {
   const path = pathOf(v, a);
   if (replace) history.replaceState({ d: depth }, '', path); else { depth++; history.pushState({ d: depth, from: S.view }, '', path); }
@@ -564,14 +555,23 @@ const upOf = v => ({ exercise: 'exercises', split: 'splits', shared: 'splits', g
 let swipeNav = false;
 addEventListener('popstate', e => { const d = e.state?.d || 0; navDir = swipeNav ? 'swipe' : d < depth ? 'back' : 'fwd'; swipeNav = false; depth = d; route(true); });
 /* the iPhone back swipe works on pages reached from another one; the dock's own pages are where you go back to */
-const SWIPE_BACK = new Set(['exercise', 'split', 'shared', 'session', 'guide', 'coach', 'widget', 'logbook']);
+const SWIPE_BACK = new Set(['exercise', 'split', 'shared', 'session', 'guide', 'coach', 'widget']);
 const canSwipeBack = () => !!(S.user && S.loaded && S.profile.onboarded && SWIPE_BACK.has(S.view) && !S.link && $('#sheet').hidden);
-const VIEW_NAME = { today: 'Home', history: 'History', exercises: 'Exercises', exercise: 'Exercise', splits: 'Splits', split: 'Split', shared: 'Split', session: 'Session', prefs: 'Settings', guide: 'Guide', coach: 'Coach', widget: 'Home', logbook: 'Logbook' };
+const VIEW_NAME = { today: 'Home', history: 'Logbook', exercises: 'Exercises', exercise: 'Exercise', splits: 'Splits', split: 'Split', shared: 'Split', session: 'Session', prefs: 'Settings', guide: 'Guide', coach: 'Coach', widget: 'Home', logbook: 'Logbook' };
 const backLabel = () => VIEW_NAME[depth > 0 && history.state?.from ? history.state.from : upOf(S.view)] || 'Back';
 /* page change: a curtain wipe through the View Transitions API where the browser has it
    (old page lifts away, new page is revealed from below; reversed when going back). */
 let navDir = 'fwd';
 const TABS = ['today', 'splits', 'exercises', 'history', 'prefs'];
+/* the Logbook tab: History is its List, the calendar its Calendar; the tab opens on whichever was used last */
+const LB_VIEWS = new Set(['history', 'logbook']);
+function lbMode(v) {
+  if (v) { try { localStorage.setItem('sg-lbmode', v); } catch {} return v; }
+  try { const m = localStorage.getItem('sg-lbmode'); return LB_VIEWS.has(m) ? m : 'history'; } catch { return 'history'; }
+}
+/* the tab's header, the same in both views so nothing moves when it flips */
+const lbHead = (on, cls = '') => `<header class="wf-top lb-top ${cls}"><div><span class="lbl">Every session, any day</span><h1 class="h1">Logbook</h1></div>${lbSwitch(on)}</header>`;
+const lbSwitch = on => `<span class="seg lb-mode" role="tablist" aria-label="Logbook view">${[['logbook', 'Calendar'], ['history', 'List']].map(([v, l]) => `<button role="tab" class="${on === v ? 'on' : ''}" aria-selected="${on === v}" data-act="lb-mode" data-v="${v}">${l}</button>`).join('')}</span>`;
 function route(enter = true) {
   const [v, a] = parsePath();
   const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg, from = S.view, fromArg = S.arg;
@@ -580,28 +580,23 @@ function route(enter = true) {
   if (!(v === 'session' && arg === S.lbCtx)) S.lbCtx = null;
   S.view = v; S.arg = arg; S.link = null; S.spLink = null;
   let dir = navDir; navDir = 'fwd';
-  /* tab to tab: a sideways slide in the direction of the tab bar */
-  const ti = TABS.indexOf(from), tj = TABS.indexOf(v);
+  /* tab to tab: a sideways slide in the direction of the tab bar (the Logbook's Calendar sits in History's place) */
+  const tab = x => TABS.indexOf(x === 'logbook' ? 'history' : x), ti = tab(from), tj = tab(v);
   if (ti >= 0 && tj >= 0 && ti !== tj) dir = tj > ti ? 'tab-fwd' : 'tab-back';
   /* a widget card grows into its full view, and shrinks back on close */
   let morph = null;
   if (v === 'widget' && from === 'today') { dir = 'widget'; morph = document.querySelector(`#view [data-w="${CSS.escape(arg || '')}"]`); }
   else if (from === 'widget' && v === 'today' && dir !== 'swipe') { dir = 'widget'; S.morphW = fromArg; }
-  /* the Logbook opens as a circle growing out of the capsule's knob, and closes as one shrinking into the
-     session button; the page under it holds still */
-  else if (v === 'logbook' && S.lbFrom) { dir = 'reveal'; circleAt(S.lbFrom.querySelector('.hc-knob') || S.lbFrom); }
-  else if (from === 'logbook' && v !== 'session' && dir !== 'swipe') { dir = 'conceal'; S.lbBack = true; }
-  const pre = S.lbFrom ? (c => () => c.remove())(S.lbFrom) : null; S.lbFrom = null;
+  /* the Logbook's Calendar and List are one tab: flipping between them swaps the page in place */
+  const lbSwap = LB_VIEWS.has(from) && LB_VIEWS.has(v);
+  if (LB_VIEWS.has(v)) lbMode(v);
   if (v !== 'today' && v !== 'widget') S.homeRestore = null;
-  if (enter && changed && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
+  if (enter && changed && !lbSwap && !SPL.el && document.startViewTransition && S.loaded && !document.hidden) {
     document.documentElement.dataset.nav = dir;
     if (morph) morph.style.viewTransitionName = 'wfocus';
-    /* closing the Logbook: the session button is held at its place and size, and the circle closes on it */
-    const t = document.startViewTransition(() => { if (pre) pre(); render(true);
-      if (S.lbBack) { document.body.classList.add('vt-snap'); const r = $('#nav .nav-train .ring'); circleAt(r && r.getBoundingClientRect().width ? r : null); } });
-    t.finished.finally(() => { if (S.lbBack) { S.lbBack = false; document.body.classList.remove('vt-snap'); }
-      if (S.morphW) { S.morphW = null; const c = document.querySelector('#view [data-w][style*="wfocus"]'); if (c) c.style.viewTransitionName = ''; } });
-  } else { if (pre) pre(); S.morphW = null; S.lbBack = false; render(enter); }
+    const t = document.startViewTransition(() => render(true));
+    t.finished.finally(() => { if (S.morphW) { S.morphW = null; const c = document.querySelector('#view [data-w][style*="wfocus"]'); if (c) c.style.viewTransitionName = ''; } });
+  } else { S.morphW = null; render(enter); }
 }
 
 /* ================= rendering ================= */
@@ -695,7 +690,7 @@ function render(enter) {
   document.body.classList.toggle('bare', bare);
   document.body.classList.toggle('in-session', app && S.view === 'session');
   document.body.classList.toggle('on-prefs', app && (S.view === 'prefs' || S.view === 'guide'));
-  document.body.classList.toggle('in-full', app && (S.view === 'widget' || S.view === 'coach' || S.view === 'logbook'));
+  document.body.classList.toggle('in-full', app && (S.view === 'widget' || S.view === 'coach'));
   if (enter) {
     const hr = S.view === 'today' && S.homeRestore;
     if (hr) { const d = $('#dash', v); if (d) d.scrollLeft = hr.x; scrollTo(0, hr.y); S.homeRestore = null; } else scrollTo(0, 0);
@@ -779,15 +774,13 @@ async function loadShared() {
 }
 let navKey = null;
 function renderNav() {
-  const a = activeSession(), on = v => S.view === v || (v === 'exercises' && S.view === 'exercise') || (v === 'splits' && (S.view === 'split' || S.view === 'shared')) || (v === 'prefs' && S.view === 'guide');
-  const key = ['today', 'splits', 'exercises', 'history', 'logbook', 'coach', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
+  const a = activeSession(), on = v => S.view === v || (v === 'history' && S.view === 'logbook') || (v === 'exercises' && S.view === 'exercise') || (v === 'splits' && (S.view === 'split' || S.view === 'shared')) || (v === 'prefs' && S.view === 'guide');
+  const key = ['today', 'splits', 'exercises', 'history', 'coach', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
   const it = (v, l, i, x = '') => `<button class="nav-i${x}${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}" aria-label="${l}"${on(v) ? ' aria-current="page"' : ''}>${i}${roll(l)}</button>`;
   /* the session button is kept across renders (only its contents change), so hiding and showing it can animate */
   const nav = $('#nav'); let fab = nav.querySelector(':scope > .nav-train');
   if (!fab) {
     nav.innerHTML = ''; fab = document.createElement('button'); fab.className = 'nav-train'; nav.appendChild(fab);
-    /* hold it, then slide up (right, beside a computer's sidebar): the Logbook, the one place to log or change past days */
-    holdReveal(fab, { label: 'Logbook', icon: ICON.book, buzz, reduced, side: () => !phoneDash(), enabled: () => S.loaded && S.view !== 'logbook', open: cap => { S.lbFrom = cap; go('logbook'); } });
   }
   /* on a phone the dock is icons only, and a soft raised circle glides to the tab you're on (style.css: --ni is
      that tab's place among the five) */
@@ -818,7 +811,7 @@ function renderNav() {
 function buildTabs(nav, fab, glow, end, it) {
   for (const c of [...nav.children]) if (c !== fab && c !== glow && c !== end) c.remove();
   fab.insertAdjacentHTML('beforebegin', `<div class="nav-brand">${brand()}</div>${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}`);
-  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}${it('logbook', 'Logbook', ICON.book, ' nav-desk nav-lb')}${coachOn() ? it('coach', 'Coach', ICON.coach, ' nav-desk nav-coach') : ''}${it('prefs', 'Settings', ICON.prefs, ' nav-desk')}`);
+  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'Logbook', ICON.book)}${coachOn() ? it('coach', 'Coach', ICON.coach, ' nav-desk nav-coach') : ''}${it('prefs', 'Settings', ICON.prefs, ' nav-desk')}`);
 }
 function pageTop(title, extra = '', logo = false) {
   return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div>${extra ? `<div class="hx">${extra}</div>` : ''}</header>`;
@@ -1541,7 +1534,7 @@ const WIDGETS = {
       if (z === 's') { const s = list[0], a = s && S.A.sess.get(s.id);
         return s ? `<div class="card-h"><span class="lbl">Last session</span></div><button class="tile tile-btn" data-act="open" data-id="${s.id}"><span class="tile-n">${a && a.int ? Math.round(a.int) : '–'}</span><span class="tile-c">${esc(sessName(s))} · ${fmtDate(s.startedAt)}</span></button>`
           : wTile('Last session', '–', 'Nothing logged yet', false); }
-      return `<div class="card-h"><span class="lbl">Recent sessions</span><button class="lbl" data-act="nav" data-v="history">${roll('All history')}</button></div>
+      return `<div class="card-h"><span class="lbl">Recent sessions</span><button class="lbl" data-act="nav" data-v="history">${roll('Logbook')}</button></div>
       <div class="list">${list.length ? list.slice(0, z === 'l' ? 8 : 4).map(rowSession).join('') : `<div class="empty"><b>No sessions yet.</b>Tap + to start, or open Splits to plan your week. Intensity calibrates once each exercise has a couple of sessions.</div>`}</div>`; }
   },
   volume: {
@@ -1839,7 +1832,7 @@ function hfDateText(f) {
 }
 function vHistory() {
   const f = S.hf;
-  return pageTop('History', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `<h1 class="h1 rv" style="margin:10px 0 16px">History</h1>
+  return pageTop('Logbook', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `${lbHead('history', 'rv')}
   <div class="hsearch rv"><input class="search" data-f="q" data-act="hf-open" placeholder="Search by session, exercise or note" value="${esc(S.q)}" autocomplete="off" aria-label="Search history">
   <button class="iconbtn hf-tog${f.open || hfOn(f) ? ' on' : ''}" data-act="hf-toggle" aria-label="Filters" aria-expanded="${f.open || hfOn(f)}" aria-controls="hfil">${FILTER_ICON}</button></div>
   <div id="hfil">${hfHTML()}</div>
@@ -2282,9 +2275,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#sheet').hidden) return closeSheet();
   if (e.key === 'Escape' && TP && TP.isOpen()) return TP.close();
   if (e.key === 'Escape' && S.view === 'widget') return back();
-  /* L opens the Logbook, from anywhere that isn't a text box */
-  if ((e.key === 'l' || e.key === 'L') && !e.metaKey && !e.ctrlKey && !e.altKey && S.user && S.loaded && S.profile.onboarded && $('#sheet').hidden && S.view !== 'logbook'
-    && !(e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]'))) { e.preventDefault(); return go('logbook'); }
+  /* L opens the Logbook tab, from anywhere that isn't a text box */
+  if ((e.key === 'l' || e.key === 'L') && !e.metaKey && !e.ctrlKey && !e.altKey && S.user && S.loaded && S.profile.onboarded && $('#sheet').hidden && !LB_VIEWS.has(S.view)
+    && !(e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]'))) { e.preventDefault(); return go(lbMode()); }
   const el = e.target; if ((e.key === 'Enter' || e.key === ' ') && el.getAttribute && el.getAttribute('role') === 'button' && el.dataset.act) { e.preventDefault(); el.click(); }
 });
 function confirmSheet(title, body, yes, fn, no = 'Cancel') {
@@ -2771,8 +2764,8 @@ const dayName = t => { const n = DAYS[new Date(t).getDay()]; return n[0] + n.sli
 const lbState = () => S.lb || (S.lb = { m: monthOf(Date.now()), k: dayKey(Date.now()) });
 function vLogbook() {
   const L = lbState();
-  return `<div class="wfull lb">
-    <header class="wf-top"><div><span class="lbl">Log or change any day</span><h1 class="h1">Logbook</h1></div>${xBtn('lb-close')}</header>
+  return pageTop('Logbook', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `<div class="wfull lb">
+    ${lbHead('logbook')}
     <div class="lb-wrap"><section class="card lb-cal" id="lb-cal">${lbMonth(L)}</section>
       <div class="lb-side"><section class="lb-day" id="lb-day" aria-live="polite">${lbDay(L.k)}</section><section class="card lb-sum" id="lb-sum">${lbSum(L)}</section></div></div></div>`;
 }
@@ -3215,7 +3208,9 @@ function changeUsername(intro = false) {
 
 /* ================= event wiring ================= */
 const ACT = {
-  nav: el => go(el.dataset.v),
+  /* the Logbook tab opens on Calendar or List, whichever was used last */
+  nav: el => go(el.dataset.v === 'history' && el.classList.contains('nav-i') ? lbMode() : el.dataset.v),
+  'lb-mode': el => { const v = el.dataset.v; if (S.view !== v) { buzz(6); go(v, null, { replace: true }); } },
   'goal-new': el => goalSheet(el.dataset.id || null),
   'coach-switch': () => { S.profile.coachOn = !coachOn(); queue('p', 0); render(false); toast(coachOn() ? 'Coach on. Its card is back on Home.' : 'Coach off. Switch it back on in Settings any time.'); },
   'coach-close': () => back(),
@@ -3296,7 +3291,6 @@ const ACT = {
   'sess-edit': startEdit,
   'edit-save': saveEditSheet,
   'edit-discard': discardEdit,
-  'lb-close': () => back(),
   'lb-m': el => lbMove(+el.dataset.d),
   'lb-pick': el => lbPick(el.dataset.k),
   'lb-open': el => { S.lbCtx = el.dataset.id; go('session', el.dataset.id); },

@@ -1,17 +1,13 @@
 import { expect } from '@playwright/test';
 
-/* the way in: hold the session button (+ on a phone, Start session on a computer), slide up into the capsule, let go */
+/* the way in: the Logbook tab (History's place on the dock or in the sidebar), then its Calendar */
 export async function openLogbook(page) {
-  /* the app has loaded and the button has settled (it springs in on a phone) */
-  await page.waitForFunction(() => !document.getElementById('splash') && document.querySelector('#nav .nav-train .ring') && document.querySelector('#view .hero, #view h1, #view .wfull'));
-  await page.waitForTimeout(700);
-  const b = await page.locator('#nav .nav-train .ring').boundingBox(), x = b.x + b.width / 2, y = b.y + b.height / 2;
-  await page.mouse.move(x, y); await page.mouse.down();
-  await expect(page.locator('.holdcap.in')).toBeVisible();
-  /* up on a phone, right beside a computer's sidebar */
-  const side = await page.evaluate(() => !matchMedia('(max-width:47.99rem)').matches);
-  for (let i = 1; i <= 16; i++) await page.mouse.move(side ? x + i * 16 : x, side ? y : y - i * 11);
-  await page.mouse.up();
+  /* the app has loaded and the dock has settled */
+  await page.waitForFunction(() => !document.getElementById('splash') && document.querySelector('#nav .nav-i[data-v="history"]') && document.querySelector('#view .hero, #view h1, #view .wfull'));
+  await page.waitForTimeout(500);
+  await page.locator('#nav .nav-i[data-v="history"]').click();
+  await expect(page).toHaveURL(/\/(history|logbook)$/);
+  if (!/\/logbook$/.test(page.url())) await page.locator('[data-act="lb-mode"][data-v="logbook"]').click();
   await expect(page).toHaveURL(/\/logbook$/);
   await expect(page.locator('#lb-cal')).toBeVisible();
 }
