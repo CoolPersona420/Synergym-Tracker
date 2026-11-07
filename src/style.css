@@ -155,7 +155,7 @@ h1,h2,h3{font-weight:700;text-wrap:balance;letter-spacing:-.02em;line-height:1.1
 .nav-i{display:flex;flex-direction:column;align-items:center;gap:3px;padding:var(--s-2) var(--s-1);min-width:3.6rem;color:var(--muted);font-size:var(--t-xs);font-weight:600;transition:color .3s}
 .nav-i.on,.nav-i:hover{color:var(--ink)}
 .nav-train{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:var(--t-xs);color:var(--ink)}
-.nav-train .ring{width:2.9rem;height:2.9rem;border-radius:50%;background:var(--solid);color:var(--solid-ink);display:grid;place-items:center;position:relative;transition:transform .45s var(--ease)}
+.nav-train .ring{width:2.9rem;height:2.9rem;border-radius:50%;background:var(--solid);color:var(--solid-ink);display:grid;place-items:center;position:relative;box-shadow:var(--gloss);transition:transform .45s var(--ease)}
 .nav-train:hover .ring{transform:scale(1.06)}
 .nav-train.live .ring::after{content:"";position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg);animation:pulse 1.6s infinite}
 .nav-train .nl{display:none}
@@ -1670,7 +1670,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 @media (max-width:59.99rem){
   .nav{left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);border:0;border-radius:1.7rem;padding:6px 6px;
     background:color-mix(in srgb,var(--surface) 80%,transparent);
-    box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent);
+    box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 1px 0 var(--rim-hi),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent);
     visibility:visible;transition:transform .5s var(--ease),opacity .35s var(--ease),visibility 0s}
   /* Ocean's surfaces are see-through, and lite devices have no blur: paint the dock solid, its surface over the page colour */
   :root[data-theme="ocean"] .nav,html.lite .nav{background:linear-gradient(var(--surface),var(--surface)),var(--bg)}
@@ -1711,7 +1711,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   body.on-prefs .nav{--sp:calc(var(--xr) / 5);--tail:0px;--st:.6s cubic-bezier(.4,0,.2,1) .42s}
   /* the pill: its left part is drawn here and never moves; it is cut where its right end (.nav-end) takes over */
   .nav::before,.nav-end > i{background:var(--dock);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
-    box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent)}
+    box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 1px 0 var(--rim-hi),inset 0 0 0 1px color-mix(in srgb,var(--ink) 7%,transparent)}
   .nav::before{content:"";position:absolute;z-index:0;left:0;top:0;bottom:0;width:calc(100% - var(--xr) - var(--fw) / 2 + 2px);border-radius:999px 0 0 999px;
     clip-path:inset(-3rem 2px -3rem -3rem)}
   /* the pill's right end: a window from that cut to the screen's edge (room for the shadow), and in it the end,
@@ -1736,11 +1736,11 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
      tabs' row, 20cqw, per tab), and on Settings rides out with its tab as the slots widen (transform) */
   .nav-glow{display:block;position:absolute;z-index:0;top:6px;bottom:6px;width:3rem;border-radius:999px;background:var(--dock-on);
     left:calc(6px + 10cqw - 1.5rem);translate:calc(var(--nif) * 20cqw) 0;transform:translateX(calc((var(--nif) + .5) * var(--sp)));
-    box-shadow:0 .25rem .75rem rgba(0,0,0,.1),inset 0 0 0 1px color-mix(in srgb,var(--ink) 6%,transparent);
+    box-shadow:0 .25rem .75rem rgba(0,0,0,.1),inset 0 1px 0 var(--rim-hi),inset 0 0 0 1px color-mix(in srgb,var(--ink) 6%,transparent);
     transition:translate .55s var(--ease),transform var(--st),opacity .25s,scale .22s var(--ease),box-shadow .22s}
   .nav:not([data-ni]):not(.drag) .nav-glow{opacity:0}
   /* dragging along the dock, as on iPhone: the circle lifts and follows the finger, the tab under it lights up */
-  .nav.drag .nav-glow{opacity:1;scale:1.14;box-shadow:0 .55rem 1.3rem rgba(0,0,0,.2),inset 0 0 0 1px color-mix(in srgb,var(--ink) 9%,transparent);
+  .nav.drag .nav-glow{opacity:1;scale:1.14;box-shadow:0 .55rem 1.3rem rgba(0,0,0,.2),inset 0 1px 0 var(--rim-hi),inset 0 0 0 1px color-mix(in srgb,var(--ink) 9%,transparent);
     transition:opacity .25s,scale .22s var(--ease),box-shadow .22s}
   .nav.drag .nav-i{transform:none}
   .nav.drag .nav-i.on:not(.hot){color:color-mix(in srgb,var(--muted) 68%,var(--ink))}
@@ -1748,7 +1748,7 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
   /* the session button: at the right end of the dock's box, the pill's height, centred on it */
   .nav-train{left:auto;right:0;top:50%;bottom:auto;transform:translateY(-50%) scale(1);
     transition:transform .6s cubic-bezier(.34,1.3,.5,1) .42s,opacity .14s linear .42s,visibility 0s .42s}
-  .nav-train .ring{width:var(--fw);height:var(--fw);box-shadow:0 .5rem 1.3rem rgba(0,0,0,.26)}
+  .nav-train .ring{width:var(--fw);height:var(--fw);box-shadow:0 .5rem 1.3rem rgba(0,0,0,.26),var(--gloss)}
   /* gone on Settings (and under a full-screen widget), it minimizes: it shrinks and drifts a little to the right,
      as if stepping off the end of the dock, the + turning a quarter, solid until nearly gone; then the pill
      stretches into its place. Back on another tab the pill shrinks first and the + grows in from the right with
@@ -2059,3 +2059,17 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
 @media (prefers-reduced-motion:reduce){html[data-nav="swipe"]::view-transition-new(root){animation:none}}
 /* History: the next page of sessions */
 .h-more{display:flex;justify-content:center;padding:var(--s0) 0}
+
+/* ---------- glass: light catching the edges, as on a glass card. Only light is added, in white (or a faint shade
+   on light themes), so every theme keeps its own colours. Cards get a bright rim along the top, a soft sheen
+   under it and a little light pooling up from the bottom; the dock (both parts of its pill), its highlight and
+   the session button catch the same light on top. Drawn with backgrounds and inset shadows only: no layout,
+   stacking or motion change. ---------- */
+:root{--rim-hi:rgba(255,255,255,1);--rim-lo:rgba(0,0,0,.06);--sheen:rgba(255,255,255,.6);--glow:rgba(0,0,0,.035);
+  --gloss:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -8px 14px rgba(0,0,0,.14)}
+:root.is-dark{--rim-hi:rgba(255,255,255,.6);--rim-lo:rgba(255,255,255,.05);--sheen:rgba(255,255,255,.07);--glow:rgba(255,255,255,.16)}
+.card,.ex,.split-card{background-image:linear-gradient(180deg,var(--sheen),transparent 38%),radial-gradient(120% 70% at 50% 125%,var(--glow),transparent 62%);
+  box-shadow:inset 0 1px 0 var(--rim-hi),inset 0 -1px 0 var(--rim-lo)}
+.split-card.tpl{box-shadow:none}
+/* the session button's gloss; its shadows (--gloss) are added where each size sets them */
+.nav-train .ring{background-image:linear-gradient(180deg,rgba(255,255,255,.16),transparent 55%)}
