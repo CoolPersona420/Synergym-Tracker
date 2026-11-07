@@ -2093,5 +2093,7 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
 }
 
 /* ---------- the Logbook tab: one title, and a Calendar | List switch beside it (List is the old History) ---------- */
-.lb-top{align-items:flex-end;margin-bottom:var(--s0)}
+/* on a narrow phone the switch drops under the title rather than pushing the page wider */
+.lb-top{align-items:flex-end;flex-wrap:wrap;row-gap:var(--s-1);margin-bottom:var(--s0)}
+.lb-top > div{min-width:0}
 .lb-mode{flex:none}
