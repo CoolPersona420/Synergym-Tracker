@@ -13,7 +13,7 @@ function withSplit(extra = {}) {
   return new FakeSupabase({ ...h, splits: [split], ...extra });
 }
 
-test('Home shows the coach; its page gives today’s call and targets inside the split’s rep range', async ({ page }) => {
+test('Home shows the coach; its page gives today’s call and targets inside the split’s rep range', async ({ page }, info) => {
   const fake = withSplit();
   await login(page, fake, 'A');
   const card = page.locator('[data-w="coach"]');
@@ -21,8 +21,9 @@ test('Home shows the coach; its page gives today’s call and targets inside the
   await card.click();
   await expect(page).toHaveURL(/\/coach$/);
   await expect(page.locator('.co-hero')).toContainText('Train');
-  /* the plan is the first tab */
-  await expect(page.locator('.co-tabs [data-t="plan"]')).toHaveAttribute('aria-selected', 'true');
+  /* on a phone the plan is the first tab; a computer shows the plan, goals and recovery all at once */
+  if (info.project.name === 'phone') await expect(page.locator('.co-tabs [data-t="plan"]')).toHaveAttribute('aria-selected', 'true');
+  else { await expect(page.locator('.co-tabs')).toHaveCount(0); await expect(page.locator('.co-wide .co-side .co-rec')).toBeVisible(); await expect(page.locator('.co-head h1')).toHaveText('Coach'); }
   /* last time 80×8 on every set, range 8–12: same weight, a rep more */
   const row = page.locator('.co-plan .row', { hasText: 'Bench Press' });
   await expect(row).toContainText('80 kg × 9');
@@ -49,15 +50,14 @@ test('after a run of training days the coach says rest, and one tap makes it a r
   await expect.poll(() => (fake.profiles[0].rest_days || []).length).toBe(1);
 });
 
-test('when lifts stall the coach calls a deload, and session targets go lighter with fewer sets', async ({ page }) => {
+test('when lifts stall the coach calls a deload, and session targets go lighter with fewer sets', async ({ page }, info) => {
   const h = benchHistory(), bench = h.exercises[0], squat = { id: crypto.randomUUID(), name: 'Back Squat', muscle: 'Quads', kind: 'w' };
   const flat = Array.from({ length: 9 }, (_, i) => session(41 - i * 5, [{ id: 'b' + i, exId: bench.id, sets: sets(80, 5) }, { id: 's' + i, exId: squat.id, sets: sets(100, 5) }]));
   const fake = new FakeSupabase({ exercises: [bench, squat], sessions: flat });
   await login(page, fake, 'A');
   await page.goto('/coach');
-  /* the Recovery tab is flagged, and opens on a tap */
-  await expect(page.locator('.co-tabs [data-t="recovery"] .co-dot')).toBeVisible();
-  await page.locator('.co-tabs [data-t="recovery"]').click();
+  /* on a phone the Recovery tab is flagged, and opens on a tap; a computer shows it beside the plan */
+  if (info.project.name === 'phone') { await expect(page.locator('.co-tabs [data-t="recovery"] .co-dot')).toBeVisible(); await page.locator('.co-tabs [data-t="recovery"]').click(); }
   await expect(page.locator('.co-rec .co-pill')).toHaveText('Deload now');
   await expect(page.locator('.co-rec')).toContainText('2 of your 2 main lifts have stalled');
   await expect(page.locator('.co-rec details')).toContainText('half your usual sets');
@@ -123,14 +123,14 @@ test('a squat goal: realistic date, milestones and this week’s block, which th
   await expect(page.locator('.co-goal')).toContainText('150 kg');
 });
 
-test('reaching a goal: “I lifted it” saves the one-rep max and closes the goal', async ({ page }) => {
+test('reaching a goal: “I lifted it” saves the one-rep max and closes the goal', async ({ page }, info) => {
   const squat = { id: crypto.randomUUID(), name: 'Back Squat', muscle: 'Quads', kind: 'w' };
   const hist = [session(6, [{ id: 'a', exId: squat.id, sets: sets(120, 3) }]), session(2, [{ id: 'b', exId: squat.id, sets: sets(125, 3) }])];
   const fake = new FakeSupabase({ exercises: [squat], sessions: hist, profile: { lift_goals: [{ id: 'g1', exId: squat.id, kg: 130, at: Date.now() - 30 * 864e5, from: 120 }] } });
   await login(page, fake, 'A');
   await page.goto('/coach');
-  await page.locator('.co-tabs [data-t="goals"]').click();
-  await expect(page.locator('.co-tabs [data-t="goals"] .co-n')).toHaveText('1');
+  if (info.project.name === 'phone') { await page.locator('.co-tabs [data-t="goals"]').click(); await expect(page.locator('.co-tabs [data-t="goals"] .co-n')).toHaveText('1'); }
+  else await expect(page.locator('.co-main')).toContainText('1 goal');
   await expect(page.locator('.co-goal .co-pill')).toHaveText('Ready to test');
   await page.locator('.co-goal [data-act="goal-menu"]').click();
   await page.locator('#sheet-body button', { hasText: 'I lifted it' }).click();

@@ -48,7 +48,8 @@ test('slide along a switch: the pill follows, the option you let go on is picked
   await expect.poll(() => fake.profiles[0].week_start).toBe(0);
 });
 
-test('the Coach tabs slide too', async ({ page }) => {
+test('the Coach tabs slide too', async ({ page }, info) => {
+  test.skip(info.project.name !== 'phone', 'a computer shows the Coach all at once, without tabs');
   await login(page, new FakeSupabase(benchHistory()), 'A');
   await page.goto('/coach');
   await page.waitForTimeout(1300);

@@ -713,6 +713,8 @@ function render(enter) {
 let rvObs = null;
 function playEnter(v) {
   if (rvObs) { rvObs.disconnect(); rvObs = null; }
+  /* the titles' red and cyan edges come in wider and settle, like a lens finding focus (style.css: .ca-start) */
+  if (!reduced) { const ts = $$('.display, .h1', v); ts.forEach(t => t.classList.add('ca-start')); requestAnimationFrame(() => requestAnimationFrame(() => ts.forEach(t => t.classList.remove('ca-start')))); }
   const vh = innerHeight, late = [], io = 'IntersectionObserver' in window && !reduced;
   /* every position is read before anything is changed: reading after a change makes the browser lay the page out
      again, once per element, which on a long list took most of a second */
@@ -780,7 +782,7 @@ async function loadShared() {
 let navKey = null;
 function renderNav() {
   const a = activeSession(), on = v => S.view === v || (v === 'exercises' && S.view === 'exercise') || (v === 'splits' && (S.view === 'split' || S.view === 'shared')) || (v === 'prefs' && S.view === 'guide');
-  const key = ['today', 'splits', 'exercises', 'history', 'coach', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
+  const key = ['today', 'splits', 'exercises', 'history', 'logbook', 'coach', 'prefs'].find(on) || '', pop = key !== navKey; navKey = key;
   const it = (v, l, i, x = '') => `<button class="nav-i${x}${on(v) ? ' on' + (pop ? ' pop' : '') : ''}" data-act="nav" data-v="${v}" aria-label="${l}"${on(v) ? ' aria-current="page"' : ''}>${i}${roll(l)}</button>`;
   /* the session button is kept across renders (only its contents change), so hiding and showing it can animate */
   const nav = $('#nav'); let fab = nav.querySelector(':scope > .nav-train');
@@ -818,7 +820,7 @@ function renderNav() {
 function buildTabs(nav, fab, glow, end, it) {
   for (const c of [...nav.children]) if (c !== fab && c !== glow && c !== end) c.remove();
   fab.insertAdjacentHTML('beforebegin', `<div class="nav-brand">${brand()}</div>${it('today', 'Home', ICON.home)}${it('splits', 'Splits', ICON.split)}`);
-  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}${coachOn() ? it('coach', 'Coach', ICON.coach, ' nav-desk nav-coach') : ''}${it('prefs', 'Settings', ICON.prefs, ' nav-desk')}`);
+  fab.insertAdjacentHTML('afterend', `${it('exercises', 'Exercises', ICON.ex)}${it('history', 'History', ICON.hist)}${it('logbook', 'Logbook', ICON.book, ' nav-desk nav-lb')}${coachOn() ? it('coach', 'Coach', ICON.coach, ' nav-desk nav-coach') : ''}${it('prefs', 'Settings', ICON.prefs, ' nav-desk')}`);
 }
 function pageTop(title, extra = '', logo = false) {
   return `<header class="top rv"><div class="ttl${logo ? '' : ' no-logo'}" aria-label="${esc(title)}">${logo ? brand() : ''}<span class="ttl-c" aria-hidden="true">${esc(title)}</span></div>${extra ? `<div class="hx">${extra}</div>` : ''}</header>`;
@@ -1161,6 +1163,9 @@ const whyList = l => l.length ? `<ul class="co-why">${l.map(t => `<li>${esc(t)}<
 /* the Coach page: a short summary of today on top, then one tab at a time (the plan, goals, recovery), so it
    reads without scrolling. Details fold away. /coach/goals and /coach/recovery open a tab directly. */
 const COACH_TABS = [['plan', 'Plan'], ['goals', 'Goals'], ['recovery', 'Recovery']];
+/* a computer's width: the Coach shows everything at once (vCoach), and is drawn again when the window crosses it */
+const CO_WIDE = matchMedia('(min-width:60rem)');
+CO_WIDE.addEventListener?.('change', () => { if (S.view === 'coach' && S.loaded) render(false); });
 const HOW_DELOAD = { off: 'No lifting for 5 to 7 days. Walk, stretch and sleep. Strength holds for several weeks, so you lose nothing; tiredness clears and joints recover. Come back at about 90% for the first session.',
   deload: 'Keep the same exercises and days. Do about half your usual sets at about 90% of your usual weights, stopping 3 to 4 reps short of failure. One week, then back to normal: most people come back stronger. The coach’s targets switch to this by themselves.' };
 const tgtText = (g, bw) => bw && !g.next.w ? `${g.next.r} reps` : `${fmtW(g.next.w)} ${unit()} × ${g.next.r}`;
@@ -1195,11 +1200,17 @@ function vCoach() {
     ${btn || more.length ? `<div class="co-acts">${btn}${more.length ? `<details class="co-more"><summary>Why</summary>${whyList(more)}</details>` : ''}</div>` : ''}</section>`;
   const recWarn = ['soon', 'now'].includes(a.deload.status) || ['change', 'consider'].includes(a.split.status);
   const tabs = `<div class="seg co-tabs rv" role="tablist" aria-label="Coach">${COACH_TABS.map(([id, t]) => `<button role="tab" aria-selected="${tab === id}" class="${tab === id ? 'on' : ''}" data-act="coach-tab" data-t="${id}">${t}${id === 'goals' && a.goals.length ? ` <span class="co-n">${a.goals.length}</span>` : ''}${id === 'recovery' && recWarn ? ' <i class="co-dot" aria-label="needs a look"></i>' : ''}</button>`).join('')}</div>`;
+  const foot = `<p class="muted co-foot rv">The coach reads your log: estimated maxes, rep ranges, training load and recovery. It’s guidance, not medical advice: if something hurts, stop. <button class="linkbtn" data-act="how">How it works</button></p>`;
+  /* on a computer there's room for it all at once: today's call as a wide banner, then the next session and goals
+     beside recovery, which stays in view as you scroll; no tabs */
+  if (CO_WIDE.matches) return pageTop('Coach') + `<header class="wf-top co-head rv"><div><span class="lbl">Planned from your log</span><h1 class="h1">Coach</h1></div></header>
+    <div class="co co-wide">${hero}
+      <div class="co-main"><div class="co-gh rv"><span class="lbl">Next session</span></div>${coachPlan(a, nx)}${coachGoals(a)}</div>
+      <aside class="co-side"><div class="co-gh rv"><span class="lbl">Recovery</span></div>${coachRecovery(a, nx)}</aside>${foot}</div>`;
   const body = tab === 'goals' ? coachGoals(a) : tab === 'recovery' ? coachRecovery(a, nx) : coachPlan(a, nx);
   /* on phones and tablets the Coach opens full screen (as a widget does), so it has its own close button */
   return `<header class="co-top rv"><span class="co-tt">Coach</span>${xBtn('coach-close', 'Close the coach')}</header>`
-    + pageTop('Coach') + `<div class="co">${hero}${tabs}<div class="co-panel" role="tabpanel">${body}</div>
-    <p class="muted co-foot rv">The coach reads your log: estimated maxes, rep ranges, training load and recovery. It’s guidance, not medical advice: if something hurts, stop. <button class="linkbtn" data-act="how">How it works</button></p></div>`;
+    + pageTop('Coach') + `<div class="co">${hero}${tabs}<div class="co-panel" role="tabpanel">${body}</div>${foot}</div>`;
 }
 function coachPlan(a, nx) {
   if (!nx) return `<section class="card rv"><p class="muted">Plan a split and the coach sets a weight, reps and sets for every exercise, every session.</p><div class="btns" style="justify-content:flex-start"><button class="btn line sm" data-act="nav" data-v="splits">${roll('Plan a split')}</button></div></section>`;
@@ -1387,13 +1398,28 @@ function chartDays(days) {
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Daily session intensity, last ${lab(days)}">${g}${f}</svg>
   <div class="axis"><span class="lbl">${lab(days)}</span><span class="lbl">${Math.round(days * 2 / 3)}d</span><span class="lbl">${Math.round(days / 3)}d</span><span class="lbl">today</span></div></div>`;
 }
+/* with a mouse, a day's square opens that day in the Logbook (as a day on GitHub's activity graph does) */
+const FINE = matchMedia('(hover:hover) and (pointer:fine)');
+function heatCells(start, weeks, ctx) {
+  const { di, tk, now, rd, open } = ctx; let h = '';
+  for (let w = 0; w < weeks; w++) { const ws = shiftWeek(start, w); for (let d = 0; d < 7; d++) { const dt = new Date(ws); dt.setDate(dt.getDate() + d); const k = dayKey(dt), past = dt.getTime() <= now;
+    let c = ''; if (!past) c = 'fut'; else if (di.has(k)) { const v = di.get(k); c = v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1'; } else if (rd.has(k)) c = 'rd';
+    if (k === tk) c += ' today';
+    h += `<i class="${c}"${open && past ? ` data-act="lb-day" data-t="${dt.getTime()}"` : ''} title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : rd.has(k) ? ' · rest day' : ''}${open && past ? ' · open in the Logbook' : ''}"></i>`; } }
+  return h;
+}
+const monYr = t => { const d = new Date(t); return d.toLocaleString('en', { month: 'short' }) + ' ' + String(d.getFullYear()).slice(2); };
 function heatWeeks(weeks) {
-  const cw = weekStart(Date.now()), start = shiftWeek(cw, -(weeks - 1)), di = dayIntensity(), tk = dayKey(Date.now()), now = Date.now(), rd = new Set(S.profile.restDays || []);
-  let h = '';
-  for (let w = 0; w < weeks; w++) { const ws = shiftWeek(start, w); for (let d = 0; d < 7; d++) { const dt = new Date(ws); dt.setDate(dt.getDate() + d); const k = dayKey(dt);
-    let c = ''; if (dt.getTime() > now) c = 'fut'; else if (di.has(k)) { const v = di.get(k); c = v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1'; } else if (rd.has(k)) c = 'rd';
-    if (k === tk) c += ' today'; h += `<i class="${c}" title="${fmtDate(dt)}${di.has(k) ? ' · int ' + Math.round(di.get(k)) : rd.has(k) ? ' · rest day' : ''}"></i>`; } }
-  return `<div class="heat${weeks > 30 ? ' dense' : ''}" aria-label="Training days, last ${weeks} weeks">${h}</div>`;
+  const cw = weekStart(Date.now()), start = shiftWeek(cw, -(weeks - 1));
+  const ctx = { di: dayIntensity(), tk: dayKey(Date.now()), now: Date.now(), rd: new Set(S.profile.restDays || []), open: FINE.matches };
+  /* a year on a phone is two rows of half a year, older above, so each day is twice the size */
+  if (weeks > 30 && phoneDash()) {
+    const half = Math.ceil(weeks / 2), mid = shiftWeek(start, half);
+    return `<div class="heat-rows" aria-label="Training days, last ${weeks} weeks">`
+      + `<div><span class="lbl">${monYr(start)} – ${monYr(mid - 864e5)}</span><div class="heat">${heatCells(start, half, ctx)}</div></div>`
+      + `<div><span class="lbl">${monYr(mid)} – now</span><div class="heat">${heatCells(mid, weeks - half, ctx)}</div></div></div>`;
+  }
+  return `<div class="heat${weeks > 30 ? ' dense' : ''}" aria-label="Training days, last ${weeks} weeks">${heatCells(start, weeks, ctx)}</div>`;
 }
 const heatKey = `<div class="heat-f"><span class="lbl">less</span><span class="lbl"><i class="rd-key"></i>rest</span><span class="lbl">more intense</span></div>`;
 const restIn = days => { const t = Date.now() - days * 864e5; return (S.profile.restDays || []).filter(k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime() >= t; }).length; };
@@ -2258,6 +2284,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#sheet').hidden) return closeSheet();
   if (e.key === 'Escape' && TP && TP.isOpen()) return TP.close();
   if (e.key === 'Escape' && S.view === 'widget') return back();
+  /* L opens the Logbook, from anywhere that isn't a text box */
+  if ((e.key === 'l' || e.key === 'L') && !e.metaKey && !e.ctrlKey && !e.altKey && S.user && S.loaded && S.profile.onboarded && $('#sheet').hidden && S.view !== 'logbook'
+    && !(e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]'))) { e.preventDefault(); return go('logbook'); }
   const el = e.target; if ((e.key === 'Enter' || e.key === ' ') && el.getAttribute && el.getAttribute('role') === 'button' && el.dataset.act) { e.preventDefault(); el.click(); }
 });
 function confirmSheet(title, body, yes, fn, no = 'Cancel') {
@@ -3172,6 +3201,8 @@ const ACT = {
   'quote-next': el => nextQuote(el),
   /* the plan is the Coach's first tab, so it gets the plain /coach address */
   'coach-go': el => { const t = el.dataset.t || 'plan'; S.coachTab = t; go('coach', t === 'plan' ? null : t); },
+  /* a day's square on the heat map: that day, in the Logbook */
+  'lb-day': el => { const t = +el.dataset.t; if (!(t > 0)) return; S.lb = { m: monthOf(t), k: dayKey(t) }; go('logbook'); },
   'coach-tab': el => { S.coachTab = el.dataset.t; if (S.arg) go('coach', null, { replace: true }); else render(false); },
   'ts-split': el => go('split', el.dataset.id),
   'goal-menu': el => goalMenu(el.dataset.id),

@@ -38,7 +38,9 @@ test('hold the session button, slide into the capsule (up on a phone, right on a
 test('the Logbook is the only way in: the heat map and History have no logging of their own', async ({ page }) => {
   await login(page, new FakeSupabase(benchHistory()), 'A');
   await page.goto('/w/consistency');
-  await expect(page.locator('.heat [data-act]')).toHaveCount(0);
+  /* a day's square can only open that day in the Logbook */
+  await page.waitForSelector('.heat i');
+  expect(await page.locator('.heat [data-act]').evaluateAll(es => es.filter(e => e.dataset.act !== 'lb-day').length)).toBe(0);
   await page.goto('/history');
   await expect(page.locator('[data-act="log-past"]')).toHaveCount(0);
 });

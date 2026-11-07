@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.36, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.37, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.36-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.37-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -41,10 +41,11 @@ The version lives in `package.json` (`0.1.36-alpha`) and shows in Settings › A
 - **Rest days:** mark today as a rest day on Home; the start button turns into a moon and stars, and no
   session can be started until the rest day is undone.
 - **Home:** a greeting and a quote (tap it for another: Stoics, Dorian Yates, CBum and more), the next session, and widgets you choose and size: the coach, this week's summary,
-  bodyweight trend, intensity, consistency, volume, muscle focus, records, top lifts and your week's plan.
+  bodyweight trend, intensity, consistency (a year of it on a phone in two rows of half a year), volume, muscle focus, records, top lifts and your week's plan.
   Each opens full screen with more detail.
 - **Logbook:** hold the + button and slide up into the capsule that rises (on a computer, hold Start session and drag
-  right into the capsule beside it). A month
+  right into the capsule beside it; a computer also has it in the sidebar, on the **L** key, and on a click of any day
+  of the Consistency map). A month
   calendar of every day: open a past session and Edit it (save as today's or update it), log a session for a day you
   missed, or mark a rest day. A logged session can also be edited from its row in History (swipe it, or the pencil
   beside it on a computer); sessions simply opened elsewhere are view-only.
@@ -85,7 +86,8 @@ progression, more set types, warm-ups, muscle balance and more.
   Splits are shared only through checked database functions. Strict security headers (CSP, HSTS, no
   framing) come from `vercel.json`.
 - **Look:** spacing, type sizes and two-column splits follow the golden ratio (φ = 1.618); the scale and
-  theme tokens are at the top of `src/style.css`, and the glass finish (its own tokens, light only) at the end.
+  theme tokens are at the top of `src/style.css`, and the glass finish (its own tokens, light only) and the titles'
+  chromatic aberration (a fine red and cyan edge that settles as a page opens) at the end.
   The wolf mascot is the logo, the splash and the app icon
   (`public/icon.svg` and the PNG icons). The wordmark is Teko Bold, slanted 12°.
 
@@ -199,7 +201,8 @@ It runs in your browser, needs no extra data, and is worked out again only when 
 exercises, splits, goals or the date change, so the app stays as quick as before (three years of
 four sessions a week takes a few milliseconds). Open it from its card on Home, the today panel, or the
 sidebar on a computer: a short summary (train, go easy or rest, with the main reason and the next step) over
-three tabs, **Plan**, **Goals** and **Recovery**, so it reads without scrolling. It also shows up where you
+three tabs, **Plan**, **Goals** and **Recovery**, so it reads without scrolling. On a computer it shows everything at
+once instead: the summary as a wide banner, then the next session and goals beside recovery, which stays in view. It also shows up where you
 train: the targets in a session and a note when they're lighter, next time's target on each exercise page,
 and its view of a split on the split's page. It's guidance, not medical advice.
 
