@@ -21,8 +21,10 @@ test('on a computer the Logbook is in the sidebar and on the L key, and a day on
   await expect(page).toHaveURL(/\/history$/);
   await page.goto('/exercises'); await page.locator('#view input').first().fill('l');
   await expect(page).toHaveURL(/\/exercises$/);
-  /* the day of the last session, from its square: the Calendar, on that day */
+  /* the day of the last session, from its square: the Calendar, on that day (once the map is drawn: a slower
+     machine is still loading when the page first answers) */
   await page.goto('/w/consistency');
+  await page.waitForSelector('.heat i[data-act="lb-day"]');
   const t = await page.evaluate(iso => { const d = new Date(iso); d.setHours(12); return [...document.querySelectorAll('.heat i[data-act="lb-day"]')].find(e => new Date(+e.dataset.t).toDateString() === d.toDateString())?.dataset.t; }, last.started_at);
   expect(t).toBeTruthy();
   await page.locator(`.heat i[data-t="${t}"]`).click();
