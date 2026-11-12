@@ -2665,15 +2665,15 @@ function endEdit() {
 }
 /* Discard: a new draft has nothing to go back to, so the page goes back too */
 function discardEdit() { const fresh = S.edit && !S.edit.orig; endEdit(); if (fresh) back(); else render(false); }
-/* a tap on something a finished session keeps locked points at Edit, or, outside the Logbook, at the Logbook */
+/* a tap on something a finished session keeps locked points at Edit, or, opened outside the Logbook, at ⋯ › Change */
 function nudgeEdit() {
   const b = $('#view .s-edit'); if (!b) return lbHint();
   b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge');
   buzz(6); toast('Tap Edit to change this session');
 }
 function lbHint() {
-  const f = $('#nav .nav-train'); if (f) { f.classList.remove('nudge'); void f.offsetWidth; f.classList.add('nudge'); }
-  buzz(6); toast(phoneDash() ? 'Past sessions change in the Logbook: hold + and slide up' : 'Past sessions change in the Logbook: hold Start session and drag right');
+  const m = $('#view [data-act="sess-menu"]'); if (m) { m.classList.remove('nudge'); void m.offsetWidth; m.classList.add('nudge'); }
+  buzz(6); toast('To change it: ⋯ › Change this session');
 }
 const recNote = a => a && a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : '';
 function saveEditSheet() {
@@ -2761,10 +2761,10 @@ function offerOneRm(changes, s, how = 'corrected') {
 }
 
 /* ---------- the Logbook ----------
-   The one place to log or change a past day. Hold the session button (+ on a phone, Start session on a computer)
-   and slide up into the capsule. A month calendar, filled in like the Consistency heat map; tap a day to see its
-   sessions (they open ready to Edit), log a session for it from your split or empty, or mark it a rest day.
-   Sessions opened anywhere else are read-only (see S.lbCtx). */
+   The Logbook tab (History's old place) is the one place to log or change a past day. Its Calendar is a month,
+   filled in like the Consistency heat map; tap a day to see its sessions (they open ready to Edit), log a session
+   for it from your split or empty, or mark it a rest day. Its List (vHistory) is every session; those open ready
+   to Edit too. Sessions opened anywhere else are read-only, with ⋯ › Change this session (see S.lbCtx). */
 const dayStart = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
 const sessOn = k => [...S.sessions.values()].filter(s => s.endedAt && dayKey(s.startedAt) === k).sort((a, b) => a.startedAt - b.startedAt);
 const monthOf = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
@@ -2999,7 +2999,7 @@ function sessMenu() {
   const s = cur(); if (!s) return;
   if (editing(s)) return menuSheet(sessName(s), [{ label: 'Save', fn: saveEditSheet }, { label: 'Change date and time', fn: editDate }, { label: S.edit.orig ? 'Discard changes' : 'Discard this session', warn: true, fn: discardEdit }, ...(S.edit.orig ? [{ label: 'Delete session', warn: true, fn: () => askDelete(s.id) }] : [])]);
   /* a finished session opened outside the Logbook can be repeated, not changed */
-  if (s.endedAt && S.lbCtx !== s.id) return menuSheet(sessName(s), [{ label: 'Repeat this session', hint: 'start a new one like it', fn: () => repeatSession(s.id) }, { label: 'Change this session', hint: 'hold + and slide up to the Logbook', fn: lbHint }, { label: 'Delete session', warn: true, fn: () => askDelete(s.id) }]);
+  if (s.endedAt && S.lbCtx !== s.id) return menuSheet(sessName(s), [{ label: 'Repeat this session', hint: 'start a new one like it', fn: () => repeatSession(s.id) }, { label: 'Change this session', hint: 'opens it ready to edit', fn: () => editFromRow(s.id) }, { label: 'Delete session', warn: true, fn: () => askDelete(s.id) }]);
   menuSheet(sessName(s), [
     ...(s.endedAt ? [{ label: 'Edit session', hint: 'then save as today’s, or update this one', fn: startEdit }] : []),
     { label: 'Change date', fn: editDate },
@@ -3262,7 +3262,8 @@ const ACT = {
   'open-today': el => { closeSheet(); TP && TP.close(); go('session', el.dataset.id); },
   'start-day': el => startFromSplit(el.dataset.sp, +el.dataset.day),
   resume: el => go('session', el.dataset.id || activeSession()?.id),
-  open: el => go('session', el.dataset.id),
+  /* the Logbook's List is the Logbook: a session opened from it can be changed, as from its Calendar */
+  open: el => { if (S.view === 'history') S.lbCtx = el.dataset.id; go('session', el.dataset.id); },
   back,
   repeat: el => repeatSession(el.dataset.id),
   'day-same': el => { const sp = curSplit(), i = +el.dataset.day, d = sp && sp.days[i]; if (!d || i === 0) return; d.same = !d.same; touchSplit(sp, 300); render(false); toast(d.same ? `Now the ${dayLabel(sp.days, i).replace(/^Day \d+ · /, '')} of ${dayLabel(sp.days, i - 1).replace(/ · .*$/, '')}` : 'Now its own day'); },

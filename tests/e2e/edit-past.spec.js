@@ -13,22 +13,44 @@ async function openLast(page) {
 const row = (fake, id) => fake.sessions.find(s => s.id === id);
 const outbox = page => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('sg-outbox')).map(k => localStorage.getItem(k)).join(''));
 
-test('opened anywhere but the Logbook, a finished session is view-only and points to the Logbook', async ({ page }) => {
+test('opened anywhere but the Logbook, a finished session is view-only; ⋯ › Change this session opens it ready to edit', async ({ page }) => {
+  const data = benchHistory(), fake = new FakeSupabase(data), last = data.sessions[0];
+  await login(page, fake, 'A');
+  /* straight from a link, as from Home or an exercise's page */
+  await page.goto('/session/' + last.id);
+  await expect(page.locator('.s-meta')).toContainText('completed');
+  await expect(page.locator('.s-edit')).toHaveCount(0);
+  await expect(page.locator('#view [data-act="edit-date"]')).toHaveCount(0);
+  /* a tap on its numbers points at the ⋯ menu, not at a gesture */
+  await page.locator('[data-f="w"][data-set="s31"]').click();
+  await expect(page.locator('#toast')).toContainText('⋯ › Change this session');
+  await expect(page.locator('#toast')).not.toContainText('hold');
+  await page.click('[data-act="sess-menu"]');
+  await expect(page.locator('#sheet')).toContainText('Repeat this session');
+  for (const t of ['Edit session', 'Change date', 'Reopen as live', 'slide up']) await expect(page.locator('#sheet')).not.toContainText(t);
+  /* deleting it is allowed anywhere (it asks first) */
+  await expect(page.locator('#sheet')).toContainText('Delete session');
+  expect(row(fake, last.id).items[0].sets[0].w).toBe(80);
+  /* Change this session opens it ready to edit, right here */
+  await page.locator('#sheet button', { hasText: 'Change this session' }).click();
+  await expect(page.locator('[data-act="edit-save"]')).toBeVisible();
+  await expect(page.locator('[data-f="w"][data-set="s31"]')).not.toHaveAttribute('readonly', '');
+});
+
+test('the Logbook’s List is the Logbook: a session opened from it has Edit, as from the Calendar', async ({ page }) => {
   const data = benchHistory(), fake = new FakeSupabase(data), last = data.sessions[0];
   await login(page, fake, 'A');
   await page.goto('/history');
   await page.locator(`[data-act="open"][data-id="${last.id}"]`).click();
-  await expect(page.locator('.s-meta')).toContainText('completed');
-  await expect(page.locator('.s-edit')).toHaveCount(0);
-  await expect(page.locator('#view [data-act="edit-date"]')).toHaveCount(0);
-  await page.locator('[data-f="w"][data-set="s31"]').click();
-  await expect(page.locator('#toast')).toContainText('Past sessions change in the Logbook');
-  await page.click('[data-act="sess-menu"]');
-  await expect(page.locator('#sheet')).toContainText('Repeat this session');
-  for (const t of ['Edit session', 'Change date', 'Reopen as live']) await expect(page.locator('#sheet')).not.toContainText(t);
-  /* deleting it is allowed anywhere (it asks first) */
-  await expect(page.locator('#sheet')).toContainText('Delete session');
-  expect(row(fake, last.id).items[0].sets[0].w).toBe(80);
+  await expect(page.locator('.s-edit')).toBeVisible();
+  await page.locator('.s-edit').click();
+  await page.locator('[data-f="w"][data-set="s31"]').fill('85');
+  await page.click('[data-act="edit-save"]');
+  await page.locator('#sheet button', { hasText: /^Update/ }).click();
+  await expect.poll(() => row(fake, last.id).items[0].sets[0].w).toBe(85);
+  /* back to the List it came from */
+  await page.click('.s-top [data-act="back"]');
+  await expect(page).toHaveURL(/\/history$/);
 });
 
 test('a finished session reads as it was logged: nothing changes until Edit, and a tap points at Edit', async ({ page }) => {

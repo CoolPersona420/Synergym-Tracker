@@ -489,6 +489,8 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 /* ---------- the session button ---------- */
 .nav-train{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .nav-train.nudge .ring{animation:nudge .45s var(--ease)}
+/* a read-only session's ⋯, pointed at when a locked field is tapped (it holds Change this session) */
+[data-act="sess-menu"].nudge{animation:nudge .45s var(--ease)}
 
 
 /* ---------- the Logbook: a month to tap through, and the day you picked ---------- */

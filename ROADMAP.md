@@ -55,7 +55,7 @@ next.
 
 | Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
-| 1.2.1 | **More set types:** timed holds (planks), cardio (time and distance), assisted lifts (weight taken off), and left/right sides for one-arm or one-leg work. | Today everything must be weight × reps, so some workouts can't be logged accurately. | Bodyweight exercises (added load). | Planned |
+| 1.2.1 | **More set types:** timed holds (planks), cardio (time and distance), assisted lifts (weight taken off), and left/right sides for one-arm or one-leg work. | Today everything must be weight × reps, so some workouts can't be logged accurately. | Bodyweight exercises (added load); cardio with time, distance and pace, heart rate, calories and effort. | In progress: cardio shipped in v0.1.22-alpha; timed holds, assisted lifts and sides are planned |
 | 1.2.2 | **Warm-up sets.** Generate them from the working weight (bar, about 50%, 70%, 85%) with the plates shown. | Used every session; saves the mental math. | Plate calculator (`src/lib/plates.js`). | Planned |
 | 1.2.3 | **Rest time per exercise.** For example, 3 min for squats and 60 s for curls. | One rest timer for everything is wrong for most sessions. | Rest timer (one setting in Settings › Training). | Planned |
 

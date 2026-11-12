@@ -10,6 +10,21 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.40-alpha · 12 November 2026
+
+**The guide catches up, and the Logbook's List edits like its Calendar**
+
+- **Open from the List, edit right there:** a session opened from the Logbook's List now has **Edit**, as one opened
+  from its Calendar does; the List is the Logbook. Opened anywhere else (Home's recent sessions, an exercise's
+  page), a session stays read-only, and **⋯ › Change this session** now opens it ready to edit.
+- **No more pointers to the old hold on +:** a tap on a read-only session's numbers, and its ⋯ menu, used to say
+  "hold + and slide up" for the Logbook, a gesture removed in 0.1.38. They now point to ⋯ › Change this session.
+- **The user guide is up to date:** the dock's tabs (Logbook in History's place), the sidebar (Logbook and the **L**
+  key), the Coach all at once on a computer, Consistency's year on a phone, and how and where a session can be
+  changed. The README and roadmap match the app too (cardio is marked as shipped).
+
+---
+
 ## 0.1.39-alpha · 7 November 2026
 
 **Widgets open like the Coach, and a smoother Logbook flip**

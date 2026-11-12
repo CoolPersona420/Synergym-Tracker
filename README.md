@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.39, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.40, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.39-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.40-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -45,12 +45,13 @@ The version lives in `package.json` (`0.1.39-alpha`) and shows in Settings › A
   Each opens full screen with more detail.
 - **Logbook:** one tab for every session, in History's old place on the dock and in the sidebar (and on the **L**
   key on a computer). A **Calendar | List** switch flips between a month calendar and the list of every session, and it
-  opens on the one used last. In **Calendar**, open a past session and Edit it (save as today's or update it), log a
-  session for a day you missed, or mark a rest day; on a computer each day shows what was trained and its volume, with
-  the day you picked and the month summed up beside it, and a click on any day of the Consistency map opens it.
-  A session logged for a past day counts everywhere: the week, the Consistency map, records, estimates and the coach.
-  A logged session can also be edited from its row in the List (swipe it, or the pencil beside it on a computer);
-  sessions simply opened elsewhere are view-only.
+  opens on the one used last. Open a past session from either and Edit it (save as today's or update it); in
+  **Calendar**, also log a session for a day you missed, or mark a rest day. On a computer each day of the Calendar
+  shows what was trained and its volume, with the day you picked and the month summed up beside it, and a click on any
+  day of the Consistency map opens it. A session logged for a past day counts everywhere: the week, the Consistency
+  map, records, estimates and the coach. Rows also edit straight from the List (swipe one, or the pencil beside it on
+  a computer). Opened anywhere else (Home, an exercise's page), a session is read-only, and **⋯ › Change this
+  session** opens it ready to edit.
 - **Bodyweight log**, the **Logbook's List** with search, and an **exercise library** of your own with editable
   muscle groups.
 - **Cardio:** add a run, ride, row, swim (or any cardio of your own) to any session. Time is always logged;
@@ -65,9 +66,13 @@ The version lives in `package.json` (`0.1.39-alpha`) and shows in Settings › A
   Only light is added, so each theme keeps its own colours.
 - **Week start:** weeks start on Monday, Sunday or Saturday (**Settings › Training**), for the weekly
   target, streaks, charts and the today panel.
-- **Phone app:** install it to the Home Screen. It opens without a connection, has a floating icon dock you can tap or drag along (every switch in the app slides the same way) (the + session button beside it; on Settings the dock stretches into the +'s place, all of it moving by
-  transform so it stays smooth while the phone is busy) and a
-  quick opening splash, never zooms, and the page stretches and springs back at the top and bottom like
+- **Phone app:** install it to the Home Screen. It opens without a connection and never zooms. A floating icon dock
+  holds the five tabs (Home, Splits, Exercises, Logbook, Settings), with the + session button beside it; tap a tab, or
+  press and slide along the dock, as on iPhone. Every switch in the app (Units, Week starts on, the Logbook's
+  Calendar | List, the Coach tabs and more) slides the same way. On Settings the + steps aside and the dock stretches
+  into its place, all of it moving by transform so it stays smooth while the phone is busy. Pages change with a slide
+  between tabs and a rise for everything opened on top (a widget, the Coach, an exercise), whose sections then come in
+  one after another. It has a quick opening splash, and the page stretches and springs back at the top and bottom like
   iOS (native on iPhone, recreated on Android). Installed on an iPhone, which has no browser back, you swipe
   in from the left edge to go back, as in other iPhone apps (`src/ui/edgeback.js`).
   - **Offline mode:** use it without an account, or take an account offline; going online merges and
@@ -152,7 +157,7 @@ or console error.
 
 **Speed.** Derived numbers (records, intensity, the sessions in order, exercise lookups) are cached and worked out
 again only when data changes: every edit goes through `queue()`, which bumps an edit counter. Records use a small
-frontier per exercise rather than scanning every weight. History renders 60 sessions at a time. To profile, build
+frontier per exercise rather than scanning every weight. The Logbook's List renders 60 sessions at a time. To profile, build
 without minifying (`npx vite build --minify false && npx vite preview`) and record a CPU profile on a large account.
 
 ## Code layout
@@ -162,7 +167,7 @@ without minifying (`npx vite build --minify false && npx vite preview`) and reco
 | `src/main.js` | app state, screens, actions, saving and sync |
 | `src/lib/` | logic with no UI: the coach, progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, error reports and stats |
 | `public/sw.js` | the service worker: the offline app shell |
-| `src/ui/` | brand and icons, themes, the login and open splashes, the user guide |
+| `src/ui/` | brand and icons, themes, the login and open splashes, the user guide, and the gestures: sliding along the dock (`dockdrag.js`) and along switches (`segdrag.js`), swiping rows (`swiperow.js`), the iPhone edge-swipe back (`edgeback.js`), the pull-down today panel (`toppanel.js`) and the rubber-band page (`rubber.js`) |
 | `src/data/` | starter split templates, quotes |
 
 ## Offline mode (phone app)
