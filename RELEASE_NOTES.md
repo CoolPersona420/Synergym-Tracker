@@ -10,6 +10,19 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.42-alpha · 14 November 2026
+
+**Messages that match the app, and swipe away**
+
+- **Glass, like the session bar:** the messages at the top of the screen ("Saved", "… swapped for …" with Undo) are
+  now the same frosted glass as the bar at the bottom of a session, with the action (Undo) as a solid button like
+  that bar's Save or Finish. They follow the theme: light glass on light themes, dark on dark ones.
+- **Swipe up to dismiss:** a message follows your finger; swipe it up and it's gone, let go early and it springs
+  back. Its time stops while you hold it, and a swipe that ends on Undo doesn't press it. A message without a button
+  also clears with a tap.
+
+---
+
 ## 0.1.41-alpha · 14 November 2026
 
 **Replace an exercise mid-session**

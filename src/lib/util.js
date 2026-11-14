@@ -32,10 +32,40 @@ export function deck(n, rand = Math.random) {
   return { current: () => order[at], next() { if (++at >= n) shuffle(order[n - 1]); return order[at]; } };
 }
 export function roll(t) { return `<span class="roll"><span data-t="${esc(t)}">${esc(t)}</span></span>`; }
-let toastT;
-/* act: an optional { label, fn } button, such as Undo; the toast then stays a little longer and takes taps */
+let toastT, toastLeft = 0, toastAt = 0, toastWired = false;
+const hideToast = () => { clearTimeout(toastT); $('#toast').classList.remove('show'); };
+const armToast = ms => { clearTimeout(toastT); toastAt = Date.now(); toastLeft = ms; toastT = setTimeout(hideToast, ms); };
+/* act: an optional { label, fn } button, such as Undo; the toast then stays a little longer */
 export function toast(msg, act) {
-  const t = $('#toast'); t.textContent = msg; t.classList.toggle('act', !!act);
-  if (act) { const b = document.createElement('button'); b.className = 'toast-act'; b.textContent = act.label; b.onclick = () => { clearTimeout(toastT); t.classList.remove('show'); act.fn(); }; t.append(b); }
-  t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), act ? 5000 : 2800);
+  const t = $('#toast'); if (!toastWired) { toastWired = true; toastSwipe(t); }
+  const tx = document.createElement('span'); tx.className = 'tx'; tx.textContent = msg;
+  t.replaceChildren(tx); t.classList.toggle('act', !!act); t.classList.remove('drag');
+  if (act) { const b = document.createElement('button'); b.className = 'toast-act'; b.textContent = act.label; b.onclick = () => { hideToast(); act.fn(); }; t.append(b); }
+  t.style.translate = ''; t.classList.add('show'); armToast(act ? 5000 : 2800);
+}
+/* swipe the toast up to send it away: it follows the finger (pulling down gives a little), goes on a long or quick
+   swipe and springs back otherwise. Its time stops while it's held. A tap clears one without a button. */
+function toastSwipe(t) {
+  let y0 = null, dy = 0, t0 = 0, moved = false;
+  t.addEventListener('pointerdown', e => {
+    if (!t.classList.contains('show') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    y0 = e.clientY; dy = 0; t0 = performance.now(); moved = false;
+    clearTimeout(toastT); toastLeft = Math.max(1500, toastLeft - (Date.now() - toastAt));
+  });
+  t.addEventListener('pointermove', e => {
+    if (y0 == null) return; dy = e.clientY - y0;
+    if (!moved && Math.abs(dy) > 6) { moved = true; t.classList.add('drag'); try { t.setPointerCapture(e.pointerId); } catch {} }
+    if (moved) t.style.translate = `0 ${dy < 0 ? dy : Math.sqrt(dy) * 3}px`;
+  });
+  const end = () => {
+    if (y0 == null) return; y0 = null;
+    const v = dy / Math.max(1, performance.now() - t0);
+    if (moved && (dy < -28 || v < -0.4)) { hideToast(); return; }
+    t.classList.remove('drag'); t.style.translate = '';
+    if (!moved && !t.classList.contains('act')) return hideToast();
+    armToast(toastLeft);
+  };
+  t.addEventListener('pointerup', end); t.addEventListener('pointercancel', end);
+  /* the click that ends a swipe isn't a press on Undo */
+  t.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
 }
