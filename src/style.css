@@ -711,6 +711,13 @@ span.dex-min{justify-content:center}
 .pk .n{font-weight:600}
 .pk .sub{font-size:.8rem;color:var(--muted)}
 .pk .last{font-weight:700;color:var(--ink-2)}
+/* replacing an exercise: what's kept, then the same muscle's exercises under their own heading */
+.pk-note,.sh-note{font-size:13px;margin:-4px 0 var(--s-1)}
+.pk-sec{display:block;margin:var(--s0) 0 0}
+.pk-sec:first-child{margin-top:var(--s-2)}
+.ex.swapped .ex-h .nm{animation:swapin .6s var(--spring) both}
+@keyframes swapin{from{opacity:0;transform:translateY(.5rem);filter:blur(4px)}}
+@media (prefers-reduced-motion:reduce){.ex.swapped .ex-h .nm{animation:none}}
 .btns{display:flex;gap:var(--s-1);justify-content:flex-end;flex-wrap:wrap;margin-top:var(--s1)}
 .form{display:grid;gap:var(--s0)}
 .form label{display:grid;gap:6px;font-size:.82rem;font-weight:600;color:var(--ink-2)}

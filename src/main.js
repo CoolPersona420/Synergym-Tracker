@@ -2295,8 +2295,8 @@ document.addEventListener('keydown', e => {
 function confirmSheet(title, body, yes, fn, no = 'Cancel') {
   openSheet(`<div class="sh-h"><h3>${esc(title)}</h3>${xBtn()}</div><p class="muted">${esc(body)}</p><div class="btns"><button class="btn ghost" data-act="close">${esc(no)}</button><button class="btn danger" id="cf-yes">${esc(yes)}</button></div>`, r => { r.querySelector('#cf-yes').onclick = () => { closeSheet(); fn(); }; });
 }
-function menuSheet(title, items) {
-  openSheet(`<div class="sh-h"><h3>${esc(title)}</h3>${xBtn()}</div><div class="menu">${items.map((it, i) => `<button data-mi="${i}" class="${it.warn ? 'warn' : ''}">${esc(it.label)}<span class="muted" style="font-size:13px">${esc(it.hint || '')}</span></button>`).join('')}</div>`,
+function menuSheet(title, items, note = '') {
+  openSheet(`<div class="sh-h"><h3>${esc(title)}</h3>${xBtn()}</div>${note ? `<p class="muted sh-note">${esc(note)}</p>` : ''}<div class="menu">${items.map((it, i) => `<button data-mi="${i}" class="${it.warn ? 'warn' : ''}">${esc(it.label)}<span class="muted" style="font-size:13px">${esc(it.hint || '')}</span></button>`).join('')}</div>`,
     r => r.querySelectorAll('[data-mi]').forEach(b => b.onclick = () => { const it = items[+b.dataset.mi]; closeSheet(); it.fn(); }));
 }
 function exerciseForm(title, ex, onSave, extra = '') {
@@ -2347,7 +2347,9 @@ function removeExercise(id) {
 /* exercise picker (session / split) */
 function openPicker(mode, extra = {}) {
   S.pk = { mode, m: '', q: '', added: 0, ...extra };
-  openSheet(`<div class="sh-h"><h3>${mode === 'session' ? 'Add exercise' : `Add to ${dayLabel(S.splits.get(extra.split)?.days, extra.day)}`}</h3>${xBtn()}</div>
+  const title = mode === 'session' ? 'Add exercise' : mode === 'replace' ? `Replace ${esc(extra.name)}` : `Add to ${dayLabel(S.splits.get(extra.split)?.days, extra.day)}`;
+  openSheet(`<div class="sh-h"><h3>${title}</h3>${xBtn()}</div>
+  ${mode === 'replace' ? `<p class="muted pk-note">Keeps its place and its ${plural(extra.n, 'set')}. Hints come from the new exercise’s last time.</p>` : ''}
   <input class="search" id="pkq" placeholder="Search your exercises" autocomplete="off" maxlength="60">
   <div class="hscroll" id="pkm" style="margin-top:12px"></div><div id="pkl" class="pk-list"></div>`, r => {
     r.querySelector('#pkq').addEventListener('input', e => { S.pk.q = e.target.value; pickerList(); });
@@ -2359,23 +2361,34 @@ const OTHER_EX = { Chest: 'cable press, machine fly', Back: 'chest-supported row
   Triceps: 'JM press, kickback', Quads: 'hack squat, sissy squat', Hamstrings: 'Nordic curl, good morning', Glutes: 'glute bridge, hip abduction', Calves: 'seated calf raise, tibialis raise',
   Core: 'Pallof press, dead bug', 'Full body': 'thruster, sled push' };
 function pickerList() {
-  const q = S.pk.q.trim(), ql = q.toLowerCase(), m = S.pk.m;
+  const q = S.pk.q.trim(), ql = q.toLowerCase(), rp = S.pk.mode === 'replace' ? S.pk : null;
+  /* a replacement is the same sort as what it replaces: a lift for a lift, cardio for cardio */
+  const m = rp && rp.cardio ? 'Cardio' : S.pk.m, fits = e => !rp || (isCardio(e) === rp.cardio && e.id !== rp.exId);
   /* Cardio sits next to All: what's in the library, then the built-in kinds not added yet */
-  $('#pkm').innerHTML = ['', 'Cardio', ...muscles().filter(x => x !== 'Cardio')].map(x => `<button class="chip${m === x ? ' on' : ''}" data-act="pk-m" data-m="${esc(x)}">${esc(x || 'All')}</button>`).join('');
-  const uses = id => S.A.ex.get(id)?.n || S.A.cr.ex.get(id)?.n || 0;
-  const lib = S.library.filter(e => !e.archived && (!m || (m === 'Cardio' ? isCardio(e) || e.muscle === 'Cardio' : e.muscle === m)) && (!ql || e.name.toLowerCase().includes(ql)))
+  $('#pkm').hidden = !!(rp && rp.cardio);
+  $('#pkm').innerHTML = rp && rp.cardio ? '' : ['', ...(rp ? [] : ['Cardio']), ...muscles().filter(x => x !== 'Cardio')].map(x => `<button class="chip${m === x ? ' on' : ''}" data-act="pk-m" data-m="${esc(x)}">${esc(x || 'All')}</button>`).join('');
+  const uses = id => S.A.ex.get(id)?.n || S.A.cr.ex.get(id)?.n || 0, sid0 = S.pk.mode === 'session' || rp ? S.arg : null;
+  const inSess = rp ? new Set(cur()?.items.map(x => x.exId)) : null;
+  const lib = S.library.filter(e => !e.archived && fits(e) && (!m || (m === 'Cardio' ? isCardio(e) || e.muscle === 'Cardio' : e.muscle === m)) && (!ql || e.name.toLowerCase().includes(ql)))
     .sort((a, b) => uses(b.id) - uses(a.id) || a.name.localeCompare(b.name));
-  const kinds = m === 'Cardio' || ql ? CARDIO.filter(c => (!ql || c.name.toLowerCase().includes(ql)) && !S.library.some(e => isCardio(e) && !e.archived && e.name.toLowerCase() === c.name.toLowerCase())) : [];
+  const kinds = m === 'Cardio' || (ql && (!rp || rp.cardio)) ? CARDIO.filter(c => (!ql || c.name.toLowerCase().includes(ql)) && !S.library.some(e => isCardio(e) && !e.archived && e.name.toLowerCase() === c.name.toLowerCase())) : [];
   const exact = q && S.library.some(e => e.name.toLowerCase() === ql);
+  const row = e => {
+    const here = inSess && inSess.has(e.id) ? ' · in this session' : '';
+    if (isCardio(e)) { const b = lastBoutFor(e.id, sid0), du = cMeasure(e).du;
+      return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<br><span class="sub">Cardio${here}</span></span><span class="last">${b ? `${fmtDur(b.t)}${b.d ? ` · ${fmtDist(b.d, du)} ${du}` : ''}` : ''}</span></button>`; }
+    const last = lastSetsFor(e.id, sid0);
+    const t = last ? last.reduce((b, st) => e1rm(loadOf(st, e), st.r) > e1rm(loadOf(b, e), b.r) ? st : b, last[0]) : null;
+    return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<br><span class="sub">${esc(e.muscle)}${e.kind === 'bw' ? ' · bodyweight' : ''}${here}</span></span><span class="last">${t ? `${fmtW(+t.w || 0)}×${t.r}` : ''}</span></button>`;
+  };
   let h = '';
   if (q && !exact) h += `<button class="pk" data-act="pk-new"><span><span class="n">Add “${esc(q)}”</span><br><span class="sub">New exercise in your list</span></span><span class="lbl">new</span></button>`;
-  h += lib.map(e => {
-    if (isCardio(e)) { const b = lastBoutFor(e.id, S.pk.mode === 'session' ? S.arg : null), du = cMeasure(e).du;
-      return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<br><span class="sub">Cardio</span></span><span class="last">${b ? `${fmtDur(b.t)}${b.d ? ` · ${fmtDist(b.d, du)} ${du}` : ''}` : ''}</span></button>`; }
-    const last = lastSetsFor(e.id, S.pk.mode === 'session' ? S.arg : null);
-    const t = last ? last.reduce((b, st) => e1rm(loadOf(st, e), st.r) > e1rm(loadOf(b, e), b.r) ? st : b, last[0]) : null;
-    return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<br><span class="sub">${esc(e.muscle)}${e.kind === 'bw' ? ' · bodyweight' : ''}</span></span><span class="last">${t ? `${fmtW(+t.w || 0)}×${t.r}` : ''}</span></button>`;
-  }).join('');
+  /* replacing a lift, with nothing typed or picked: the ones for the same muscle first */
+  const same = rp && !rp.cardio && !m && !q && rp.muscle ? lib.filter(e => e.muscle === rp.muscle) : [];
+  if (same.length) {
+    const other = lib.filter(e => e.muscle !== rp.muscle);
+    h += `<span class="lbl pk-sec">Also works ${esc(rp.muscle.toLowerCase())}</span>${same.map(row).join('')}${other.length ? `<span class="lbl pk-sec">Everything else</span>${other.map(row).join('')}` : ''}`;
+  } else h += lib.map(row).join('');
   h += kinds.map(c => `<button class="pk" data-act="pk-cardio" data-k="${c.key}"><span><span class="n">${esc(c.name)}</span><br><span class="sub">Cardio</span></span><span class="lbl">add</span></button>`).join('');
   if (m === 'Cardio' && !q) h += `<button class="pk" data-act="pk-new"><span><span class="n">Other cardio…</span><br><span class="sub">Name your own: assault bike, hiking, a class</span></span><span class="lbl">new</span></button>`;
   /* every muscle group ends with a way to add your own to it, already filed under that group */
@@ -2385,6 +2398,10 @@ function pickerList() {
 }
 function picked(ex) {
   if (S.pk.mode === 'session') { closeSheet(); addExercise(ex.id); }
+  else if (S.pk.mode === 'replace') {
+    if (isCardio(ex) !== S.pk.cardio) return toast(S.pk.cardio ? 'Cardio swaps for cardio' : 'A lift swaps for a lift, not cardio');
+    closeSheet(); replaceItem(S.pk.item, ex.id);
+  }
   else if (S.pk.mode === 'split') {
     const sp = S.splits.get(S.pk.split), d = sp && sp.days[S.pk.day]; if (!d) return closeSheet();
     if (d.exercises.length >= 30) return toast('A day holds up to 30 exercises');
@@ -2990,10 +3007,57 @@ function itemMenu(itemId) {
   if (locked(s)) return menuSheet(exOf(it.exId)?.name || 'Exercise', [{ label: 'Exercise history', fn: () => go('exercise', it.exId) }, ...(S.lbCtx === s.id ? [{ label: 'Edit session', hint: 'to change this exercise', fn: startEdit }] : [])]);
   const mv = d => { const j = i + d; if (j < 0 || j >= s.items.length) return; [s.items[i], s.items[j]] = [s.items[j], s.items[i]]; queue('s:' + s.id, 300); render(false); };
   const items = []; if (i > 0) items.push({ label: 'Move up', fn: () => mv(-1) }); if (i < s.items.length - 1) items.push({ label: 'Move down', fn: () => mv(1) });
+  const ex = exOf(it.exId);
+  items.push({ label: 'Replace exercise', hint: 'same spot, same sets', fn: () => openPicker('replace', { item: it.id, exId: it.exId, name: ex?.name || 'exercise', muscle: ex?.muscle || '', cardio: isCardio(ex), n: it.sets.length }) });
   items.push({ label: 'Exercise history', fn: () => go('exercise', it.exId) });
   items.push({ label: 'Remove from session', warn: true, fn: () => { const rm = () => { s.items.splice(s.items.indexOf(it), 1); cleanGroups(s); queue('s:' + s.id, 0); render(false); };
     if (it.sets.some(setLogged)) confirmSheet('Remove exercise?', 'What you logged for it in this session will be deleted.', 'Remove', rm); else rm(); } });
   menuSheet(exOf(it.exId)?.name || 'Exercise', items);
+}
+/* Replace an exercise in a session with another, in the same place. With nothing logged it swaps straight away;
+   with sets logged it asks: they stay with the old exercise and the new one takes the rest (the machine was taken),
+   or they all move to the new one (they were logged under the wrong exercise). */
+function replaceItem(itemId, exId) {
+  const s = cur(), it = s && s.items.find(x => x.id === itemId), ex = exOf(exId); if (!it || !ex || locked(s)) return;
+  const old = exOf(it.exId)?.name || 'Exercise', n = it.sets.length, done = it.sets.filter(setLogged).length, rest = n - done;
+  if (!done) return swapItem(s, it, ex, false);
+  const them = done === 1 ? 'it' : 'them';
+  menuSheet(`${plural(done, 'set')} ${done === 1 ? 'is' : 'are'} logged`, [
+    ...(rest ? [{ label: `Swap the rest for ${ex.name}`, hint: `the ${done} done stay${done === 1 ? 's' : ''} as ${old}; ${ex.name} gets the other ${rest}`, fn: () => swapItem(s, it, ex, true) }] : []),
+    { label: n === 1 ? `Move it to ${ex.name}` : `Move all ${n} to ${ex.name}`, hint: `I logged ${them} under the wrong exercise`, fn: () => swapItem(s, it, ex, false) }
+  ], `${done === n ? `Every set of ${old} is done` : `You did ${done} of ${n} sets of ${old}`}. What should happen to ${them}?`);
+}
+/* hints for a set of the new exercise: its own last time's numbers, as when it's added, so they agree with its Try line.
+   With no history the reps hint stays and the weight goes: weights don't carry from one exercise to another. */
+function swapHints(s, ex) {
+  if (isCardio(ex)) { const lb = lastBoutFor(ex.id, s.id); return () => lb ? { pt: lb.t ?? null, pd: lb.d ?? null } : null; }
+  const last = lastSetsFor(ex.id, s.id);
+  return i => { const l = last && last[Math.min(i, last.length - 1)]; return l ? { pw: l.w ?? null, pr: l.r ?? null } : null; };
+}
+/* split: true keeps the logged sets with the old exercise and moves the rest into a new card just below */
+function swapItem(s, it, ex, split) {
+  const before = clone(s.items), was = exOf(it.exId)?.name || 'Exercise', hint = swapHints(s, ex), c = isCardio(ex);
+  let to = it;
+  if (split) {
+    const keep = it.sets.filter(setLogged), move = it.sets.filter(st => !setLogged(st));
+    /* a drop chain is one exercise's: a set leaving the rest of its chain leaves the chain (a superset round stays linked) */
+    for (const st of move) if (st.g && keep.some(k => k.g === st.g) && !s.items.some(o => o !== it && o.sets.some(k => k.g === st.g))) st.g = null;
+    it.sets = keep; to = { id: sid(), exId: ex.id, sets: move };
+    s.items.splice(s.items.indexOf(it) + 1, 0, to);
+  } else to.exId = ex.id;
+  /* cardio tracks what was tracked last time; sets that moved with their numbers keep what shows them */
+  if (c && !to.sets.some(setLogged)) to.m = lastMetrics(ex.id, s.id) || defaultMetrics(ex.name);
+  /* sets not logged yet take the new exercise's hints; a weight typed for the old one goes */
+  to.sets.forEach((st, i) => {
+    if (setLogged(st)) return; const h = hint(i);
+    if (c) { st.d = null; if (h) { st.pt = h.pt; st.pd = to.m?.includes('d') ? h.pd : null; } }
+    else { st.w = null; st.pw = h ? h.pw : null; if (h) st.pr = h.pr; }
+  });
+  cleanGroups(s); queue('s:' + s.id, 0); render(false); buzz(10);
+  requestAnimationFrame(() => { const el = $(`[data-item="${to.id}"]`); if (!el) return; el.classList.add('swapped');
+    if (split) el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); });
+  toast(split ? `${ex.name} takes the other ${plural(to.sets.length, 'set')}` : `${was} swapped for ${ex.name}`, { label: 'Undo', fn: () => {
+    const s2 = S.sessions.get(s.id); if (!s2) return; s2.items = before; queue('s:' + s2.id, 0); if (cur() === s2) render(false); } });
 }
 function sessMenu() {
   const s = cur(); if (!s) return;
@@ -3287,7 +3351,7 @@ const ACT = {
   'c-m': el => cardioMetric(el.dataset.item, el.dataset.k),
   /* effort: tap a step; tapping the one set clears it */
   'c-eff': el => { const s = cur(), x = s && findSet(s, el.dataset.set); if (!x) return; const v = +el.dataset.v; x.st.e = x.st.e === v ? null : v; queue('s:' + s.id, 300); buzz(8); render(false); },
-  'pk-new': () => { const q = S.pk.q.trim(), pk = { ...S.pk }; closeSheet(); newExercise({ name: q, muscle: pk.m }, ex => { S.pk = pk; picked(ex); if (pk.mode === 'split') openPicker('split', { split: pk.split, day: pk.day }); }); },
+  'pk-new': () => { const q = S.pk.q.trim(), pk = { ...S.pk }; closeSheet(); newExercise({ name: q, muscle: pk.m || (pk.mode === 'replace' ? (pk.cardio ? 'Cardio' : pk.muscle) : '') }, ex => { S.pk = pk; picked(ex); if (pk.mode === 'split') openPicker('split', { split: pk.split, day: pk.day }); }); },
   'add-set': el => addSet(el.dataset.item),
   'add-drop': el => addDrop(el.dataset.set),
   done: el => toggleDone(el.dataset.set),

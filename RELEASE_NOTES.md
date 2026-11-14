@@ -10,6 +10,25 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.41-alpha · 14 November 2026
+
+**Replace an exercise mid-session**
+
+- **⋯ › Replace exercise:** in a live session (or one you're editing), an exercise's ⋯ menu can swap it for another.
+  The new one takes the same place and the same number of sets, keeps any superset links, and shows its own last
+  numbers as hints, so its weights never come from the exercise it replaced. With no history yet, the reps hint stays
+  and the weight is left blank. **Undo** puts it back.
+- **The right swap first:** the picker lists exercises for the same muscle first, under "Also works quads" (or chest,
+  back…), most used at the top, then everything else; exercises already in the session say so. A lift swaps for a
+  lift and cardio for cardio. Search and "add a new one" work as usual.
+- **Sets already logged? It asks once:** **Swap the rest** keeps the done sets with the old exercise and puts the
+  new one just below with the sets that are left (the machine was taken); **Move all** takes every set, numbers and
+  all, to the new exercise (they were logged under the wrong one). With nothing logged, the swap is instant.
+- **Nothing else changes:** your split keeps its plan, and records, the coach, the Logbook and widgets follow the
+  session as it now is. Finished sessions opened just to view don't offer it.
+
+---
+
 ## 0.1.40-alpha · 12 November 2026
 
 **The guide catches up, and the Logbook's List edits like its Calendar**
