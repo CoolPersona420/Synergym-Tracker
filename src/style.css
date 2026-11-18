@@ -2131,3 +2131,43 @@ html[data-nav="lb-back"]::view-transition-new(root){animation:tab-in-l .55s var(
   .linkbtn::before,.ts-open::before{width:calc(100% + 12px);height:44px}
   .toggle::before{width:calc(100% + 8px);height:44px}
 }
+
+/* ---------- drag to reorder: a grip of six dots before an exercise's name; the row lifts while it moves ---------- */
+.grip{flex:none;box-sizing:content-box;width:9px;height:15px;padding:8px 9px 8px 4px;margin:0 2px 0 -6px;color:var(--muted);cursor:grab;touch-action:none;
+  background:radial-gradient(circle at 1.5px 1.5px,currentColor 1.4px,transparent 1.8px) content-box 0 0/6px 6px}
+.ex-h .grip{align-self:flex-start;margin-top:2px}
+.ex-h .grip + .nm{margin-right:auto}
+.dex .nm{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:0}
+.dex .nm .grip{grid-row:span 2;align-self:center;padding:10px 8px 10px 2px;margin:0}
+.dex .nm:not(:has(.grip)) b,.dex .nm:not(:has(.grip)) small{grid-column:1 / -1}
+.ro-lift{position:relative;z-index:20;box-shadow:0 1.2rem 2.6rem rgba(0,0,0,.2)!important}
+.dex.ro-lift{background:var(--surface);border-radius:var(--r-sm)}
+html.ro-dragging,html.ro-dragging *{user-select:none;-webkit-user-select:none;cursor:grabbing!important}
+@media (pointer:coarse){.grip{padding:12px 12px 12px 6px;margin:-4px 0 -4px -8px}}
+
+/* ---------- the summary after Finish ---------- */
+.ts-kv.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.fs-vs{font-size:13px;margin:6px 0 2px}
+.fs-vs b.up{color:var(--good)}
+.fs-vs b.down{color:var(--bad)}
+.fs-sub{display:block;margin:var(--s0) 0 6px}
+.fs-best{margin:0}
+
+/* ---------- an exercise's note, on its card and its page ---------- */
+.ex-note{display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;margin:-2px 0 var(--s-1);padding:.55rem .7rem;border-radius:var(--r-sm);
+  background:var(--surface-2);font-size:.86rem;line-height:1.35;color:var(--ink-2)}
+.ex-note b{color:var(--ink);font-weight:600}
+.ex-note .ico,.ex-note-add .ico{width:14px;height:14px;flex:none;margin-top:2px;opacity:.7}
+.ex-note-add{display:flex;gap:6px;align-items:center;margin:-4px 0 var(--s-1) 4px;font-size:.82rem;color:var(--muted)}
+.ex-note-add .ico{margin-top:0}
+.ex-note-add:hover,.ex-note:hover{color:var(--ink)}
+.ex-pnote{margin-top:var(--s0)}
+.ex-pnote .ex-note,.ex-pnote .ex-note-add{margin:0}
+.note-f{width:100%;resize:vertical;min-height:5.5rem;font:inherit;line-height:1.4}
+
+/* ---------- warm-up sets: before the working sets, lighter on the page ---------- */
+.set.wu{opacity:.66}
+.set.wu.done{opacity:.8}
+.set.wu .sno{font-size:.9rem;color:var(--ink-2)}
+.wu-note{font-size:12px;color:var(--muted);margin:0 0 6px 4px}
+.ex-f{flex-wrap:wrap}

@@ -17,7 +17,7 @@ export function parseImport(d, fallbackBw = 75) {
     const name = String(x.name || '').trim().slice(0, 60); if (!name) continue;
     let e = byName.get(name.toLowerCase());
     if (!e) {
-      e = { id: uuid(), name, muscle: String(x.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: cleanKind(x.kind), archived: !!x.archived, isDefault: !!x.isDefault, oneRm: num(x.oneRm) > 0 && num(x.oneRm) < 2000 ? num(x.oneRm) : null, oneRmAt: num(x.oneRmAt) };
+      e = { id: uuid(), name, muscle: String(x.muscle || 'Full body').trim().slice(0, 30) || 'Full body', kind: cleanKind(x.kind), archived: !!x.archived, isDefault: !!x.isDefault, note: typeof x.note === 'string' ? x.note.trim().slice(0, 200) : '', oneRm: num(x.oneRm) > 0 && num(x.oneRm) < 2000 ? num(x.oneRm) : null, oneRmAt: num(x.oneRmAt) };
       byName.set(name.toLowerCase(), e); library.push(e);
     }
     exId.set(String(x.id), e.id);

@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.43, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.44, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.43-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.44-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -14,7 +14,10 @@ The version lives in `package.json` (`0.1.43-alpha`) and shows in Settings › A
   a rest timer, drop sets, and linked sets that are named automatically (superset, giant set, drop set,
   rest-pause, pyramid). **⋯ › Replace exercise** swaps an exercise for another in the same place (the same
   muscle's listed first), keeping its sets; with sets already logged it asks whether to keep them and swap the
-  rest, or move them all.
+  rest, or move them all. **+ Warm-up** adds warm-ups that build to the working weight (W1, W2…; never counted
+  toward records, intensity or volume); drag an exercise by its grip to reorder it (sessions and split days); an
+  exercise can keep a note (seat, grip, setup) that shows on its card in every session. **Finish** shows a summary:
+  intensity, volume, sets, time, the change on last time, records and the best set, with **Undo finish**.
 - **Records (PRs):** each exercise knows its records. A weight PR is heavier than ever, a rep PR is more
   reps than ever at that weight or heavier, and beating both is marked as both. Sets are judged live as you
   type them, and each exercise page shows its heaviest set, most reps and best reps by weight.

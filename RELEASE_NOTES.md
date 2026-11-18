@@ -10,6 +10,26 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.44-alpha · 18 November 2026
+
+**A summary when you finish, warm-ups, notes, and drag to reorder**
+
+- **Finish summary:** tapping **Finish** now shows how it went: intensity, volume, sets and minutes, the volume
+  change on the last time you did this split day (or a session of the same name), any records, and your best set
+  with its estimated 1RM. **Undo finish** takes you straight back to logging, every set and hint as it was.
+- **Warm-up sets:** before your working sets, **+ Warm-up** adds warm-ups that build to the first working weight:
+  about 40%, 60% and 80% of it for 8, 5 and 3 reps (two steps for light weights), rounded to what you can load.
+  They show as W1, W2… above set 1, tick like any set, and never count toward records, intensity, volume or the
+  coach. Delete one, or all, from its number. Ticked warm-ups are saved with the session; the rest are dropped.
+- **Drag to reorder:** hold the six dots beside an exercise's name and move it, in a live or edited session and in
+  a split day. The others slide out of the way, the page scrolls along at the edges, and on a computer's two
+  columns it moves across too. Move up and Move down stay in the ⋯ menu for the keyboard.
+- **Exercise notes:** an exercise can keep a note (seat, grip, setup, up to 200 characters). Add it from its card
+  in a session or from the exercise's page; it shows on that card in every session. Notes are part of export and
+  import, and of offline mode.
+
+---
+
 ## 0.1.43-alpha · 18 November 2026
 
 **Fixes from a full check on phone and computer**

@@ -76,6 +76,8 @@ alter table public.exercises add column if not exists one_rm_at timestamptz;
 -- Cardio exercises (kind 'c': runs, rides, rows, swims), added in 0.1.22. Widens the check on older databases.
 alter table public.exercises drop constraint if exists exercises_kind_check;
 alter table public.exercises add constraint exercises_kind_check check (kind in ('w','bw','c'));
+-- A note that stays with the exercise (seat, grip, setup), added in 0.1.44.
+alter table public.exercises add column if not exists note text check (note is null or char_length(note) <= 200);
 
 create table if not exists public.sessions (
   id         uuid primary key,

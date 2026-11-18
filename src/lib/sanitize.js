@@ -25,6 +25,8 @@ export function cleanItem(o) {
   const it = { id: safeId(o.id), exId: safeId(o.exId), sets: Array.isArray(o.sets) ? o.sets.slice(0, 40).map(cleanSet).filter(Boolean) : [] };
   /* the metrics a cardio item shows (time is always there) */
   if (Array.isArray(o.m)) it.m = cleanMetrics(o.m);
+  /* warm-up sets: kept apart from the working sets, so records, intensity and volume never count them */
+  if (Array.isArray(o.wu) && o.wu.length) { const wu = o.wu.slice(0, 10).map(cleanSet).filter(Boolean).map(x => ({ ...x, g: null })); if (wu.length) it.wu = wu; }
   return it;
 }
 export function cleanSession(o) {

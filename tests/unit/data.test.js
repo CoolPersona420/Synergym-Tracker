@@ -141,3 +141,14 @@ test('an empty set stays empty when a session is loaded, and one saved as zeros 
   assert.deepEqual([set({ w: 0, r: 12, done: true }).w, set({ w: 0, r: 12, done: true }).r], [0, 12]);
   assert.deepEqual([set({ w: 80, r: 0 }).w, set({ w: 80, r: 0 }).r], [80, null]);
 });
+
+test('warm-up sets are kept apart from the working sets, and an exercise note comes through an import', async () => {
+  const { cleanSession } = await import('../../src/lib/sanitize.js');
+  const s = cleanSession({ id: 's', items: [{ id: 'i', exId: 'x', sets: [{ id: 'a', w: 80, r: 5, done: true }], wu: [{ id: 'w1', w: 40, r: 8, done: true, g: 'zz' }, null, 'junk'] }] });
+  assert.equal(s.items[0].sets.length, 1);
+  assert.deepEqual(s.items[0].wu.map(x => [x.id, x.w, x.r, x.done, x.g]), [['w1', 40, 8, true, null]]);
+  /* no warm-ups: no wu at all */
+  assert.equal('wu' in cleanSession({ id: 's', items: [{ id: 'i', exId: 'x', sets: [], wu: [] }] }).items[0], false);
+  const d = parseImport({ app: 'Synergym', library: [{ id: 'b', name: 'Bench Press', kind: 'w', note: '  Grip one finger out  ' }], sessions: [], splits: [] });
+  assert.equal(d.library[0].note, 'Grip one finger out');
+});

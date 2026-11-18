@@ -23,6 +23,7 @@ import { topPanel } from './ui/toppanel.js';
 import { swipeRows } from './ui/swiperow.js';
 import { dockDrag } from './ui/dockdrag.js';
 import { segDrag } from './ui/segdrag.js';
+import { reorderDrag } from './ui/reorder.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
@@ -90,8 +91,8 @@ function flipTheme() {
 /* ================= sanitising ================= */
 
 /* ================= db mapping ================= */
-const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: cleanKind(r.kind), archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null });
-const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null });
+const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: cleanKind(r.kind), archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null, note: typeof r.note === 'string' ? r.note : '' });
+const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null, note: (e.note || '').trim().slice(0, 200) || null });
 const sessFromDb = r => cleanSession({ id: r.id, name: r.name, startedAt: Date.parse(r.started_at), endedAt: r.ended_at ? Date.parse(r.ended_at) : null, notes: r.notes, items: r.items, splitId: r.split_id, splitDay: r.split_day });
 const sessToDb = s => ({ id: s.id, user_id: S.user.id, name: s.name, started_at: new Date(s.startedAt).toISOString(), ended_at: s.endedAt ? new Date(s.endedAt).toISOString() : null, notes: s.notes || '', items: s.items, split_id: s.splitId || null, split_day: s.splitDay ?? null, updated_at: new Date().toISOString() });
 const splitFromDb = r => ({ id: r.id, name: r.name, description: r.description || '', days: cleanDays(r.days), shareToken: r.share_token || null, copiedFrom: r.copied_from || null, updatedAt: Date.parse(r.updated_at) || 0 });
@@ -1684,7 +1685,7 @@ function vSession() {
     <button class="fab magnet" data-act="add-ex" aria-label="Add exercise"><span class="fab-l" aria-hidden="true">Add exercise</span>${ICON.plus}</button></section>
   <div class="wave rv" id="wave">${wave(s)}</div>
   <div class="strip rv" id="strip">${stripHTML(a)}</div>
-  <div class="items">${s.items.map(it => isCardio(exOf(it.exId)) ? cardioCard(it) : exCard(it, gmap)).join('') || `<div class="empty rv"><b>No exercises yet.</b>Tap + to add one from your library.</div>`}</div>
+  <div class="items" data-ro-list="items">${s.items.map(it => isCardio(exOf(it.exId)) ? cardioCard(it) : exCard(it, gmap)).join('') || `<div class="empty rv"><b>No exercises yet.</b>Tap + to add one from your library.</div>`}</div>
   <div class="groups" id="gsum">${groupsHTML(groups)}</div>
   <textarea class="notes rv" data-f="notes" placeholder="${ro ? 'No notes' : 'Notes: how it felt, sleep, anything worth remembering'}" maxlength="4000"${ro ? ' readonly' : ''}>${esc(s.notes || '')}</textarea>
   ${live && !S.link ? `<div class="discard-bar rv"><button class="linkbtn discard" data-act="sess-del" data-id="${s.id}">${ICON.trash}Discard session</button></div>` : ''}
@@ -1700,16 +1701,38 @@ function wave(s) {
   const b = bars.map((x, i) => { if (!x.p) return ''; const h = Math.max(3, Math.min(100, x.p) / 100 * (H - 4)); return `<rect class="wb${x.d ? '' : ' o'}" x="${i * 6 + 1.5}" y="${(H - h) / 2}" width="3" height="${h}" rx="1.5"/>`; }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet" aria-label="Set intensity, in order">${ticks.join('')}${b}</svg>`;
 }
+/* the handle to drag an exercise to a new place: a live session, or one being edited, outside linking */
+const gripFor = () => { const s = cur(); return s && !locked(s) && !S.link ? '<span class="grip" data-grip aria-hidden="true" title="Drag to reorder"></span>' : ''; };
+/* an exercise's note (seat, grip, setup): it stays with the exercise and shows on its card in every session.
+   A live or edited session offers to add one; a session that's only being viewed shows it if there is one. */
+function noteLine(ex, page = false) {
+  if (!ex || !ex.id) return '';
+  if (ex.note) return `<button class="ex-note" data-act="ex-note" data-id="${ex.id}" aria-label="Edit the note for ${esc(ex.name)}">${ICON.pen}<span><b>Your note</b> · ${esc(ex.note)}</span></button>`;
+  const s = !page && cur();
+  return page || (s && !locked(s)) ? `<button class="ex-note-add" data-act="ex-note" data-id="${ex.id}">${ICON.pen}Add a note: seat, grip, setup</button>` : '';
+}
+function noteSheet(id) {
+  const ex = exOf(id); if (!ex) return;
+  openSheet(`<div class="sh-h"><h3>Note · ${esc(ex.name)}</h3>${xBtn()}</div>
+    <p class="muted sh-note">It stays with the exercise and shows on its card in every session.</p>
+    <textarea class="field note-f" id="nt-v" maxlength="200" rows="3" placeholder="Seat 4, grip just outside the rings, feet tucked">${esc(ex.note || '')}</textarea>
+    <div class="btns">${ex.note ? `<button class="btn line" id="nt-del" style="margin-right:auto;color:var(--bad)">${roll('Remove')}</button>` : ''}<button class="btn" id="nt-save">${roll('Save')}</button></div>`, r => {
+    const save = v => { ex.note = v.trim().slice(0, 200); queue('x:' + ex.id, 0); closeSheet(); render(false); toast(ex.note ? 'Note saved' : 'Note removed'); };
+    r.querySelector('#nt-save').onclick = () => save(r.querySelector('#nt-v').value);
+    r.querySelector('#nt-del')?.addEventListener('click', () => save(''));
+    const t = r.querySelector('#nt-v'); setTimeout(() => { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }, 60);
+  });
+}
 const setInt = st => { const p = S.A.set.get(st.id); return p ? Math.round(p) : '·'; };
 function exCard(it, gmap) {
   const ex = exOf(it.exId) || { name: 'Deleted exercise', muscle: '', kind: 'w' }, bw = ex.kind === 'bw';
-  return `<article class="ex rv" data-item="${it.id}">
-  <div class="ex-h"><button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub" data-orm="${it.id}">${ormLine(cur() || { id: null }, it)}</div></button>
+  return `<article class="ex rv" data-item="${it.id}" data-ro="${it.id}">
+  <div class="ex-h">${gripFor()}<button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub" data-orm="${it.id}">${ormLine(cur() || { id: null }, it)}</div></button>
   <button class="iconbtn" data-act="item-menu" data-item="${it.id}" aria-label="Exercise options">${ICON.dots}</button></div>
-  ${suggLine(it, bw)}
+  ${noteLine(ex)}${suggLine(it, bw)}
   <div class="set-head lbl"><span>Set</span><span>${bw ? '+' + unit() : unit()}</span><span>Reps</span><span>Int</span><span></span></div>
-  <div class="sets">${it.sets.map((st, i) => setRow(st, i, gmap)).join('')}</div>
-  <div class="ex-f"><button class="btn ghost sm" data-act="add-set" data-item="${it.id}">${roll('+ Set')}</button>${it.sets.length ? `<button class="btn line sm" data-act="add-drop" data-set="${it.sets[it.sets.length - 1].id}">${roll('+ Drop')}</button>` : ''}${bw ? '' : `<button class="btn ghost sm ex-plates" data-act="plates" data-item="${it.id}">${roll('Plates')}</button>`}</div></article>`;
+  ${it.wu ? '<p class="wu-note">Warm-ups first · not counted in records, intensity or volume</p>' : ''}<div class="sets">${(it.wu || []).map(wuRow).join('')}${it.sets.map((st, i) => setRow(st, i, gmap)).join('')}</div>
+  <div class="ex-f">${!bw && !it.wu && !locked(cur()) && !it.sets.some(x => x.done) ? `<button class="btn ghost sm" data-act="add-wu" data-item="${it.id}">${roll('+ Warm-up')}</button>` : ''}<button class="btn ghost sm" data-act="add-set" data-item="${it.id}">${roll('+ Set')}</button>${it.sets.length ? `<button class="btn line sm" data-act="add-drop" data-set="${it.sets[it.sets.length - 1].id}">${roll('+ Drop')}</button>` : ''}${bw ? '' : `<button class="btn ghost sm ex-plates" data-act="plates" data-item="${it.id}">${roll('Plates')}</button>`}</div></article>`;
 }
 /* A cardio exercise in a session: one bout, with time always and the metrics chosen for it (distance with its
    pace or speed, average heart rate, calories, effort 1–10). The chips under the name choose them; they're
@@ -1718,10 +1741,10 @@ const cMeasure = ex => { const how = howOf(ex.name); return { how, du: distUnit(
 function cardioCard(it) {
   const ex = exOf(it.exId), ro = locked(cur()), m = itemMetrics(it);
   const chips = ro ? '' : `<div class="cx-m hscroll" role="group" aria-label="What to track"><span class="lbl">Track</span>${METRICS.map(([k, l]) => `<button class="chip${m.includes(k) ? ' on' : ''}" data-act="c-m" data-item="${it.id}" data-k="${k}" aria-pressed="${m.includes(k)}">${l}</button>`).join('')}</div>`;
-  return `<article class="ex cx rv" data-item="${it.id}">
-  <div class="ex-h"><button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub" data-crl="${it.id}">${cardioLine(it)}</div></button>
+  return `<article class="ex cx rv" data-item="${it.id}" data-ro="${it.id}">
+  <div class="ex-h">${gripFor()}<button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub" data-crl="${it.id}">${cardioLine(it)}</div></button>
   <button class="iconbtn" data-act="item-menu" data-item="${it.id}" aria-label="Exercise options">${ICON.dots}</button></div>
-  ${chips}${it.sets.map(st => boutRow(it, st, ex, m, ro)).join('')}</article>`;
+  ${noteLine(ex)}${chips}${it.sets.map(st => boutRow(it, st, ex, m, ro)).join('')}</article>`;
 }
 function boutRow(it, st, ex, m, ro) {
   const { how, du } = cMeasure(ex), r = ro ? ' readonly' : '', p = pace(st.t ?? st.pt, st.d ?? st.pd, how, unit());
@@ -1775,6 +1798,16 @@ function suggLine(it, bw) {
   const fmt = x => bw && !x.w ? `${x.r} reps` : `${fmtW(x.w)}×${x.r}`;
   const why = `${g.sets} ${g.sets === 1 ? 'set' : 'sets'} · ${WHY_SHORT[g.why] || ''}`;
   return `<div class="sugg"><span class="sugg-t"><span class="lbl">Last</span> ${fmt(g.last)} <span class="arr" aria-hidden="true">→</span> <span class="lbl">Try</span> <b>${fmt(g.next)}</b><small>${why}</small></span><button class="btn ghost sm" data-act="sugg-use" data-item="${it.id}">${roll('Use')}</button></div>`;
+}
+/* a warm-up set: W1, W2…, the same fields as a working set, lighter on the page */
+function wuRow(st, i) {
+  const ro = locked(cur()) ? ' readonly' : '';
+  return `<div class="set wu${st.done ? ' done' : ''}">
+  <button class="sno" data-act="set-menu" data-set="${st.id}" aria-label="Warm-up ${i + 1} options">W${i + 1}</button>
+  <input data-f="w" data-set="${st.id}" inputmode="decimal" enterkeyhint="next" value="${fmtW(st.w)}" placeholder="${st.pw != null ? fmtW(st.pw) : '0'}" aria-label="Weight, warm-up ${i + 1}" autocomplete="off"${ro}>
+  <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, warm-up ${i + 1}" autocomplete="off"${ro}>
+  <span class="int">·</span>
+  <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark warm-up not done' : 'Mark warm-up done'}" aria-pressed="${!!st.done}">${ICON.check}</button></div>`;
 }
 function setRow(st, i, gmap) {
   const g = gmap.get(st.id), p = S.A.set.get(st.id), sel = S.link && S.link.has(st.id), ro = locked(cur()) ? ' readonly' : '';
@@ -2000,6 +2033,7 @@ function vExercise() {
   const bs = x?.bestSet;
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Exercise</span><button class="btn ghost sm" data-act="edit-ex" data-id="${ex.id}">${roll('Edit')}</button></header>
   <h1 class="h1 rv" style="margin:14px 0 4px">${esc(ex.name)}${ex.isDefault ? '' : ' <span class="badge acc">custom</span>'}</h1><p class="muted rv">${esc(ex.muscle)} · ${ex.kind === 'bw' ? 'Bodyweight (load = bodyweight + added)' : 'Weighted'}${ex.archived ? ' · removed from list' : ''}</p>
+  <div class="rv ex-pnote">${noteLine(ex, true)}</div>
   <div class="dash" style="margin-top:18px">
     <div class="card rv"><div class="card-h"><span class="lbl">${ex.oneRm > 0 ? 'Your 1RM' : 'Estimated 1RM'} · ${unit()}</span><button class="btn ghost sm" data-act="edit-orm" data-id="${ex.id}">${roll(ex.oneRm > 0 ? 'Edit' : 'Set 1RM')}</button></div>
       <div class="bignum md">${big(ex.oneRm > 0 ? fmtW(ex.oneRm) : x ? fmtW(roundW(x.best)) : '–')}<span class="dot"></span></div>
@@ -2120,11 +2154,11 @@ function dayCard(d, i, ro, days = [d]) {
     const tag = gr ? `<span class="gtag">${gr.ab}·${gr.letter}</span> ` : '';
     /* cardio: minutes planned, across the sets and reps columns */
     if (x.kind === 'c') return ro ? `<div class="dex"><div class="nm"><b>${esc(name)}</b><small>Cardio</small></div><span class="ro dex-min">${x.min || 30} min</span><span></span></div>`
-      : `<div class="dex"><div class="nm"><b>${esc(name)}</b><small>Cardio</small></div>
+      : `<div class="dex" data-ro="${x.id}"><div class="nm">${lk ? '' : '<span class="grip" data-grip aria-hidden="true" title="Drag to reorder"></span>'}<b>${esc(name)}</b><small>Cardio</small></div>
         <label class="dex-min"><input data-f="dmin" data-day="${i}" data-x="${j}" inputmode="numeric" value="${x.min || 30}" aria-label="Minutes of ${esc(name)}"><span class="lbl">min</span></label>
         <button class="iconbtn" data-act="dex-menu" data-day="${i}" data-x="${j}" aria-label="Options for ${esc(name)}">${ICON.dots}</button></div>`;
     return ro ? `<div class="dex${gr ? ' linked' : ''}"><div class="nm"><b>${esc(name)}</b><small>${tag}${esc(muscle)}</small></div><span class="ro">${x.sets}</span><span class="ro">${esc(x.reps)}</span><span></span></div>`
-      : `<div class="dex${gr ? ' linked' : ''}${lk && lk.sel.has(j) ? ' sel' : ''}"${lk ? ` data-act="sp-link-pick" data-x="${j}" role="button" tabindex="0"` : ''}><div class="nm"><b>${esc(name)}</b><small>${tag}${esc(muscle)}</small></div>
+      : `<div class="dex${gr ? ' linked' : ''}${lk && lk.sel.has(j) ? ' sel' : ''}" data-ro="${x.id}"${lk ? ` data-act="sp-link-pick" data-x="${j}" role="button" tabindex="0"` : ''}><div class="nm">${lk ? '' : '<span class="grip" data-grip aria-hidden="true" title="Drag to reorder"></span>'}<b>${esc(name)}</b><small>${tag}${esc(muscle)}</small></div>
         <input data-f="dsets" data-day="${i}" data-x="${j}" inputmode="numeric" value="${x.sets}" aria-label="Sets for ${esc(name)}">
         <input data-f="dreps" data-day="${i}" data-x="${j}" value="${esc(x.reps)}" maxlength="12" aria-label="Reps for ${esc(name)}">
         <button class="iconbtn" data-act="dex-menu" data-day="${i}" data-x="${j}" aria-label="Options for ${esc(name)}">${ICON.dots}</button></div>`;
@@ -2133,7 +2167,7 @@ function dayCard(d, i, ro, days = [d]) {
   const foot = ro ? '' : lk
     ? `<div class="sp-linkbar"><button class="iconbtn" data-act="sp-link-cancel" aria-label="Cancel linking">${ICON.x}</button><div class="tlink"><b>${lk.sel.size ? spLinkType(lk.sel.size) : 'Select exercises to link'}</b><span class="muted">${lk.sel.size ? (lk.sel.size === 1 ? 'all its sets run back to back' : `set 1 of each, then set 2…`) : 'tap 2+ for a superset, or 1 for a drop set'}</span></div><button class="btn sm" data-act="sp-link-do"${lk.sel.size ? '' : ' disabled'}>Link</button></div>`
     : `<div class="day-f"><button class="btn ghost sm" data-act="dex-add" data-day="${i}">${roll('+ Exercise')}</button>${d.exercises.length ? `<button class="btn ghost sm" data-act="sp-link" data-day="${i}">${ICON.link}${roll('Link sets')}</button>` : ''}<button class="btn line sm" data-act="day-rest" data-day="${i}">${roll('Make it a rest day')}</button>${canTwo ? `<button class="btn ${two ? 'line' : 'ghost'} sm day-two" data-act="day-same" data-day="${i}" aria-pressed="${two}">${two ? roll('Make it its own day') : roll(`Same day as ${dayLabel(days, i - 1).replace(/ · .*$/, '')}`)}</button>` : ''}</div>`;
-  return `<div class="day${ro ? ' ro' : ''}${lk ? ' linking' : ''}${two ? ' second' : ''}${cardioDay(d) ? ' cday' : ''} rv" data-did="${d.id}">${head}${cardioDay(d) ? `<p class="day-2nd lbl day-c">${ICON.pulse}Cardio day · ${d.exercises.reduce((t, x) => t + (x.min || 30), 0)} min planned</p>` : ''}${two ? `<p class="day-2nd lbl">${ICON.link}Same day as ${esc(days[i - 1].type || dayLabel(days, i - 1))} · train twice</p>` : ''}
+  return `<div class="day${ro ? ' ro' : ''}${lk ? ' linking' : ''}${two ? ' second' : ''}${cardioDay(d) ? ' cday' : ''} rv" data-did="${d.id}"${ro ? '' : ` data-ro-list="day:${i}"`}>${head}${cardioDay(d) ? `<p class="day-2nd lbl day-c">${ICON.pulse}Cardio day · ${d.exercises.reduce((t, x) => t + (x.min || 30), 0)} min planned</p>` : ''}${two ? `<p class="day-2nd lbl">${ICON.link}Same day as ${esc(days[i - 1].type || dayLabel(days, i - 1))} · train twice</p>` : ''}
     ${d.exercises.length ? `<div class="dex-h lbl"><span>Exercise</span>${cardioDay(d) ? '<span style="grid-column:span 2">Minutes</span>' : '<span>Sets</span><span>Reps</span>'}<span></span></div>${rows}` : `<p class="muted" style="font-size:13px">No exercises yet.</p>`}
     ${glist ? `<div class="groups">${glist}</div>` : ''}${foot}</div>`;
 }
@@ -2582,7 +2616,30 @@ function addExercise(exId) {
   const it = { id: sid(), exId, sets }; s.items.push(it); queue('s:' + s.id, 0); render(false);
   requestAnimationFrame(() => { const el = $(`[data-item="${it.id}"]`); if (el) el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); });
 }
-function findSet(s, id) { for (const it of s.items) { const i = it.sets.findIndex(x => x.id === id); if (i >= 0) return { it, st: it.sets[i], i }; } return null; }
+/* an exercise dragged to a new place: in the session's list, or in a split day's */
+function moveIn(list, from, to) {
+  if (list === 'items') { const s = cur(); if (!s || locked(s)) return; const [it] = s.items.splice(from, 1); s.items.splice(to, 0, it); queue('s:' + s.id, 300); render(false); return; }
+  const m = /^day:(\d+)$/.exec(list), sp = m && curSplit(), d = sp && sp.days[+m[1]]; if (!d) return;
+  const [x] = d.exercises.splice(from, 1); d.exercises.splice(to, 0, x); S.spLink = null; touchSplit(sp, 300); render(false);
+}
+function findSet(s, id) {
+  for (const it of s.items) { const i = it.sets.findIndex(x => x.id === id); if (i >= 0) return { it, st: it.sets[i], i };
+    /* a warm-up set: found too (for typing and ticking it), marked so nothing else treats it as a working set */
+    const k = it.wu ? it.wu.findIndex(x => x.id === id) : -1; if (k >= 0) return { it, st: it.wu[k], i: k, wu: true }; }
+  return null;
+}
+/* warm-ups that build to the first working set: about 40%, 60% and 80% of it for 8, 5 and 3 reps (two steps when
+   it's light), rounded to what can be loaded. They're hints; tick each as you go. */
+function addWarmups(itemId) {
+  const s = cur(), it = s && s.items.find(x => x.id === itemId); if (!it || locked(s)) return;
+  const next = it.sets.find(st => !st.done) || it.sets[0], top = next ? +(next.w ?? next.pw) || 0 : 0;
+  if (!(top > 0)) return toast('Set a working weight first, then add warm-ups');
+  const steps = top < 40 ? [[0.5, 8], [0.75, 4]] : [[0.4, 8], [0.6, 5], [0.8, 3]], seen = new Set();
+  it.wu = steps.map(([p, r]) => ({ w: roundStep(top * p), r })).filter(x => x.w < top && !seen.has(x.w) && seen.add(x.w))
+    .map(x => ({ id: sid(), w: null, r: null, pw: x.w, pr: x.r, done: false, g: null }));
+  if (!it.wu.length) { delete it.wu; return toast('That weight is light enough to start without warm-ups'); }
+  queue('s:' + s.id, 300); buzz(10); render(false);
+}
 function addSet(itemId) {
   const s = cur(), it = s && s.items.find(x => x.id === itemId); if (!it) return; const p = it.sets[it.sets.length - 1];
   if (it.sets.length >= 40) return toast('That’s the maximum number of sets');
@@ -2600,6 +2657,12 @@ function toggleDone(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
   if (st.done) { st.done = false; queue('s:' + s.id, 300); render(false); return; }
   const ex = exOf(f.it.exId);
+  if (f.wu) {
+    if (st.w == null && st.pw != null) st.w = st.pw;
+    if (st.r == null && st.pr != null) st.r = st.pr;
+    if (!(+st.r > 0)) { render(false); return toast('Add reps first'); }
+    st.done = true; queue('s:' + s.id, 300); buzz(8); render(false); return;
+  }
   if (isCardio(ex)) {
     /* a bout takes the time (and distance) it was hinted with; no rest timer after cardio */
     if (st.t == null && st.pt != null) st.t = st.pt;
@@ -2627,17 +2690,52 @@ function beep() { if (!S.profile.sound || !AC) return; try { const o = AC.create
 const logged = s => s.items.some(it => it.sets.some(st => setLogged(st) || (st.done && (+st.pr > 0 || +st.pt > 0))));
 function tidySets(s) {
   for (const it of s.items) { for (const st of it.sets) { if (st.done && st.r == null && st.pr != null) st.r = st.pr; if (st.done && st.w == null && st.pw != null) st.w = st.pw;
-    if (st.done && st.t == null && st.pt != null) st.t = st.pt; if (st.done && st.d == null && st.pd != null) st.d = st.pd; } it.sets = it.sets.filter(setLogged); }
+    if (st.done && st.t == null && st.pt != null) st.t = st.pt; if (st.done && st.d == null && st.pd != null) st.d = st.pd; } it.sets = it.sets.filter(setLogged);
+    /* warm-ups ticked off stay with the session, with their numbers; the rest go */
+    if (it.wu) { for (const st of it.wu) { if (st.done && st.r == null && st.pr != null) st.r = st.pr; if (st.done && st.w == null && st.pw != null) st.w = st.pw; }
+      it.wu = it.wu.filter(st => st.done && +st.r > 0); if (!it.wu.length) delete it.wu; } }
   s.items = s.items.filter(it => it.sets.length); cleanGroups(s);
 }
 function finish() {
   const s = cur(); if (!s) return;
   const any = logged(s);
   if (!any) return confirmSheet('Nothing logged', 'This session has no sets with reps and no cardio with a time. Delete it instead?', 'Delete session', () => delSession(s.id), 'Keep logging');
+  /* as it was, for Undo finish: unticked hints and empty sets come back too */
+  const was = clone(s.items), rest = isRestToday();
   tidySets(s); s.endedAt = Date.now(); S.rest = null; S.link = null;
-  if (isRestToday()) { S.profile.restDays = (S.profile.restDays || []).filter(k => k !== dayKey(Date.now())); queue('p', 300); }
-  queue('s:' + s.id, 0); compute(); const a = S.A.sess.get(s.id);
-  render(true); toast(`Saved · intensity ${Math.round(a.int)}${a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : ''}`);
+  if (rest) { S.profile.restDays = (S.profile.restDays || []).filter(k => k !== dayKey(Date.now())); queue('p', 300); }
+  queue('s:' + s.id, 0); compute();
+  render(true); finishSheet(s, () => {
+    if (activeSession()) return toast('Another session is live');
+    s.items = was; s.endedAt = null;
+    if (rest) { S.profile.restDays = [...(S.profile.restDays || []), dayKey(Date.now())]; queue('p', 300); }
+    queue('s:' + s.id, 0); compute(); render(false); toast('Back to logging');
+  });
+}
+/* After Finish: how it went, against last time, the records and the best set, with Undo finish */
+function finishSheet(s, undo) {
+  const a = S.A.sess.get(s.id); if (!a) return;
+  const min = Math.max(1, Math.round((s.endedAt - s.startedAt) / 6e4));
+  const kv = (v, l) => `<div><b>${v}</b><span class="lbl">${l}</span></div>`;
+  const stats = a.sets ? kv(Math.round(a.int), 'intensity') + kv(fmtVol(a.vol), 'volume') + kv(a.sets, 'sets') + kv(min, 'minutes')
+    : kv(fmtMin(a.ct), 'cardio') + kv(a.ex, a.ex === 1 ? 'exercise' : 'exercises') + kv(min, 'minutes');
+  /* last time: the same split day, or else a session of the same name */
+  const prev = sorted().find(x => x.id !== s.id && x.endedAt && x.startedAt < s.startedAt && (s.splitId != null ? x.splitId === s.splitId && x.splitDay === s.splitDay : sessName(x) === sessName(s)));
+  const pa = prev && S.A.sess.get(prev.id);
+  let vs = '';
+  if (a.sets && pa && pa.vol > 0) { const d = Math.round((a.vol - pa.vol) / pa.vol * 100);
+    vs = `<p class="muted fs-vs">Volume <b class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '+' : ''}${d}%</b> on last ${esc(sessName(prev))} (${fmtVol(pa.vol)}, ${fmtDate(prev.startedAt)})</p>`; }
+  const prs = bestPerSession(S.A.rec.events.filter(e => e.sid === s.id));
+  let best = null;
+  for (const it of s.items) { const ex = exOf(it.exId); if (!ex || isCardio(ex)) continue;
+    for (const st of it.sets) { if (!(+st.r > 0)) continue; const v = e1rm(loadOf(st, ex), +st.r); if (!best || v > best.v) best = { v, st, ex }; } }
+  openSheet(`<div class="sh-h"><div><span class="lbl">${DAYS[new Date(s.startedAt).getDay()].slice(0, 3)} · ${fmtDate(s.startedAt)} · ${plural(min, 'min')}</span><h3>${esc(sessName(s))}, done</h3></div>${xBtn()}</div>
+    <div class="ts-kv${a.sets ? '' : ' three'}">${stats}</div>${vs}
+    ${prs.length ? `<span class="lbl fs-sub">${prs.length === 1 ? 'Record' : 'Records'}</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(exOf(p.exId)?.name || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}
+    ${best ? `<span class="lbl fs-sub">Best set</span><p class="fs-best">${esc(best.ex.name)} <b>${best.ex.kind === 'bw' && !best.st.w ? `${best.st.r} reps` : `${best.ex.kind === 'bw' ? '+' : ''}${fmtW(+best.st.w || 0)} ${unit()} × ${best.st.r}`}</b>${best.ex.kind === 'bw' ? '' : ` <span class="muted">· est. 1RM ${fmtW(best.v)} ${unit()}</span>`}</p>` : ''}
+    <div class="btns"><button class="btn line" id="fs-undo">${roll('Undo finish')}</button><button class="btn" data-act="close">${roll('Done')}</button></div>`, r => {
+    r.querySelector('#fs-undo').onclick = () => { closeSheet(); undo(); };
+  });
 }
 /* Deleting a session: from its ⋯ menu, the Discard button of a live one, or a row in History or the Logbook
    (swipe it left on a phone, the bin beside it on a computer). It always asks first. */
@@ -2981,6 +3079,12 @@ function setMenu(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
   const w = st.w ?? st.pw, ex = exOf(f.it.exId);
   const plates = ex && ex.kind !== 'bw' ? [{ label: 'Plate calculator', hint: w > 0 ? `${fmtW(w)} ${unit()}` : '', fn: () => plateSheet(w) }] : [];
+  if (f.wu) {
+    if (locked(s)) return plates.length ? plateSheet(w) : nudgeEdit();
+    const drop = list => { f.it.wu = list; if (!f.it.wu.length) delete f.it.wu; queue('s:' + s.id, 300); render(false); };
+    return menuSheet(`${ex?.name || 'Exercise'} · warm-up ${f.i + 1}`, [...plates, { label: 'Delete this warm-up', warn: true, fn: () => drop(f.it.wu.filter(x => x !== st)) },
+      { label: 'Delete all warm-ups', warn: true, fn: () => drop([]) }]);
+  }
   if (locked(s)) return S.lbCtx === s.id ? menuSheet(`${ex?.name || 'Set'} · set ${f.i + 1}`, [...plates, { label: 'Edit session', hint: 'to change this set', fn: startEdit }]) : plates.length ? plateSheet(w) : nudgeEdit();
   const items = [...plates, ...(isCardio(ex) ? [] : [{ label: 'Superset with…', hint: 'a set of another exercise', fn: () => supersetSheet(setId) }]),
     { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
@@ -3064,7 +3168,7 @@ function swapItem(s, it, ex, split) {
     for (const st of move) if (st.g && keep.some(k => k.g === st.g) && !s.items.some(o => o !== it && o.sets.some(k => k.g === st.g))) st.g = null;
     it.sets = keep; to = { id: sid(), exId: ex.id, sets: move };
     s.items.splice(s.items.indexOf(it) + 1, 0, to);
-  } else to.exId = ex.id;
+  } else { to.exId = ex.id; if (!to.sets.some(setLogged)) delete to.wu; }
   /* cardio tracks what was tracked last time; sets that moved with their numbers keep what shows them */
   if (c && !to.sets.some(setLogged)) to.m = lastMetrics(ex.id, s.id) || defaultMetrics(ex.name);
   /* sets not logged yet take the new exercise's hints; a weight typed for the old one goes */
@@ -3377,6 +3481,8 @@ const ACT = {
   done: el => toggleDone(el.dataset.set),
   'h-more': () => { hShown += H_PAGE; drawHList(); },
   'set-menu': el => setMenu(el.dataset.set),
+  'add-wu': el => addWarmups(el.dataset.item),
+  'ex-note': el => noteSheet(el.dataset.id),
   'sugg-use': el => useSuggestion(el.dataset.item),
   plates: el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); const st = it && [...it.sets].reverse().find(x => (x.w ?? x.pw) > 0); plateSheet(st ? st.w ?? st.pw : (el.dataset.w ? +el.dataset.w : null)); },
   'bw-del': el => { S.profile.bwLog = unlogBw(S.profile.bwLog, el.dataset.d); const l = S.profile.bwLog; if (l.length) S.profile.bw = l[l.length - 1].kg; queue('p', 300); render(false); },
@@ -3875,6 +3981,7 @@ function boot() {
   dockDrag($('#nav'), { enabled: () => phoneDash() && S.loaded && $('#sheet').hidden, onPick: el => go(el.dataset.v), buzz });
   /* every switch can be slid along too */
   segDrag({ buzz });
+  reorderDrag({ onMove: moveIn, enabled: () => !S.link && !S.spLink, buzz, reduced });
   if (coarse.matches) rubberBand($('#view'), { ios: isIOS(), reduced, held: () => TP.dragging() });
   /* the app installed on an iPhone has no browser back: swipe in from the left edge instead */
   if (coarse.matches && isIOS() && navigator.standalone === true) edgeBack({ view: $('#view'), reduced, canBack: canSwipeBack, label: backLabel, onBack: () => { swipeNav = true; back(); }, held: () => TP.isOpen() || TP.dragging() });
