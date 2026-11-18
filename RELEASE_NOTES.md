@@ -10,7 +10,7 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
-## 0.1.42-alpha · 14 November 2026
+## 0.1.42-alpha · 18 November 2026
 
 **Messages that match the app, and swipe away**
 
