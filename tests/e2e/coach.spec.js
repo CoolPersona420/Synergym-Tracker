@@ -235,7 +235,10 @@ test('the Coach card on Home: the call, then next, week, recovery and goal, each
   await expect(card.locator('.co-wr[data-k="next"]')).toContainText('Push');
   /* the 110 kg goal puts bench in its Strength block: 4 reps at 80% of about 101 kg */
   await expect(card.locator('.co-wr[data-k="next"]')).toContainText('Bench Press 80×4');
-  await expect(card.locator('.co-wr[data-k="week"]')).toContainText('1 of 3');
+  /* this week counts from its start (Monday by default), like Home's This week */
+  const from = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); })();
+  const inWeek = fake.sessions.filter(s => new Date(s.started_at).getTime() >= from).length;
+  await expect(card.locator('.co-wr[data-k="week"]')).toContainText(`${inWeek} of 3`);
   await expect(card.locator('.co-wr[data-k="recovery"]')).toContainText('weeks');
   await expect(card.locator('.co-wr[data-k="goal"]')).toContainText('110');
   await card.locator('.co-wr[data-k="goal"]').click();

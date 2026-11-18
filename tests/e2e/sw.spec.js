@@ -33,8 +33,7 @@ test('a new release whose files are not there yet opens the last good version, t
   /* the "release": the page now asks for index-NEXT.js, which isn't deployed yet */
   let deployed = false;
   await context.route(u => u.pathname === '/' || u.pathname === '/history', async r => {
-    const res = await r.fetch(); const html = (await res.text()).replace(old, '/assets/index-NEXT.js');
-    await r.fulfill({ response: res, body: html });
+    try { const res = await r.fetch(); const html = (await res.text()).replace(old, '/assets/index-NEXT.js'); await r.fulfill({ response: res, body: html }); } catch {}
   });
   await context.route('**/assets/index-NEXT.js', r => deployed ? r.fulfill({ status: 200, contentType: 'text/javascript', body: real }) : r.fulfill({ status: 404, body: 'not found' }));
   await page.reload();
@@ -44,6 +43,7 @@ test('a new release whose files are not there yet opens the last good version, t
   deployed = true;
   await expect.poll(async () => { await page.reload(); await page.waitForSelector('#f-auth', { timeout: 15000 });
     return page.evaluate(() => document.querySelector('script[type="module"][src*="/assets/"]').getAttribute('src')); }, { timeout: 30000, intervals: [500, 1000, 2000] }).toBe('/assets/index-NEXT.js');
+  await context.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
 test('without a service worker yet, a build file that fails to load is retried instead of leaving a blank page', async ({ page }) => {
