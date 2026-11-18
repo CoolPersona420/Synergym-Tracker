@@ -152,3 +152,11 @@ test('warm-up sets are kept apart from the working sets, and an exercise note co
   const d = parseImport({ app: 'Synergym', library: [{ id: 'b', name: 'Bench Press', kind: 'w', note: '  Grip one finger out  ' }], sessions: [], splits: [] });
   assert.equal(d.library[0].note, 'Grip one finger out');
 });
+
+test('reps in reserve is kept on a set, from 0 to 4 (4 meaning 4 or more)', async () => {
+  const { cleanSet } = await import('../../src/lib/sanitize.js');
+  assert.equal(cleanSet({ id: 'a', w: 80, r: 5, done: true, rir: 2 }).rir, 2);
+  assert.equal(cleanSet({ id: 'a', w: 80, r: 5, done: true, rir: 9 }).rir, 4);
+  assert.equal('rir' in cleanSet({ id: 'a', w: 80, r: 5, done: true, rir: -1 }), false);
+  assert.equal('rir' in cleanSet({ id: 'a', w: 80, r: 5, done: true }), false);
+});

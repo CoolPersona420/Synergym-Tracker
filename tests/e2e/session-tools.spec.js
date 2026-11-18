@@ -139,3 +139,34 @@ test('warm-ups are saved with an exercise that has working sets, and can be dele
   expect(it.wu).toEqual([expect.objectContaining({ w: 30, r: 8, done: true })]);
   expect(it.sets).toHaveLength(1);
 });
+
+test('reps in reserve: after ticking a set, an optional tap says how many reps were left; it shows under the set number', async ({ page }) => {
+  const { saved } = await setup(page, { benchDone: 0 });
+  const card = page.locator('[data-item="L1"]');
+  await card.locator('.set [data-act="done"]').first().click();
+  const ask = card.locator('.rir');
+  await expect(ask).toHaveCount(1);
+  await expect(ask).toContainText('Reps left?');
+  await ask.locator('[data-v="2"]').click();
+  await expect(card.locator('.rir')).toHaveCount(0);
+  await expect(card.locator('.sno').first()).toContainText('2 RIR');
+  await expect.poll(() => saved().items[0].sets[0].rir).toBe(2);
+  /* ignoring it is fine: ticking the next set moves the question there */
+  await card.locator('.set [data-act="done"]').nth(1).click();
+  await expect(card.locator('.set').nth(1).locator('.rir')).toHaveCount(1);
+  await card.locator('.set [data-act="done"]').nth(2).click();
+  await expect(card.locator('.set').nth(1).locator('.rir')).toHaveCount(0);
+  await expect(card.locator('.set').nth(2).locator('.rir')).toHaveCount(1);
+  /* the set's menu asks again, and tapping the same answer clears it */
+  await card.locator('.sno').first().click();
+  await page.locator('#sheet .menu button', { hasText: 'Reps left (RIR)' }).click();
+  await card.locator('.set').first().locator('.rir [data-v="2"]').click();
+  await expect(card.locator('.sno').first()).not.toContainText('RIR');
+  await expect.poll(() => 'rir' in saved().items[0].sets[0]).toBe(false);
+  /* one question at a time: set 3's went when set 1's was asked again. 4 means 4 or more */
+  await expect(card.locator('.rir')).toHaveCount(0);
+  await card.locator('.sno').nth(2).click();
+  await page.locator('#sheet .menu button', { hasText: 'Reps left (RIR)' }).click();
+  await card.locator('.set').nth(2).locator('.rir [data-v="4"]').click();
+  await expect(card.locator('.sno').nth(2)).toContainText('4+ RIR');
+});

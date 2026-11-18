@@ -12,7 +12,7 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ## 0.1.44-alpha · 18 November 2026
 
-**A summary when you finish, warm-ups, notes, and drag to reorder**
+**A summary when you finish, warm-ups, notes, reps in reserve, and drag to reorder**
 
 - **Finish summary:** tapping **Finish** now shows how it went: intensity, volume, sets and minutes, the volume
   change on the last time you did this split day (or a session of the same name), any records, and your best set
@@ -27,6 +27,10 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 - **Exercise notes:** an exercise can keep a note (seat, grip, setup, up to 200 characters). Add it from its card
   in a session or from the exercise's page; it shows on that card in every session. Notes are part of export and
   import, and of offline mode.
+- **Reps in reserve:** after you tick a working set, a small **Reps left?** row asks how many more reps you had in
+  you: 0, 1, 2, 3 or 4+. Tap one or carry on (it moves to the next set you tick). The answer shows as "2 RIR" under
+  the set's number and is saved with the set; the set's menu asks again, and tapping the same answer clears it.
+  For now it's a record for you; the coach doesn't use it yet.
 
 ---
 

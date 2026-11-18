@@ -1812,13 +1812,17 @@ function wuRow(st, i) {
 function setRow(st, i, gmap) {
   const g = gmap.get(st.id), p = S.A.set.get(st.id), sel = S.link && S.link.has(st.id), ro = locked(cur()) ? ' readonly' : '';
   return `<div class="set${st.done ? ' done' : ''}${sel ? ' sel' : ''}"${S.link ? ` data-act="link-pick" data-set="${st.id}"` : ''}>
-  <button class="sno" data-act="set-menu" data-set="${st.id}" aria-label="Set ${i + 1} options">${i + 1}<span data-gtag="${st.id}">${g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''}</span></button>
+  <button class="sno" data-act="set-menu" data-set="${st.id}" aria-label="Set ${i + 1} options">${i + 1}<span data-gtag="${st.id}">${g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''}</span>${st.rir != null ? `<span class="rir-t">${rirText(st.rir)} RIR</span>` : ''}</button>
   <input data-f="w" data-set="${st.id}" inputmode="decimal" enterkeyhint="next" value="${fmtW(st.w)}" placeholder="${st.pw != null ? fmtW(st.pw) : '0'}" aria-label="Weight, set ${i + 1}" autocomplete="off"${ro}>
   <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, set ${i + 1}" autocomplete="off"${ro}>
   <span class="int${p >= 99.5 ? ' top' : ''}" data-int="${st.id}">${setInt(st)}</span>
   <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark set not done' : 'Mark set done'}" aria-pressed="${!!st.done}">${ICON.check}</button>
-  ${prLine(st)}</div>`;
+  ${prLine(st)}${rirAsk(st)}</div>`;
 }
+/* reps in reserve: after a working set is ticked, how many more reps were left in it (0 to 4+). Optional: the row
+   under the set waits for a tap and goes when the next set is ticked. */
+const rirText = v => v >= 4 ? '4+' : String(v);
+const rirAsk = st => S.rirAsk !== st.id || !st.done || locked(cur()) ? '' : `<div class="rir" role="group" aria-label="Reps left in the tank"><span class="lbl">Reps left?</span>${[0, 1, 2, 3, 4].map(v => `<button class="chip${st.rir === v ? ' on' : ''}" data-act="rir" data-set="${st.id}" data-v="${v}" aria-pressed="${st.rir === v}">${rirText(v)}</button>`).join('')}</div>`;
 const prLine = st => { const ev = S.A.rec?.bySet.get(st.id); return `<span class="set-pr" data-prb="${st.id}" role="status"${ev ? '' : ' hidden'}>${ev ? prText(ev) : ''}</span>`; };
 function groupsHTML(groups) {
   return groups.map(g => { const names = [...new Set(g.m.map(x => exOf(x.it.exId)?.name || '?'))];
@@ -2655,7 +2659,7 @@ function addDrop(setId) {
 }
 function toggleDone(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
-  if (st.done) { st.done = false; queue('s:' + s.id, 300); render(false); return; }
+  if (st.done) { st.done = false; if (S.rirAsk === st.id) S.rirAsk = null; queue('s:' + s.id, 300); render(false); return; }
   const ex = exOf(f.it.exId);
   if (f.wu) {
     if (st.w == null && st.pw != null) st.w = st.pw;
@@ -2675,7 +2679,7 @@ function toggleDone(setId) {
   if (st.w == null && st.pw != null) st.w = st.pw;
   if (st.r == null && st.pr != null) st.r = st.pr;
   if (!(+st.r > 0)) { render(false); return toast('Add reps first'); }
-  st.done = true; queue('s:' + s.id, 300); buzz(12);
+  st.done = true; S.rirAsk = st.id; queue('s:' + s.id, 300); buzz(12);
   let nextName = null;
   if (st.g && !s.endedAt) { const g = groupsOf(s).find(x => x.g === st.g); if (g) { const idx = g.m.findIndex(x => x.st.id === st.id); const nxt = g.m.slice(idx + 1).find(x => !x.st.done); if (nxt) nextName = exOf(nxt.it.exId)?.name; } }
   render(false);
@@ -3088,7 +3092,8 @@ function setMenu(setId) {
   if (locked(s)) return S.lbCtx === s.id ? menuSheet(`${ex?.name || 'Set'} · set ${f.i + 1}`, [...plates, { label: 'Edit session', hint: 'to change this set', fn: startEdit }]) : plates.length ? plateSheet(w) : nudgeEdit();
   const items = [...plates, ...(isCardio(ex) ? [] : [{ label: 'Superset with…', hint: 'a set of another exercise', fn: () => supersetSheet(setId) }]),
     { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
-    { label: 'Duplicate set', fn: () => { f.it.sets.splice(f.i + 1, 0, { ...clone(st), id: sid(), done: false, g: null }); queue('s:' + s.id, 300); render(false); } }];
+    { label: 'Duplicate set', fn: () => { const c = { ...clone(st), id: sid(), done: false, g: null }; delete c.rir; f.it.sets.splice(f.i + 1, 0, c); queue('s:' + s.id, 300); render(false); } }];
+  if (st.done && !isCardio(ex)) items.push({ label: 'Reps left (RIR)', hint: st.rir != null ? rirText(st.rir) : 'how many more you had', fn: () => { S.rirAsk = st.id; render(false); } });
   if (st.g) items.push({ label: 'Unlink from group', fn: () => { st.g = null; cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
   items.push({ label: 'Delete set', warn: true, fn: () => { f.it.sets.splice(f.i, 1); cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
   menuSheet(`${exOf(f.it.exId)?.name || 'Set'} · set ${f.i + 1}`, items);
@@ -3482,6 +3487,8 @@ const ACT = {
   'h-more': () => { hShown += H_PAGE; drawHList(); },
   'set-menu': el => setMenu(el.dataset.set),
   'add-wu': el => addWarmups(el.dataset.item),
+  rir: el => { const s = cur(), f = s && findSet(s, el.dataset.set); if (!f || f.wu || locked(s)) return; const v = +el.dataset.v;
+    f.st.rir = f.st.rir === v ? null : v; if (f.st.rir == null) delete f.st.rir; S.rirAsk = null; queue('s:' + s.id, 300); buzz(8); render(false); },
   'ex-note': el => noteSheet(el.dataset.id),
   'sugg-use': el => useSuggestion(el.dataset.item),
   plates: el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); const st = it && [...it.sets].reverse().find(x => (x.w ?? x.pw) > 0); plateSheet(st ? st.w ?? st.pw : (el.dataset.w ? +el.dataset.w : null)); },

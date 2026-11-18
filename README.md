@@ -18,6 +18,7 @@ The version lives in `package.json` (`0.1.44-alpha`) and shows in Settings › A
   toward records, intensity or volume); drag an exercise by its grip to reorder it (sessions and split days); an
   exercise can keep a note (seat, grip, setup) that shows on its card in every session. **Finish** shows a summary:
   intensity, volume, sets, time, the change on last time, records and the best set, with **Undo finish**.
+  After a set is ticked, an optional **Reps left?** (0–4+, reps in reserve) is saved with it and shown under its number.
 - **Records (PRs):** each exercise knows its records. A weight PR is heavier than ever, a rep PR is more
   reps than ever at that weight or heavier, and beating both is marked as both. Sets are judged live as you
   type them, and each exercise page shows its heaviest set, most reps and best reps by weight.

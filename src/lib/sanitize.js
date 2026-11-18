@@ -15,6 +15,8 @@ export function cleanSet(o) {
   const out = { id: safeId(o.id), w: w == null ? null : Math.max(0, w), r: r == null ? null : Math.max(0, Math.round(r)), pw, pr, done, g: o.g ? safeId(o.g) : null };
   /* a cardio bout: seconds, metres, heart rate, calories, effort, and the time and distance it was hinted with */
   for (const [k, lo, hi, whole] of CARDIO_FIELDS) { const v = num(o[k]); if (v != null) out[k] = Math.min(hi, Math.max(lo, whole ? Math.round(v) : v)); }
+  /* reps left in the tank after a set (0 to 4, where 4 means 4 or more) */
+  const rir = num(o.rir); if (rir != null && rir >= 0) out.rir = Math.min(4, Math.round(rir));
   return out;
 }
 const CARDIO_FIELDS = [['t', 0, 86400, true], ['pt', 0, 86400, true], ['d', 0, 1e6, false], ['pd', 0, 1e6, false], ['hr', 30, 250, true], ['kc', 0, 20000, true], ['e', 1, 10, true]];
