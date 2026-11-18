@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DAY, WEEK, e1rm, loadFor, parseRange, seriesByLift, currentE1rm, trend, stalled, falling, loadRatio, trainingStreak, splitRun,
-  readiness, lastBreak, deloadCheck, splitCheck, prescribe, goalPlan, phaseFor, analyse } from '../../src/lib/coach.js';
+  readiness, lastBreak, deloadCheck, splitCheck, prescribe, goalPlan, phaseFor, analyse, withBreak } from '../../src/lib/coach.js';
 
 const NOW = new Date(2026, 9, 27, 18, 0).getTime();
 const snap = w => Math.round(w / 2.5) * 2.5;
@@ -211,4 +211,19 @@ test('fast enough to run on every change: three years of four sessions a week', 
   const ms = performance.now() - t0;
   assert.ok(a.goals.length === 2 && a.ready.call && a.deload.status);
   assert.ok(ms < 150, `took ${ms.toFixed(1)} ms`);
+});
+
+test('a week off or deload that is due decides the day: the call never says train while recovery says rest', () => {
+  const train = { call: 'train', reasons: ['Trained yesterday, and nothing says you need a rest.'], notes: [] };
+  const off = withBreak(train, { status: 'now', kind: 'week-off' });
+  assert.equal(off.call, 'rest'); assert.equal(off.brk, 'off'); assert.match(off.reasons[0], /week off is due/);
+  assert.ok(!off.reasons.some(r => /nothing says you need a rest/.test(r)));
+  const dl = withBreak(train, { status: 'now', kind: 'deload' });
+  assert.equal(dl.call, 'easy'); assert.equal(dl.brk, 'deload'); assert.match(dl.reasons[0], /Deload week/);
+  /* a rest call for its own reasons keeps them, after the deload's */
+  const rest = withBreak({ call: 'rest', reasons: ['5 training days in a row.'], notes: [] }, { status: 'now', kind: 'deload' });
+  assert.equal(rest.call, 'rest'); assert.deepEqual(rest.reasons.slice(1), ['5 training days in a row.']);
+  /* not due yet, or nothing to say: unchanged */
+  assert.equal(withBreak(train, { status: 'soon', kind: 'deload' }), train);
+  assert.equal(withBreak(train, null), train);
 });

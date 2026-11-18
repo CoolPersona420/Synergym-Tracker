@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+/* lets tests route the service worker's own requests (sw.spec.js); other tests block service workers */
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
+
 /* Browser tests run against a production build with Supabase faked in the browser (tests/e2e/fake-supabase.js) */
 export default defineConfig({
   testDir: 'tests/e2e',

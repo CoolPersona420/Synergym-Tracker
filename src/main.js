@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import './style.css';
-import { analyse, readiness, prescribe, parseRange, goalPlan } from './lib/coach.js';
+import { analyse, readiness, withBreak, prescribe, parseRange, goalPlan } from './lib/coach.js';
 import { suggestNext } from './lib/progress.js';
 import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
@@ -474,7 +474,7 @@ function coach() {
     goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)), savedOf: id => { const e = exMap.get(id); return e && e.oneRm > 0 ? { kg: e.oneRm, at: e.oneRmAt } : null; } };
   const a = analyse(log, ctx);
   /* trained today: the call is for tomorrow morning */
-  if (doneToday().length) { const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(8, 0, 0, 0); a.next = { ...readiness(log, a.series, { ...ctx, now: t.getTime() }), when: 'tomorrow' }; }
+  if (doneToday().length) { const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(8, 0, 0, 0); a.next = { ...withBreak(readiness(log, a.series, { ...ctx, now: t.getTime() }), a.deload), when: 'tomorrow' }; }
   else a.next = { ...a.ready, when: 'today' };
   a.ctx = ctx;
   Object.assign(CO, { a, k, s: S.sessions, l: S.library, p: S.splits });
@@ -1070,7 +1070,11 @@ function vToday() {
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-undo">${ICON.moon}Undo rest day</button></div>`;
   } else if (nx) {
     const d = nx.sp.days[nx.i], ty = d.type ? esc(d.type) : 'training day';
-    lines = [greet(hi), ty, pick(['<em>is up next</em>.', '<em>is on deck</em>.', '<em>is calling</em>.'], 3)];
+    /* the greeting agrees with the coach: no "is calling" when a week off or a rest day is the call */
+    const co = coachOn() && coach().next, cc = co && co.when === 'today' && callOf(co);
+    lines = cc === 'rest' ? [greet(hi), ...(co.brk === 'off' ? pick([['a week off', '<em>is due</em>.'], ['time for', '<em>a week off</em>.']], 3) : pick([['rest is', '<em>the call today</em>.'], ['recovery', '<em>comes first</em>.']], 3))]
+      : cc === 'easy' ? [greet(hi), ty, pick(['<em>goes light today</em>.', '<em>is an easy one</em>.'], 3)]
+      : [greet(hi), ty, pick(['<em>is up next</em>.', '<em>is on deck</em>.', '<em>is calling</em>.'], 3)];
     cta = `${pickBtn(`${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}${nx.picked ? ' · your pick' : ''}`, `${esc(d.type || 'Training')}`, `${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}`)}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   } else {
@@ -1105,7 +1109,7 @@ function todayContent() {
   const now = Date.now(), done = doneToday().slice().reverse(), a = activeSession(), nx = nextSplitDay();
   const tot = done.reduce((t, x) => { const q = S.A.sess.get(x.id); return q ? { sets: t.sets + q.sets, vol: t.vol + q.vol, min: t.min + Math.max(0, Math.round((x.endedAt - x.startedAt) / 6e4)) } : t; }, { sets: 0, vol: 0, min: 0 });
   const ids = new Set(done.map(x => x.id)), prs = bestPerSession(S.A.rec.events.filter(e => ids.has(e.sid)));
-  const wk = sorted().filter(x => x.endedAt && x.startedAt >= weekStart(now)).length, tgt = S.profile.target || 3;
+  const wk = weekCount(), tgt = S.profile.target || 3;
   let today;
   if (a) { const q = S.A.sess.get(a.id); today = `<div class="ts-live"><span class="dot live"></span><span><b>${esc(sessName(a))}</b><span class="muted">In progress · ${plural(q ? q.sets : 0, 'set')} logged</span></span><button class="btn sm" data-act="ts-go" data-to="resume" data-id="${a.id}">Resume</button></div>`; }
   else today = '';
@@ -1115,7 +1119,7 @@ function todayContent() {
   else if (!a) today += isRestToday() ? `<p class="ts-note">${ICON.moon}Rest day. Recovery counts.</p>` : `<p class="ts-note">Nothing logged yet today.</p>`;
   const wkBar = `<div class="ts-week"><span class="lbl">This week</span><b>${wk} of ${tgt}</b><span class="ts-bar"><i style="width:${Math.min(100, wk / tgt * 100).toFixed(0)}%"></i></span></div>`;
   const co = coachOn() && coach().next, cc = co && callOf(co);
-  if (co) today += `<button class="ts-coach" data-act="ts-go" data-to="coach"><span class="co-call-t co-${cc}">${co.when === 'tomorrow' ? 'Tomorrow: ' : ''}${CALL[cc][0]}</span><span class="muted">${esc(callReason(co))}</span>${ICON.coach}</button>`;
+  if (co) today += `<button class="ts-coach" data-act="ts-go" data-to="coach"><span class="co-call-t co-${cc}">${co.when === 'tomorrow' ? 'Tomorrow: ' : ''}${callTitle(co, cc)}</span><span class="muted">${esc(callReason(co))}</span>${ICON.coach}</button>`;
   return { html: `<div class="sh-h"><div><span class="lbl">${DAYS[new Date(now).getDay()]} · ${fmtDate(now)}</span><h3 id="tsh-title">${dayDone() ? 'Today’s summary' : 'Today’s plan'}</h3></div>${xBtn('top-close', 'Close', ' tsh-x')}</div>
   <section class="ts-sec">${today}</section>${wkBar}
   <section class="ts-sec ts-next">${nextBlock(nx, done, a)}</section>` };
@@ -1150,6 +1154,8 @@ function todayPanel() {
 const CALL = { train: ['Train', 'Good to go'], easy: ['Go easy', 'Train, but lighter'], rest: ['Rest day', 'Recovery is training too'] };
 /* a rest day marked for today wins over anything the coach worked out */
 const callOf = r => r.when === 'today' && isRestToday() && !activeSession() ? 'rest' : r.call;
+/* the call's name: a due week off reads Week off, a deload's easy day reads Deload */
+const callTitle = (r, c) => c === 'rest' && r.brk === 'off' ? 'Week off' : c === 'easy' && r.brk === 'deload' ? 'Deload' : CALL[c][0];
 const callReason = r => r.when === 'today' && isRestToday() && !activeSession() ? 'You marked today as a rest day.' : r.reasons[0] || '';
 const WHY = { load: 'Last time went well: add weight.', 'range-up': 'Every set reached the top of the range: add weight, back to the bottom.', reps: 'Same weight, one more rep.',
   repeat: 'Last time slipped: match it before moving on.', consolidate: 'Later sets fell short: own this weight first.', reset: 'Too heavy twice running: 5% lighter, build back up.',
@@ -1187,7 +1193,7 @@ function coachMood(a) {
 }
 function vCoach() {
   if (!coachOn()) return `<header class="co-top rv"><span class="co-tt">Coach</span>${xBtn('coach-close', 'Close the coach')}</header>` + pageTop('Coach') + `<div class="co"><section class="card rv co-offc"><h2 class="co-call-t">Coach is off</h2><p class="co-lead">Turn it on for targets in every session, a call each day to train, go easy or rest, deload and split checks, and goals with a plan. Your goals are kept while it’s off.</p><div class="co-acts"><button class="btn" data-act="coach-switch">${roll('Turn the coach on')}</button></div></section></div>`;
-  const a = coach(), r = a.next, c = callOf(r), nx = nextSplitDay(), act = activeSession(), wk = sorted().filter(s => s.endedAt && Date.now() - s.startedAt < 7 * 864e5).length;
+  const a = coach(), r = a.next, c = callOf(r), nx = nextSplitDay(), act = activeSession(), wk = weekCount();
   if (COACH_TABS.some(t => t[0] === S.arg)) S.coachTab = S.arg;
   const tab = S.coachTab || 'plan', today = r.when === 'today';
   const reasons = today && isRestToday() && !act ? ['You marked today as a rest day.'] : r.reasons, notes = r.notes || [];
@@ -1198,7 +1204,7 @@ function vCoach() {
   const more = reasons.slice(1).concat(notes);
   const hero = `<section class="card co-hero co-${c} rv">
     <div class="co-call"><span class="co-ico" aria-hidden="true">${c === 'rest' ? ICON.rest : c === 'easy' ? ICON.down : ICON.check}</span>
-      <div class="co-cm"><span class="lbl">${today ? 'Today' : 'Tomorrow'} · ${wk} of ${S.profile.target || 3} this week</span><h2 class="co-call-t co-${c}">${CALL[c][0]}</h2></div></div>
+      <div class="co-cm"><span class="lbl">${today ? 'Today' : 'Tomorrow'} · ${wk} of ${S.profile.target || 3} this week</span><h2 class="co-call-t co-${c}">${callTitle(r, c)}</h2></div></div>
     <p class="co-lead">${esc(reasons[0] || CALL[c][1])}</p>
     ${btn || more.length ? `<div class="co-acts">${btn}${more.length ? `<details class="co-more"><summary>Why</summary>${whyList(more)}</details>` : ''}</div>` : ''}</section>`;
   const recWarn = ['soon', 'now'].includes(a.deload.status) || ['change', 'consider'].includes(a.split.status);
@@ -1475,6 +1481,9 @@ const planDays = (nx, full) => { const dn = new Set(doneToday().filter(s => s.sp
 const wTile = (label, value, caption, open) => `<div class="card-h"><span class="lbl">${label}</span>${open ? `<span class="w-ex" aria-hidden="true">${ICON.expand}</span>` : ''}</div><div class="tile"><span class="tile-n">${value}</span><span class="tile-c">${caption}</span></div>`;
 const mkv = pairs => `<div class="mkv">${pairs.map(([k, v]) => `<div><b>${v}</b><span class="lbl">${k}</span></div>`).join('')}</div>`;
 const thisWeek = () => weekSummary(sorted(), weekStart(Date.now()));
+/* sessions this week, the one count everywhere (Home's This week, the Coach, today's plan): from the start of the
+   week you chose in Settings, each with a set logged, as the Week widget counts them */
+const weekCount = () => { const from = weekStart(Date.now()); return sorted().filter(s => s.startedAt >= from && logged(s)).length; };
 const gainText = g => `+${fmtW(g.by)} ${unit()} on ${esc(exOf(g.exId)?.name || 'a lift')}`;
 const volDelta = W => W.lastVol ? `${W.vol >= W.lastVol ? '+' : '−'}${Math.round(Math.abs(W.vol - W.lastVol) / W.lastVol * 100)}%` : '–';
 const bwDelta = ch => ch == null ? '–' : `${ch > 0 ? '+' : ch < 0 ? '−' : '±'}${fmtW(Math.abs(ch))} ${unit()}`;
@@ -1491,9 +1500,9 @@ const WIDGETS = {
   coach: {
     title: 'Coach', desc: 'Today’s call, what’s next, your week, recovery and goals', link: 'coach',
     card: (open, z) => { const a = coach(), r = a.next, c = callOf(r), when = r.when === 'tomorrow' ? 'Tomorrow' : 'Today';
-      if (z === 's') return wTile('Coach', CALL[c][0], when.toLowerCase(), open);
+      if (z === 's') return wTile('Coach', callTitle(r, c), when.toLowerCase(), open);
       const nx = nextSplitDay(), day = nx && nx.sp.days[nx.i], tg = day ? dayTargets(day).filter(t => t.g) : [];
-      const wk = sorted().filter(s => s.endedAt && Date.now() - s.startedAt < 7 * 864e5).length, tgt = S.profile.target || 3, dk = recKey(a.deload);
+      const wk = weekCount(), tgt = S.profile.target || 3, dk = recKey(a.deload);
       const g = a.goals.find(x => x.status !== 'no-data') || a.goals[0];
       /* each row opens its part of the Coach */
       const row = (k, v, t) => `<div class="co-wr" data-k="${k.toLowerCase()}" data-act="coach-go" data-t="${t}"><span class="lbl">${k}</span><span class="co-wv">${v}</span></div>`;
@@ -1509,7 +1518,7 @@ const WIDGETS = {
         + row('Recovery', ['soon', 'now', 'off'].includes(dk) ? `<b class="co-warn">${REC[dk][0]}</b>` : `${a.deload.weeks} of ~${a.deload.every} weeks`, 'recovery')
         + row('Goal', goal, 'goals');
       const more = list ? `<div class="co-wn"><span class="lbl">Targets · ${esc(day.type || 'next session')} · ${unit()}</span>${tg.slice(0, 4).map(t => `<span><b>${esc(t.e.name)}</b><i class="co-wt">${short(t)} <small>× ${t.g.sets}</small></i></span>`).join('')}</div>` : '';
-      return wHead('Coach', when, open) + `<div class="co-wc"><b class="co-call-t co-${c}">${CALL[c][0]}</b><span class="muted co-wwhy">${esc(callReason(r))}</span></div><div class="co-wrows">${rows}</div>${more}`; }
+      return wHead('Coach', when, open) + `<div class="co-wc"><b class="co-call-t co-${c}">${callTitle(r, c)}</b><span class="muted co-wwhy">${esc(callReason(r))}</span></div><div class="co-wrows">${rows}</div>${more}`; }
   },
   intensity: {
     title: 'Intensity', desc: 'How hard each training day was', opts: [[30, '30d'], [90, '90d'], [365, '1y']],
@@ -2262,8 +2271,11 @@ const HOW = `<div class="sh-h"><h3>How the numbers work</h3>${xBtn()}</div><div 
 
 /* ================= sheets ================= */
 let sheetGen = 0;
-function openSheet(html, mount) { sheetGen++; const sh = $('#sheet'), sp0 = $('#sheet .sp'); sp0.style.transform = sp0.style.transition = sp0.style.animation = ''; $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); fluidApply($('#sheet-body'), null); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
-function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.remove('open'); w.setAttribute('aria-expanded', 'false'); } $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; const sp = $('#sheet .sp'); sp.style.transform = sp.style.transition = sp.style.animation = ''; }
+/* the button a sheet was opened from gets the keyboard back when it closes */
+let sheetFrom = null;
+function openSheet(html, mount) { sheetGen++; if ($('#sheet').hidden) sheetFrom = document.activeElement; const sh = $('#sheet'), sp0 = $('#sheet .sp'); sp0.style.transform = sp0.style.transition = sp0.style.animation = ''; $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); fluidApply($('#sheet-body'), null); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
+function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.remove('open'); w.setAttribute('aria-expanded', 'false'); } $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; const sp = $('#sheet .sp'); sp.style.transform = sp.style.transition = sp.style.animation = ''; 
+  const from = sheetFrom; sheetFrom = null; if (from && from.isConnected && from !== document.body && matchMedia('(pointer:fine)').matches) try { from.focus({ preventScroll: true }); } catch {} }
 /* drag a sheet down from its top to dismiss it, like a native bottom sheet */
 (() => {
   const sp = $('#sheet .sp'); let y0 = null, dy = 0, t0 = 0;
@@ -2284,6 +2296,14 @@ function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.rem
   sp.addEventListener('touchcancel', () => { if (y0 == null) return; y0 = null; sp.style.transition = 'transform .32s var(--ease)'; sp.style.transform = ''; });
 })();
 document.addEventListener('keydown', e => {
+  /* an open sheet keeps the keyboard: Tab and Shift+Tab go round its own buttons and fields, not the page behind */
+  if (e.key === 'Tab' && !$('#sheet').hidden) {
+    const f = [...$$('#sheet .sp button, #sheet .sp input, #sheet .sp select, #sheet .sp textarea, #sheet .sp [href], #sheet .sp [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent !== null);
+    if (!f.length) return e.preventDefault();
+    const i = f.indexOf(document.activeElement);
+    if (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === f.length - 1)) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); }
+    return;
+  }
   if (e.key === 'Escape' && !$('#sheet').hidden) return closeSheet();
   if (e.key === 'Escape' && TP && TP.isOpen()) return TP.close();
   if (e.key === 'Escape' && S.view === 'widget') return back();
@@ -3886,4 +3906,6 @@ function boot() {
     }, 0);
   });
 }
+/* the app's files loaded: theme.js can stop retrying them */
+try { sessionStorage.removeItem('sg-retry'); } catch {}
 boot();

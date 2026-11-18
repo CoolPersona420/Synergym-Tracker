@@ -377,10 +377,21 @@ function weeksTo(cur, kg, rate) {
 }
 
 /* ---------- everything, once ---------- */
+/* a week off or a deload that's due now decides the day, so the call never says "train" while recovery says
+   "take a week off": a week off makes it a rest day, a deload makes a training day an easy one. brk names it. */
+export function withBreak(r, d) {
+  if (!d || d.status !== 'now') return r;
+  const off = d.kind === 'week-off';
+  const why = off ? 'A week off is due: no lifting for 5 to 7 days. Strength holds, tiredness clears.' : 'Deload week: your usual days, about 10% lighter and half the sets.';
+  const call = off ? 'rest' : r.call === 'train' ? 'easy' : r.call;
+  /* a plain "train" reason no longer applies; reasons for resting or going easy still do */
+  return { ...r, call, brk: off ? 'off' : 'deload', reasons: [why, ...(r.call === 'train' ? [] : r.reasons)] };
+}
+
 /* ctx: { now, exp, target, split, lastSplitDay, nextMuscles, muscleOf, goals, savedOf(exId) → { kg, at } | null, round } */
 export function analyse(log, ctx) {
-  const series = seriesByLift(log);
-  const ready = readiness(log, series, ctx), deload = deloadCheck(log, series, ctx);
+  const series = seriesByLift(log), deload = deloadCheck(log, series, ctx);
+  const ready = withBreak(readiness(log, series, ctx), deload);
   const split = splitCheck(log, series, { ...ctx, deload });
   const goals = (ctx.goals || []).map(g => goalPlan(g, series.get(g.exId), { ...ctx, saved: ctx.savedOf ? ctx.savedOf(g.exId) : null }));
   return { series, ready, deload, split, goals };

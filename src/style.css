@@ -19,7 +19,7 @@
 
   /* Mono light */
   --bg:#EDEDED; --page:#EDEDED; --surface:#FFFFFF; --surface-2:#E3E3E3; --field:#F3F3F3; --line:#D8D8D8;
-  --ink:#0E0E0E; --ink-2:#474747; --muted:#878787;
+  --ink:#0E0E0E; --ink-2:#474747; --muted:#6A6A6A;
   --accent:#0E0E0E; --on-accent:#FFFFFF; --solid:#0E0E0E; --solid-ink:#FFFFFF;
   --good:#2F7D4F; --bad:#B3261E; --glass:rgba(237,237,237,.7); --shadow:0 .618rem 1.618rem rgba(0,0,0,.07);
   --heat0:#E2E2E2; --heat-ink:#0E0E0E;
@@ -29,7 +29,7 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme]){
   --bg:#050505; --page:#050505; --surface:#151515; --surface-2:#212121; --field:#1A1A1A; --line:#2A2A2A;
-  --ink:#F4F4F4; --ink-2:#B4B4B4; --muted:#767676;
+  --ink:#F4F4F4; --ink-2:#B4B4B4; --muted:#808080;
   --accent:#F4F4F4; --on-accent:#000000; --solid:#F4F4F4; --solid-ink:#000000;
   --good:#7BD88F; --bad:#FF8A80; --glass:rgba(8,8,8,.68); --shadow:0 .618rem 1.618rem rgba(0,0,0,.4);
   --heat0:#1E1E1E; --heat-ink:#F4F4F4;
@@ -37,7 +37,7 @@
   --orb-solid:#000000; --orb-glass:rgba(255,255,255,.13); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#050505; --page:#050505; --surface:#151515; --surface-2:#212121; --field:#1A1A1A; --line:#2A2A2A;
-  --ink:#F4F4F4; --ink-2:#B4B4B4; --muted:#767676;
+  --ink:#F4F4F4; --ink-2:#B4B4B4; --muted:#808080;
   --accent:#F4F4F4; --on-accent:#000000; --solid:#F4F4F4; --solid-ink:#000000;
   --good:#7BD88F; --bad:#FF8A80; --glass:rgba(8,8,8,.68); --shadow:0 .618rem 1.618rem rgba(0,0,0,.4);
   --heat0:#1E1E1E; --heat-ink:#F4F4F4;
@@ -45,7 +45,7 @@
   --orb-solid:#000000; --orb-glass:rgba(255,255,255,.13); color-scheme:dark}
 :root[data-theme="solarized-light"]{
   --bg:#FDF6E3; --page:#FDF6E3; --surface:#FFFCF2; --surface-2:#EEE8D5; --field:#F6F0DC; --line:#E2DBC5;
-  --ink:#073642; --ink-2:#586E75; --muted:#8D9A9A;
+  --ink:#073642; --ink-2:#586E75; --muted:#5A7479;
   --accent:#268BD2; --on-accent:#FDF6E3; --solid:#073642; --solid-ink:#FDF6E3;
   --good:#859900; --bad:#DC322F; --glass:rgba(253,246,227,.74); --shadow:0 .618rem 1.618rem rgba(7,54,66,.08);
   --heat0:#EEE8D5; --heat-ink:#268BD2;
@@ -53,7 +53,7 @@
   --orb-solid:#CB4B16; --orb-glass:rgba(253,246,227,.16); color-scheme:light}
 :root[data-theme="solarized-dark"]{
   --bg:#002B36; --page:#002B36; --surface:#073642; --surface-2:#0B4251; --field:#04323E; --line:#114B5A;
-  --ink:#EEE8D5; --ink-2:#93A1A1; --muted:#6F8A90;
+  --ink:#EEE8D5; --ink-2:#93A1A1; --muted:#8A9E9E;
   --accent:#268BD2; --on-accent:#FDF6E3; --solid:#EEE8D5; --solid-ink:#002B36;
   --good:#859900; --bad:#DC322F; --glass:rgba(0,43,54,.72); --shadow:0 .618rem 1.618rem rgba(0,0,0,.3);
   --heat0:#0B4251; --heat-ink:#2AA198;
@@ -61,7 +61,7 @@
   --orb-solid:#002B36; --orb-glass:rgba(253,246,227,.12); color-scheme:dark}
 :root[data-theme="gruvbox-light"]{
   --bg:#FBF1C7; --page:#FBF1C7; --surface:#F9F5D7; --surface-2:#EBDBB2; --field:#F2E5BC; --line:#D5C4A1;
-  --ink:#3C3836; --ink-2:#504945; --muted:#7C6F64;
+  --ink:#3C3836; --ink-2:#504945; --muted:#766A60;
   --accent:#AF3A03; --on-accent:#FBF1C7; --solid:#3C3836; --solid-ink:#FBF1C7;
   --good:#79740E; --bad:#9D0006; --glass:rgba(251,241,199,.74); --shadow:0 .618rem 1.618rem rgba(60,56,54,.1);
   --heat0:#EBDBB2; --heat-ink:#AF3A03;
@@ -77,7 +77,7 @@
   --orb-solid:#D65D0E; --orb-glass:rgba(251,241,199,.12); color-scheme:dark}
 :root[data-theme="nord"]{
   --bg:#2E3440; --page:#2E3440; --surface:#3B4252; --surface-2:#434C5E; --field:#353C4A; --line:#4C566A;
-  --ink:#ECEFF4; --ink-2:#D8DEE9; --muted:#9AA5BA;
+  --ink:#ECEFF4; --ink-2:#D8DEE9; --muted:#A6B0C3;
   --accent:#88C0D0; --on-accent:#2E3440; --solid:#ECEFF4; --solid-ink:#2E3440;
   --good:#A3BE8C; --bad:#BF616A; --glass:rgba(46,52,64,.72); --shadow:0 .618rem 1.618rem rgba(0,0,0,.25);
   --heat0:#434C5E; --heat-ink:#88C0D0;
@@ -85,7 +85,7 @@
   --orb-solid:#5E81AC; --orb-glass:rgba(236,239,244,.12); color-scheme:dark}
 :root[data-theme="dracula"]{
   --bg:#282A36; --page:#282A36; --surface:#303341; --surface-2:#3A3D4F; --field:#2C2E3B; --line:#44475A;
-  --ink:#F8F8F2; --ink-2:#D3D5E3; --muted:#8C93BE;
+  --ink:#F8F8F2; --ink-2:#D3D5E3; --muted:#959BC2;
   --accent:#BD93F9; --on-accent:#282A36; --solid:#F8F8F2; --solid-ink:#282A36;
   --good:#50FA7B; --bad:#FF5555; --glass:rgba(40,42,54,.72); --shadow:0 .618rem 1.618rem rgba(0,0,0,.3);
   --heat0:#3A3D4F; --heat-ink:#BD93F9;
@@ -93,7 +93,7 @@
   --orb-solid:#BD93F9; --orb-glass:rgba(248,248,242,.12); color-scheme:dark}
 :root[data-theme="sage"]{
   --bg:#C3C6B1; --page:#C3C6B1; --surface:#CED1BD; --surface-2:#B6BAA3; --field:#D4D7C4; --line:#A7AB94;
-  --ink:#1F241D; --ink-2:#3E4539; --muted:#666C5E;
+  --ink:#1F241D; --ink-2:#3E4539; --muted:#4C5247;
   --accent:#C9583A; --on-accent:#FFFFFF; --solid:#1F241D; --solid-ink:#E8EADF;
   --good:#3D6B3A; --bad:#A3321C; --glass:rgba(195,198,177,.76); --shadow:0 .618rem 1.618rem rgba(31,36,29,.1);
   --heat0:#B6BAA3; --heat-ink:#1F241D;
@@ -101,7 +101,7 @@
   --orb-solid:#1F241D; --orb-glass:rgba(255,244,239,.18); color-scheme:light}
 :root[data-theme="volt"]{
   --bg:#0A0A0A; --page:#0A0A0A; --surface:#161616; --surface-2:#202020; --field:#141414; --line:#2A2A2A;
-  --ink:#F2F2F2; --ink-2:#BDBDBD; --muted:#7A7A7A;
+  --ink:#F2F2F2; --ink-2:#BDBDBD; --muted:#818181;
   --accent:#D4F25A; --on-accent:#111111; --solid:#F2F2F2; --solid-ink:#0A0A0A;
   --good:#D4F25A; --bad:#FF6B5B; --glass:rgba(10,10,10,.7); --shadow:0 .618rem 1.618rem rgba(0,0,0,.45);
   --heat0:#1E1E1E; --heat-ink:#D4F25A;
@@ -2064,7 +2064,7 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
 
 
 /* ---------- the Logbook on a computer: a calendar like a calendar app's month, each day showing what was trained,
-   and beside it the day you picked and the month in numbers. Phones keep the compact square days. ---------- */
+   and beside it the day you picked and the month in numbers. Phones, tablets and small laptops keep the compact square days. ---------- */
 .lb-ev{display:none}
 .lb-side{display:contents}
 .lb-sum{display:none}
@@ -2079,6 +2079,12 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
   .lb-kinds{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s0)}
   .lb-cal{padding:var(--s0)}
   .lb-wk,.lb-grid{gap:6px}
+  /* the day card is narrow: its buttons stack, full width */
+  .lb-side .lb-acts .btn{flex:1 1 100%}
+}
+/* days that show what was trained need room: on a smaller laptop or a tablet held sideways (under 75rem) the
+   calendar keeps the compact square days, with the day and the month beside it */
+@media (min-width:75rem){
   .lb-wk .lbl{text-align:left;padding-left:9px}
   .lb-d{aspect-ratio:auto;height:5.6rem;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:5px;padding:8px 9px;
     border-radius:10px;text-align:left;background:color-mix(in srgb,var(--ink) 3%,transparent);overflow:hidden}
@@ -2093,8 +2099,6 @@ html[data-nav="swipe"]::view-transition-new(root){animation:vt-swipe-in .36s cub
   .lb-d.l4 .lb-ev{background:var(--heat-ink);color:var(--bg)}
   .lb-ev.more{background:none!important;color:var(--muted)!important;padding:0 2px;font-weight:500}
   .lb-d.rd::after{content:"Rest";font-size:11px;font-weight:500;color:var(--muted)}
-  /* the day card is narrow: its buttons stack, full width */
-  .lb-side .lb-acts .btn{flex:1 1 100%}
 }
 
 /* ---------- the Logbook tab: one title, and a Calendar | List switch beside it (List is the old History) ---------- */
@@ -2113,3 +2117,17 @@ html[data-nav="lb-fwd"]::view-transition-old(root){animation:tab-out-l .38s var(
 html[data-nav="lb-fwd"]::view-transition-new(root){animation:tab-in-r .55s var(--ease) both}
 html[data-nav="lb-back"]::view-transition-old(root){animation:tab-out-r .38s var(--ease) both}
 html[data-nav="lb-back"]::view-transition-new(root){animation:tab-in-l .55s var(--ease) both}
+
+/* ---------- fingertip-sized tap areas: small controls keep their look and get an invisible hit area of about
+   44px (Apple's and Google's minimum) on touch screens ---------- */
+@media (pointer:coarse){
+  /* above their neighbours, so the hit area isn't covered by the next line */
+  .dash-dots button,.day-mv .iconbtn.sm,.linkbtn,.ts-open,.toggle{position:relative;z-index:1}
+  .dash-dots button::before,.day-mv .iconbtn.sm::before,.linkbtn::before,.ts-open::before,.toggle::before{content:"";position:absolute;left:50%;top:50%;translate:-50% -50%}
+  /* the dots sit 16px apart: each takes its share of the row, full height */
+  .dash-dots button::before{width:calc(100% + 8px);height:44px}
+  /* the two day arrows are stacked: wide enough, and tall enough between them */
+  .day-mv .iconbtn.sm::before{width:44px;height:calc(100% + 8px)}
+  .linkbtn::before,.ts-open::before{width:calc(100% + 12px);height:44px}
+  .toggle::before{width:calc(100% + 8px);height:44px}
+}

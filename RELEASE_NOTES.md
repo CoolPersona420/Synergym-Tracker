@@ -10,6 +10,31 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.43-alpha · 18 November 2026
+
+**Fixes from a full check on phone and computer**
+
+- **The Coach says one thing:** when a week off was due, the Coach could say **Train** ("nothing says you need a
+  rest") right above **Take a week off**, and Home still said the next day "is calling". A break that's due now
+  leads the call: a week off reads **Week off** (with *Make today a rest day*), a deload reads **Deload**, and Home's
+  greeting agrees. Targets are unchanged.
+- **One "this week":** Home's This week card counted from the start of your week, the Coach the last 7 days, so
+  the same screen could say 2 of 3 and 4 of 3. Both now count from the start of the week you chose in Settings.
+- **No blank screen after a release:** for a few seconds after an update, the app could load a page whose files
+  weren't online yet. It now opens the last version that works until the new one's files are there, then switches;
+  a file that fails to load is retried. Build files also load from the phone's copy more reliably.
+- **Easier to read:** grey text (dates, hints, labels) is a step darker in every theme, to the 4.5:1 contrast
+  that small text needs. Each theme keeps its own colours.
+- **Logbook calendar on smaller laptops:** between tablet and full desktop widths, the days that list what you
+  trained got too narrow to read. Below 1200px wide the calendar keeps compact days, with the day and the month
+  beside it.
+- **Keyboard on a computer:** an open menu keeps Tab and Shift+Tab inside it, and gives focus back to the button
+  that opened it when it closes.
+- **Fingertip-sized taps on a phone:** Home's widget dots, a split day's up/down arrows, text links, the date on
+  Home and the switches in Settings take a tap just beside them too. They look the same.
+
+---
+
 ## 0.1.42-alpha · 18 November 2026
 
 **Messages that match the app, and swipe away**

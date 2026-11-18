@@ -6,22 +6,33 @@
 const SHELL = 'sg-shell-v1', ASSETS = 'sg-assets-v1', STATIC = 'sg-static-v1';
 const KEEP = [SHELL, ASSETS, STATIC];
 
-/* cache the page and every file it references, so the first offline launch works */
-async function cacheShell() {
-  const cache = await caches.open(SHELL), res = await fetch('/', { cache: 'no-store' });
-  if (!res.ok) return;
-  const html = await res.clone().text();
-  await cache.put('/', res);
-  const urls = [...html.matchAll(/(?:src|href)="(\/[^"]+)"/g)].map(m => m[1]).filter(u => !u.startsWith('//'));
+/* the build files a page needs (its script and stylesheet) */
+const builds = html => [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map(m => m[1]);
+/* fetch and keep a page's build files; true only when every one is there. Right after a release a new page can
+   arrive a few seconds before its files do, and a page without them is a blank screen. */
+async function haveBuilds(urls) {
   const assets = await caches.open(ASSETS);
-  await Promise.all(urls.map(async u => {
-    const store = u.startsWith('/assets/') ? assets : cache;
-    if (store === assets && await assets.match(u)) return;
-    try { const r = await fetch(u); if (r.ok) await store.put(u, r); } catch {}
-  }));
+  for (const u of urls) {
+    if (await assets.match(u, { ignoreVary: true })) continue;
+    try { const r = await fetch(u); if (!r.ok) return false; await assets.put(u, r); } catch { return false; }
+  }
+  return true;
+}
+
+/* cache the page and every file it references, so the first offline launch works. A new page is only kept once
+   all its build files are; until then the last good page and its files stay. */
+async function cacheShell() {
+  const res = await fetch('/', { cache: 'no-store' });
+  if (!res.ok) return;
+  const html = await res.clone().text(), live = builds(html);
+  if (!(await haveBuilds(live))) return;
+  const cache = await caches.open(SHELL);
+  await cache.put('/', res);
+  const others = [...html.matchAll(/(?:src|href)="(\/[^"]+)"/g)].map(m => m[1]).filter(u => !u.startsWith('//') && !u.startsWith('/assets/'));
+  await Promise.all(others.map(async u => { try { const r = await fetch(u); if (r.ok) await cache.put(u, r); } catch {} }));
   /* drop build files the current page no longer uses */
-  const live = new Set(urls.filter(u => u.startsWith('/assets/')));
-  for (const req of await assets.keys()) { const p = new URL(req.url).pathname; if (!live.has(p)) assets.delete(req); }
+  const keep = new Set(live), assets = await caches.open(ASSETS);
+  for (const req of await assets.keys()) { const p = new URL(req.url).pathname; if (!keep.has(p)) assets.delete(req); }
 }
 
 self.addEventListener('install', e => { e.waitUntil(cacheShell().catch(() => {}).then(() => self.skipWaiting())); });
@@ -38,22 +49,27 @@ const timeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout((
 self.addEventListener('fetch', e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== 'GET') return;
-  /* pages: try the network (briefly), fall back to the cached app */
+  /* pages: try the network (briefly), fall back to the cached app. A new page is used only when its build files
+     can be had; otherwise the last good page opens, and the new files are fetched for next time. */
   if (req.mode === 'navigate' && url.origin === location.origin) {
     e.respondWith((async () => {
-      try {
-        const res = await timeout(fetch(req), 4000);
-        if (res.ok) { const c = await caches.open(SHELL); c.put('/', res.clone()); }
-        return res;
-      } catch {
-        return (await caches.match('/', { cacheName: SHELL })) || Response.error();
-      }
+      const last = () => caches.match('/', { cacheName: SHELL });
+      let res;
+      try { res = await timeout(fetch(req), 4000); } catch { return (await last()) || Response.error(); }
+      if (!res.ok) return res;
+      const urls = builds(await res.clone().text()), ready = haveBuilds(urls);
+      let ok = false;
+      try { ok = await timeout(ready, 4000); } catch {}
+      if (ok) { const c = await caches.open(SHELL); await c.put('/', res.clone()); return res; }
+      /* still coming (or not there yet): keep fetching in the background, and open what worked last time */
+      e.waitUntil(ready.then(done => done && caches.open(SHELL).then(c => c.put('/', res.clone()))).catch(() => {}));
+      return (await last()) || res;
     })());
     return;
   }
   /* build files never change once published */
   if (url.origin === location.origin && url.pathname.startsWith('/assets/')) {
-    e.respondWith(caches.match(req, { cacheName: ASSETS }).then(hit => hit || fetch(req).then(res => {
+    e.respondWith(caches.match(req, { cacheName: ASSETS, ignoreVary: true }).then(hit => hit || fetch(req).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(ASSETS).then(c => c.put(req, copy)); }
       return res;
     })));

@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.42, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.43, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.42-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.43-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -230,7 +230,9 @@ every coach hint goes, sessions show plain next-set suggestions, and goals are k
   intermediate, advanced), counted from the last break of 6+ days or the last lighter week, and straight
   away when half the main lifts stall or two keep falling. A full week off after 16 weeks without a break,
   or when lifts stay stuck after a recent deload. While a deload is due, every target is about 10% lighter
-  with half the sets. After a lighter week, stalls are ignored for two weeks while lifts bounce back.
+  with half the sets. After a lighter week, stalls are ignored for two weeks while lifts bounce back. A break
+  that's due leads today's call, so it never says train while Recovery says rest: a due week off reads **Week
+  off** (a rest day) and a due deload turns a training day into **Deload** (an easy one).
 - **The split.** Give a split 6–8 weeks. Time to change when, at the rate you actually train, a 4+ day split
   hits major muscles less than once a week, or when half the main lifts have stalled after 8+ weeks outside a
   deload; worth a tweak after 16 weeks with fewer than half still climbing, or if it skips a major muscle.
