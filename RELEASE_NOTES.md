@@ -10,7 +10,7 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
-## 0.1.44-alpha · 18 November 2026
+## 0.1.44-alpha · 19 November 2026
 
 **A summary when you finish, warm-ups, notes, reps in reserve, and drag to reorder**
 
