@@ -10,6 +10,19 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.46-alpha · 19 November 2026
+
+**A steadier instant start**
+
+- **No redraw for nothing:** after opening from the copy on your device, the app redrew the page as soon as the
+  server answered, even when nothing had changed. You couldn't see it, but it could cut an opening animation short
+  or move the keyboard's focus. It now redraws only when the server's data differs, and the same goes for the
+  refresh when you come back to the app after a while.
+- **A fresher copy:** the copy on your device is saved again right after each change reaches the server (and a
+  second and a half after you stop typing), so opening the app moments after a change shows it straight away.
+
+---
+
 ## 0.1.45-alpha · 19 November 2026
 
 **Opens at once, a smaller app, and tidier details**

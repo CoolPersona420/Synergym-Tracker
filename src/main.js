@@ -161,7 +161,7 @@ async function flush(key) {
   try {
     const r = await runJob(key);
     if (r.error) throw r.error;
-    ok = true; OB.failing = false; OB.backoff = 2000; OB.lastOk.set(key, Date.now());
+    ok = true; OB.failing = false; OB.backoff = 2000; OB.lastOk.set(key, Date.now()); snapSoon(250);
   } catch (e) {
     if (isPermanent(e)) { saveError(key, e); }
     else { OB.pending.add(key); OB.failing = true; scheduleRetry(); }
@@ -244,7 +244,7 @@ async function loadAll() {
   S.shared = (sh.error ? [] : sh.data || []).map(r => ({ id: r.split_id, name: r.name, description: r.description || '', days: cleanDays(r.days), from: r.from_username, sharedAt: Date.parse(r.shared_at) }));
   S.lastFetch = S.sharedAt = Date.now();
 }
-async function refresh() { if (S.local || S.syncing) return; try { await loadAll(); snapSoon(500); soft(); } catch (e) { console.warn(e); } }
+async function refresh() { if (S.local || S.syncing) return; try { const was = dataSig(); await loadAll(); if (dataSig() !== was) { snapSoon(500); soft(); } } catch (e) { console.warn(e); } }
 /* ---------- instant start: a copy of the account on this device ----------
    An online account opens from the copy at once, then what the server has replaces it in the background. The copy
    is written after each load from the server, a few seconds after changes, and when the app goes to the background;
@@ -255,7 +255,13 @@ function snapNow() {
   if (S.local || !S.user || !S.loaded || S.syncing) return;
   writeSnap(S.user.id, { profile: S.profile, library: S.library, sessions: [...S.sessions.values()], splits: [...S.splits.values()], shared: S.shared });
 }
-function snapSoon(ms = 4000) { if (S.local || !S.user || !S.loaded) return; clearTimeout(snapT); snapT = setTimeout(snapNow, ms); }
+function snapSoon(ms = 1500) { if (S.local || !S.user || !S.loaded) return; clearTimeout(snapT); snapT = setTimeout(snapNow, ms); }
+/* a fingerprint of the account's data, keys in a fixed order, to tell whether the server's copy differs from this
+   device's: when it doesn't, the page isn't drawn again (nothing would change, but focus and animations would) */
+function dataSig() {
+  const sorted = (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v;
+  try { return JSON.stringify([S.profile, S.library, [...S.sessions.values()], [...S.splits.values()], S.shared], sorted); } catch { return String(Math.random()); }
+}
 function applySnap(d) {
   S.profile = { ...DEFAULT_PROFILE, ...d.profile };
   S.library = Array.isArray(d.library) ? d.library.filter(e => e && e.id && e.name) : [];
@@ -3990,10 +3996,12 @@ async function startApp() {
     applySnap(snap); restoreOutbox(); afterLoad();
     const t = S.profile.onboarded && pendingPublic();
     if (t) go('public', t, { replace: true }); else route(true);
+    const was = dataSig();
     try { await loadAll(); }
     catch (e) { console.warn(e); if (S.user && S.user.id === uid) toast(navigator.onLine ? 'Couldn’t refresh. Showing what’s saved on this phone.' : 'Offline · showing what’s saved on this phone'); return; }
     if (!S.user || S.user.id !== uid) return;
-    checkDevice(S.profile.activeSession); snapSoon(500); soft();
+    checkDevice(S.profile.activeSession);
+    if (dataSig() !== was) { snapSoon(500); soft(); }
     return;
   }
   restoreOutbox();

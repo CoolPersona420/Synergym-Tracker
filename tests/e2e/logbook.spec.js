@@ -131,7 +131,7 @@ test('an edit that beats a saved 1RM offers to raise it; the coach plans from th
   await expect(page.locator('#toast')).toContainText('1RM: 139.5');
   await page.goto('/exercises/' + ex.id);
   await expect(page.locator('#view .card').first()).toContainText('Your 1RM');
-  expect(await page.locator('#view .card', { hasText: 'next time' }).first().innerText()).not.toBe(coachBefore);
+  await expect.poll(() => page.locator('#view .card', { hasText: 'next time' }).first().innerText()).not.toBe(coachBefore);
 });
 
 test('correcting the session a saved 1RM came from offers to lower it; Undo takes it back', async ({ page }) => {
