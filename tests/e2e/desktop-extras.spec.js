@@ -66,7 +66,8 @@ test('the Logbook on a computer: each day shows what was trained, and the month 
   }
   await expect(chip).toBeVisible();
   await expect(chip).toContainText('Push');
-  await expect(chip).toContainText('kg');
+  /* its volume: kg below 1,000, tonnes from there */
+  await expect(chip).toContainText(/\d( kg| t)/);
   const sum = page.locator('#lb-sum');
   await expect(sum).toBeVisible();
   await expect(sum).toContainText('This month');
