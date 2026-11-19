@@ -703,7 +703,9 @@ span.dex-min{justify-content:center}
 .tour-x{position:absolute;top:0;right:0}
 .sh-h h3{font-size:var(--t1)}
 .menu{display:flex;flex-direction:column}
-.menu button{padding:var(--s0) 4px;border-bottom:1px solid var(--line);font-size:1rem;font-weight:500;display:flex;justify-content:space-between;align-items:center}
+/* each option's hint sits under its label, so long ones read as a line, not a squeezed column */
+.menu button{padding:var(--s0) 4px;border-bottom:1px solid var(--line);font-size:1rem;font-weight:500;display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left}
+.menu button > .muted:empty{display:none}
 .menu button:last-child{border-bottom:0}
 .menu button.warn{color:var(--bad)}
 .pk-list{display:flex;flex-direction:column;margin-top:var(--s-1)}

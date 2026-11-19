@@ -1,7 +1,7 @@
 {
   "name": "synergym",
   "private": true,
-  "version": "0.1.44-alpha",
+  "version": "0.1.45-alpha",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.117.0",
+    "@supabase/auth-js": "2.117.0",
+    "@supabase/postgrest-js": "2.117.0",
     "@vercel/analytics": "2.0.1"
   },
   "devDependencies": {

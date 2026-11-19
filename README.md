@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.44, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.45, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.44-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.45-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -83,6 +83,9 @@ The version lives in `package.json` (`0.1.44-alpha`) and shows in Settings › A
   in from the left edge to go back, as in other iPhone apps (`src/ui/edgeback.js`).
   - **Offline mode:** use it without an account, or take an account offline; going online merges and
     uploads (see below).
+  - **Instant start:** an online account opens from a copy kept on the device (its own small IndexedDB
+    database, per account, deleted on sign-out), then refreshes from the server in the background; if the server
+    can't be reached, the copy stays on screen with a note instead of an error page.
 - **Accounts:** email and password; a six-step setup (account, name, body and units, goal and days, a
   starter split, a theme) followed by a short tour. One device is signed in per account at a time.
 - **Your data:** export everything as JSON or every set as CSV; import replaces all data after a warning.

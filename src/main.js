@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { makeClient } from './lib/sb.js';
+import { readSnap, writeSnap, clearSnaps } from './lib/snapcache.js';
 import './style.css';
 import { analyse, readiness, withBreak, prescribe, parseRange, goalPlan } from './lib/coach.js';
 import { suggestNext } from './lib/progress.js';
@@ -36,7 +37,7 @@ import { trackErrors, startAnalytics } from './lib/telemetry.js';
 const SB_URL = (import.meta.env.VITE_SUPABASE_URL || 'https://dqpxqinejgovkhwvsqem.supabase.co').trim();
 const SB_KEY = (import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_jTBU_Y-1T3ouNej7YUsCIQ_E5ceELbu').trim();
 const sb = SB_URL && SB_KEY
-  ? createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } })
+  ? makeClient(SB_URL, SB_KEY, { flowType: 'pkce' })
   : null;
 
 /* errors reach the database only for a signed-in user (S is defined below; this runs later, on an error) */
@@ -77,7 +78,8 @@ const toU = kg => S.profile.unit === 'lb' ? kg * KG_LB : kg;
 const fromU = v => S.profile.unit === 'lb' ? v / KG_LB : v;
 const fmtW = kg => { if (kg == null || !isFinite(kg)) return ''; return String(Math.round(toU(kg) * 10) / 10); };
 const NUM = new Intl.NumberFormat('en-US');
-const fmtVol = kg => { const v = toU(kg || 0); if (v >= 10000) return (v / 1000).toFixed(1) + (unit() === 'lb' ? 'k lb' : ' t'); return NUM.format(Math.round(v)) + ' ' + unit(); };
+/* volume: tonnes from 1,000 kg (thousands of pounds in lb), so a list never mixes 6,510 kg with 15.2 t */
+const fmtVol = kg => { const v = toU(kg || 0); if (v >= 1000) return (v / 1000).toFixed(1) + (unit() === 'lb' ? 'k lb' : ' t'); return NUM.format(Math.round(v)) + ' ' + unit(); };
 
 /* ================= themes ================= */
 function flipTheme() {
@@ -124,7 +126,7 @@ function restoreOutbox() {
   for (const [key, val] of Object.entries(o)) {
     const [t, id] = splitKey(key);
     if (t === 's') { if (val) { const s = cleanSession(val); if (s) S.sessions.set(id, s); } else S.sessions.delete(id); }
-    else if (t === 'x') { S.library = S.library.filter(e => e.id !== id); if (val && val.name) S.library.push({ id, name: String(val.name).slice(0, 60), muscle: val.muscle || 'Full body', kind: cleanKind(val.kind), archived: !!val.archived, isDefault: !!val.isDefault, oneRm: num(val.oneRm), oneRmAt: num(val.oneRmAt) }); }
+    else if (t === 'x') { S.library = S.library.filter(e => e.id !== id); if (val && val.name) S.library.push({ id, name: String(val.name).slice(0, 60), muscle: val.muscle || 'Full body', kind: cleanKind(val.kind), archived: !!val.archived, isDefault: !!val.isDefault, oneRm: num(val.oneRm), oneRmAt: num(val.oneRmAt), note: typeof val.note === 'string' ? val.note.slice(0, 200) : '' }); }
     else if (t === 'sp') { if (val) S.splits.set(id, { ...val, days: cleanDays(val.days) }); else S.splits.delete(id); }
     else if (t === 'p' && val) S.profile = { ...S.profile, ...val, username: S.profile.username, onboarded: S.profile.onboarded };
     else continue;
@@ -137,7 +139,7 @@ function queue(key, delay = 600) {
   /* a change to the session being edited is a draft: the numbers and records update, nothing is saved */
   if (S.edit && key === 's:' + S.edit.id) { DATA_REV++; S.edit.dirty = true; return; }
   if (!(key.startsWith('s:') && S.sessions.get(key.slice(2))?.endedAt == null)) DATA_REV++;
-  OB.pending.add(key); persistOutbox();
+  OB.pending.add(key); persistOutbox(); snapSoon();
   clearTimeout(OB.timers.get(key)); OB.timers.set(key, setTimeout(() => flush(key), delay)); syncUI();
 }
 async function runJob(key) {
@@ -180,9 +182,9 @@ function saveError(key, e) {
   toast('Couldn’t save a change: ' + (e.message || 'unknown error'));
 }
 addEventListener('online', flushAll);
-addEventListener('pagehide', flushAll);
+addEventListener('pagehide', () => { flushAll(); snapNow(); });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') flushAll();
+  if (document.visibilityState === 'hidden') { flushAll(); snapNow(); }
   else if (S.loaded && Date.now() - S.lastFetch > 120000 && !OB.pending.size && !OB.inflight.size) refresh();
 });
 const autosaveText = () => OB.pending.has('p') || OB.inflight.has('p') ? 'Saving…' : S.local ? (OB.failing ? 'Couldn’t save on this phone · retrying' : 'Saved on this phone') : OB.failing ? 'Saved on this device · syncs when online' : 'Changes save automatically';
@@ -242,7 +244,26 @@ async function loadAll() {
   S.shared = (sh.error ? [] : sh.data || []).map(r => ({ id: r.split_id, name: r.name, description: r.description || '', days: cleanDays(r.days), from: r.from_username, sharedAt: Date.parse(r.shared_at) }));
   S.lastFetch = S.sharedAt = Date.now();
 }
-async function refresh() { if (S.local || S.syncing) return; try { await loadAll(); soft(); } catch (e) { console.warn(e); } }
+async function refresh() { if (S.local || S.syncing) return; try { await loadAll(); snapSoon(500); soft(); } catch (e) { console.warn(e); } }
+/* ---------- instant start: a copy of the account on this device ----------
+   An online account opens from the copy at once, then what the server has replaces it in the background. The copy
+   is written after each load from the server, a few seconds after changes, and when the app goes to the background;
+   changes still waiting to upload (the outbox) are applied on top of it, as they are on top of the server's data. */
+let snapT = 0;
+function snapNow() {
+  clearTimeout(snapT); snapT = 0;
+  if (S.local || !S.user || !S.loaded || S.syncing) return;
+  writeSnap(S.user.id, { profile: S.profile, library: S.library, sessions: [...S.sessions.values()], splits: [...S.splits.values()], shared: S.shared });
+}
+function snapSoon(ms = 4000) { if (S.local || !S.user || !S.loaded) return; clearTimeout(snapT); snapT = setTimeout(snapNow, ms); }
+function applySnap(d) {
+  S.profile = { ...DEFAULT_PROFILE, ...d.profile };
+  S.library = Array.isArray(d.library) ? d.library.filter(e => e && e.id && e.name) : [];
+  S.sessions = new Map((d.sessions || []).map(cleanSession).filter(Boolean).map(x => [x.id, x]));
+  S.splits = new Map((d.splits || []).filter(x => x && x.id).map(x => [x.id, { ...x, days: cleanDays(x.days) }]));
+  S.shared = Array.isArray(d.shared) ? d.shared : [];
+  S.lastFetch = 0;
+}
 async function reloadLibrary() { if (S.local) return render(false); try { const ex = await fetchAll(() => sb.from('exercises').select('*').order('name')); S.library = ex.map(exFromDb); render(false); } catch {} }
 
 /* ================= metrics ================= */
@@ -1837,7 +1858,7 @@ function transport(s) {
   }
   const live = !s.endedAt;
   if (editing(s)) return `<div class="transport ed-bar"><button class="tb" data-act="edit-discard" aria-label="Discard changes" title="Discard changes">${ICON.x}</button><button class="tb" data-act="link-toggle" aria-label="Link sets into a superset, giant set or drop set" title="Link sets">${ICON.link}</button><span class="tdiv"></span>
-  <div class="tlink"><b>${S.edit.orig ? 'Editing' : `Logging ${fmtDate(s.startedAt)}`}</b><span class="muted">Nothing is saved until you tap Save</span></div>
+  <div class="tlink"><b>${S.edit.orig ? 'Editing' : `Logging ${fmtDate(s.startedAt)}`}</b><span class="muted">Save to keep it</span></div>
   <button class="tfin" data-act="edit-save">Save</button></div>`;
   return `<div class="transport">${locked(s) ? '' : `<button class="tb" data-act="link-toggle" aria-label="Link sets into a superset, giant set or drop set" title="Link sets">${ICON.link}</button><span class="tdiv"></span>`}
   <div class="tsum" id="tsum" data-act="rest-tap"></div>
@@ -3786,6 +3807,7 @@ function afterLoad() {
   S.ob = { step: (S.local ? p.name : p.username) ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null, theme: themePref() };
 }
 async function startLocal() {
+  clearTimeout(snapT); clearSnaps();
   S.local = true; S.user = LOCAL_USER; S.authReady = true; S.loaded = false; S.loadError = null; S.syncFlow = false;
   try { sb && sb.auth.stopAutoRefresh(); } catch {}
   render(false);
@@ -3961,10 +3983,23 @@ function resetState() {
 }
 async function startApp() {
   S.loaded = false; S.loadError = null; render(false);
+  const uid = S.user.id, snap = !S.claim && await readSnap(uid);
+  if (!S.user || S.user.id !== uid || S.local) return;
+  if (snap) {
+    /* open from the copy on this device straight away; the server's data follows */
+    applySnap(snap); restoreOutbox(); afterLoad();
+    const t = S.profile.onboarded && pendingPublic();
+    if (t) go('public', t, { replace: true }); else route(true);
+    try { await loadAll(); }
+    catch (e) { console.warn(e); if (S.user && S.user.id === uid) toast(navigator.onLine ? 'Couldn’t refresh. Showing what’s saved on this phone.' : 'Offline · showing what’s saved on this phone'); return; }
+    if (!S.user || S.user.id !== uid) return;
+    checkDevice(S.profile.activeSession); snapSoon(500); soft();
+    return;
+  }
   restoreOutbox();
   try { await loadAll(); }
   catch (e) { console.error(e); S.loadError = navigator.onLine ? (e.message || 'The server didn’t respond.') : 'You’re offline. Connect and try again.'; return render(true); }
-  afterLoad();
+  afterLoad(); snapSoon(500);
   if (S.claim) { S.claim = false; claimDevice(); } else checkDevice(S.profile.activeSession);
   const t = S.profile.onboarded && pendingPublic();
   if (t) return go('public', t, { replace: true });
@@ -4015,7 +4050,7 @@ function boot() {
       const first = !S.authReady; S.authReady = true;
       if (u && (!S.user || S.user.id !== u.id)) { const fresh = event === 'SIGNED_IN' && !first; if (fresh) splashIn(); resetState(); S.user = u; S.claim = fresh; startApp(); }
       else if (u) { S.user = u; }
-      else if (!u && S.user) { resetState(); S.recover = false; S.authMode = 'signin'; S.authMsg = S.kickMsg ? { text: S.kickMsg, err: false } : null; S.kickMsg = null; go('today', null, { replace: true }); }
+      else if (!u && S.user) { clearTimeout(snapT); clearSnaps(); resetState(); S.recover = false; S.authMode = 'signin'; S.authMsg = S.kickMsg ? { text: S.kickMsg, err: false } : null; S.kickMsg = null; go('today', null, { replace: true }); }
       else render(first);
     }, 0);
   });

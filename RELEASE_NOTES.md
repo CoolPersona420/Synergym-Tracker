@@ -10,6 +10,28 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.45-alpha · 19 November 2026
+
+**Opens at once, a smaller app, and tidier details**
+
+- **Instant start:** with an account, the app used to wait for your whole history to download before showing
+  anything: a few seconds on 3G, and an error page on a patchy signal. It now opens straight away from a copy kept
+  on your device, then catches up with your account in the background. If the server can't be reached, your log
+  stays on screen with a note ("Showing what's saved on this phone") instead of an error. The copy is per account,
+  kept in its own small database on the device, and deleted when you sign out.
+- **A smaller app:** the database library bundled parts the app never uses (live updates, file storage, server
+  functions). Using only its sign-in and database parts makes the app about 95 KB smaller (26 KB less to
+  download), with the same sign-in, so nobody is signed out by the update.
+- **One unit for volume:** volumes from 1,000 kg up show in tonnes (6.5 t, 15.2 t), so a list never mixes
+  "6,510 kg" with "15.2 t". In pounds it's thousands (14.3k lb).
+- **Menus read better:** each option's hint now sits under its label, so a long hint reads as a line instead of a
+  squeezed column beside it.
+- **Shorter editing bar:** while editing or logging a past day, the bar says "Save to keep it" instead of
+  "Nothing is saved until you tap Save", so it fits on a phone.
+- **Fix:** an exercise note added while offline could be lost if the app was closed before it synced. It's kept now.
+
+---
+
 ## 0.1.44-alpha · 19 November 2026
 
 **A summary when you finish, warm-ups, notes, reps in reserve, and drag to reorder**
