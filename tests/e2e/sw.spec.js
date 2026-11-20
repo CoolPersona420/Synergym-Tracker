@@ -11,6 +11,8 @@ test('the app opens with no connection once it has been loaded', async ({ page, 
   /* the shell and its build files are cached */
   await expect.poll(() => page.evaluate(async () => (await caches.keys()).sort().join(',')), { timeout: 10000 }).toContain('sg-assets-v1');
   await expect.poll(() => page.evaluate(async () => (await (await caches.open('sg-assets-v1')).keys()).length), { timeout: 10000 }).toBeGreaterThanOrEqual(2);
+  /* the page itself is kept last, once its files are (sw.js) */
+  await expect.poll(() => page.evaluate(async () => (await (await caches.open('sg-shell-v1')).match('/')) ? 1 : 0), { timeout: 10000 }).toBe(1);
   await context.setOffline(true);
   await page.reload();
   await page.waitForSelector('#f-auth', { timeout: 15000 });
