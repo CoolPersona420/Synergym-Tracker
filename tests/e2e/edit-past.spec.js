@@ -13,26 +13,25 @@ async function openLast(page) {
 const row = (fake, id) => fake.sessions.find(s => s.id === id);
 const outbox = page => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('sg-outbox')).map(k => localStorage.getItem(k)).join(''));
 
-test('opened anywhere but the Logbook, a finished session is view-only; ⋯ › Change this session opens it ready to edit', async ({ page }) => {
+test('a finished session has Edit wherever it’s opened (GitHub issue #3), and stays as it is until you tap it', async ({ page }) => {
   const data = benchHistory(), fake = new FakeSupabase(data), last = data.sessions[0];
   await login(page, fake, 'A');
   /* straight from a link, as from Home or an exercise's page */
   await page.goto('/session/' + last.id);
   await expect(page.locator('.s-meta')).toContainText('completed');
-  await expect(page.locator('.s-edit')).toHaveCount(0);
-  await expect(page.locator('#view [data-act="edit-date"]')).toHaveCount(0);
-  /* a tap on its numbers points at the ⋯ menu, not at a gesture */
+  await expect(page.locator('.s-edit')).toBeVisible();
+  await expect(page.locator('.done-bar [data-act="sess-edit"]')).toBeVisible();
+  /* its numbers don't change by accident: a tap on them points at Edit */
+  await expect(page.locator('[data-f="w"][data-set="s31"]')).toHaveAttribute('readonly', '');
   await page.locator('[data-f="w"][data-set="s31"]').click();
-  await expect(page.locator('#toast')).toContainText('⋯ › Change this session');
-  await expect(page.locator('#toast')).not.toContainText('hold');
+  await expect(page.locator('#toast')).toContainText('Tap Edit');
   await page.click('[data-act="sess-menu"]');
-  await expect(page.locator('#sheet')).toContainText('Repeat this session');
-  for (const t of ['Edit session', 'Change date', 'Reopen as live', 'slide up']) await expect(page.locator('#sheet')).not.toContainText(t);
-  /* deleting it is allowed anywhere (it asks first) */
-  await expect(page.locator('#sheet')).toContainText('Delete session');
+  for (const t of ['Edit session', 'Change date', 'Repeat this session', 'Delete session']) await expect(page.locator('#sheet')).toContainText(t);
+  await expect(page.locator('#sheet')).not.toContainText('Change this session');
+  await page.keyboard.press('Escape');
   expect(row(fake, last.id).items[0].sets[0].w).toBe(80);
-  /* Change this session opens it ready to edit, right here */
-  await page.locator('#sheet button', { hasText: 'Change this session' }).click();
+  /* the Edit at the bottom opens it ready to edit, right here */
+  await page.locator('.done-bar [data-act="sess-edit"]').click();
   await expect(page.locator('[data-act="edit-save"]')).toBeVisible();
   await expect(page.locator('[data-f="w"][data-set="s31"]')).not.toHaveAttribute('readonly', '');
 });

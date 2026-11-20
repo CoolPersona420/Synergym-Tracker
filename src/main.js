@@ -1,4 +1,5 @@
 import { makeClient } from './lib/sb.js';
+import { findTypos } from './lib/typos.js';
 import { readSnap, writeSnap, clearSnaps } from './lib/snapcache.js';
 import './style.css';
 import { analyse, readiness, withBreak, prescribe, parseRange, goalPlan } from './lib/coach.js';
@@ -295,13 +296,30 @@ const sorted = () => { const k = [S.sessions, S.sessions.size, EDITS]; if (!same
 const activeSession = () => sorted().find(s => !s.endedAt);
 const cur = () => S.sessions.get(S.arg);
 const CMP = { k: null };
+/* ---------- sets that look like typos (GitHub issue #3; the rules are in lib/typos.js) ----------
+   Until a suspected typo is kept as it is or fixed, it's left out of records, estimated maxes, intensity, volume,
+   hints and the coach, and its row asks about it. */
+const SUSC = { k: null, info: new Map() };
+function suspects() {
+  const k = [S.sessions, S.sessions.size, S.library, S.library.length, EDITS];
+  if (SUSC.k && same(SUSC.k, k)) return SUSC.info;
+  const kind = new Map(S.library.map(e => [e.id, e.kind]));
+  SUSC.k = k; SUSC.info = findTypos(S.sessions.values(), id => kind.get(id)); return SUSC.info;
+}
+/* a set that counts toward the numbers: logged, and not a suspected typo */
+const counted = st => +st.r > 0 && !suspects().has(st.id);
+/* a session as the numbers see it: without its suspected typos (the same object when it has none) */
+function cleanOf(s, sus = suspects()) {
+  if (!sus.size || !s.items.some(it => it.sets.some(st => sus.has(st.id)))) return s;
+  return { ...s, items: s.items.map(it => it.sets.some(st => sus.has(st.id)) ? { ...it, sets: it.sets.filter(st => !sus.has(st.id)) } : it) };
+}
 function compute() {
   const ck = [S.sessions, S.sessions.size, S.library, S.library.length, EDITS];
   if (S.A && same(CMP.k, ck)) return S.A;
   CMP.k = ck;
   const exMap = new Map(S.library.map(e => [e.id, e]));
-  const list = [...S.sessions.values()].sort((a, b) => a.startedAt - b.startedAt);
-  const best = new Map(), seen = new Map(), A = { sess: new Map(), set: new Map(), ex: new Map() };
+  const sus = suspects(), list = [...S.sessions.values()].map(s => cleanOf(s, sus)).sort((a, b) => a.startedAt - b.startedAt);
+  const best = new Map(), seen = new Map(), A = { sess: new Map(), set: new Map(), ex: new Map(), sus };
   /* weight and rep PRs; a live session's faded weights count, as they do when a set is ticked */
   const rec = scanRecords(list, { weightOf: (st, s, it) => { const w = +(s.endedAt ? st.w : st.w ?? st.pw) || 0; return exMap.get(it.exId)?.kind === 'bw' || w > 0 ? w : null; } }), prBy = new Map();
   for (const e of rec.events) { if (!prBy.has(e.sid)) prBy.set(e.sid, new Set()); prBy.get(e.sid).add(e.exId); }
@@ -347,7 +365,7 @@ function prevBestE1rm(exId, excludeSid) {
 }
 const oneRmOf = (exId, excludeSid) => { const ex = exOf(exId); return ex && ex.oneRm > 0 ? ex.oneRm : prevBestE1rm(exId, excludeSid); };
 const roundW = kg => { const st = unit() === 'lb' ? 1 : 0.5; return fromU(Math.round(toU(kg) / st) * st); };
-function liveTop(s, it) { const ex = exOf(it.exId); let b = 0, bs = null; for (const st of it.sets) { const v = e1rm(loadOf(st, ex), +st.r || 0); if (v > b) { b = v; bs = st; } } return { v: b, st: bs }; }
+function liveTop(s, it) { const ex = exOf(it.exId), sus = suspects(); let b = 0, bs = null; for (const st of it.sets) { if (sus.has(st.id)) continue; const v = e1rm(loadOf(st, ex), +st.r || 0); if (v > b) { b = v; bs = st; } } return { v: b, st: bs }; }
 function ormLine(s, it) {
   const ex = exOf(it.exId); if (!ex) return '';
   const base = oneRmOf(it.exId, s.id), top = liveTop(s, it).v, saved = ex.oneRm > 0;
@@ -360,7 +378,7 @@ function ormLine(s, it) {
 }
 const declined1rm = new Map();
 function maybePromptOneRm(s, it, st) {
-  const ex = exOf(it.exId); if (!ex || s.endedAt) return;
+  const ex = exOf(it.exId); if (!ex || s.endedAt || suspects().has(st.id)) return;
   const v = e1rm(loadOf(st, ex), +st.r || 0), base = oneRmOf(it.exId, s.id);
   if (!(v > 0) || !(base > 0) || v <= base * 1.0001) return;
   const val = roundW(v); if (val <= base) return;
@@ -460,13 +478,13 @@ function consistency() {
 }
 function dayIntensity() { const m = new Map(); for (const s of S.sessions.values()) { if (!s.items.length) continue; const k = dayKey(s.startedAt), v = S.A.sess.get(s.id)?.int || 0; m.set(k, Math.max(m.get(k) ?? 0, v)); } return m; }
 function lastSetsFor(exId, excludeId) {
-  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => i.exId === exId && i.sets.some(x => +x.r > 0)); if (it) return it.sets.filter(x => +x.r > 0); }
+  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => i.exId === exId && i.sets.some(counted)); if (it) return it.sets.filter(counted); }
   return null;
 }
 /* the last n sessions' logged sets for an exercise, newest first */
 function historyFor(exId, excludeId, n = 2) {
   const out = [];
-  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => i.exId === exId && i.sets.some(x => +x.r > 0)); if (it) { out.push(it.sets.filter(x => +x.r > 0)); if (out.length >= n) break; } }
+  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => i.exId === exId && i.sets.some(counted)); if (it) { out.push(it.sets.filter(counted)); if (out.length >= n) break; } }
   return out;
 }
 /* weights snap to what you can load: 2.5 kg or 5 lb steps */
@@ -493,7 +511,7 @@ function coach() {
   if (CO.a && CO.k === k && CO.s === S.sessions && CO.l === S.library && CO.p === S.splits) return CO.a;
   const exMap = new Map(S.library.map(e => [e.id, e]));
   const log = [...S.sessions.values()].filter(s => s.endedAt).sort((a, b) => a.startedAt - b.startedAt).map(s => ({ id: s.id, t: s.startedAt, splitId: s.splitId, splitDay: s.splitDay,
-    items: s.items.filter(it => exMap.get(it.exId)?.kind !== 'c').map(it => { const ex = exMap.get(it.exId); return { exId: it.exId, sets: it.sets.filter(st => +st.r > 0).map(st => ({ w: +st.w || 0, r: +st.r, load: loadOf(st, ex) })) }; }) }))
+    items: s.items.filter(it => exMap.get(it.exId)?.kind !== 'c').map(it => { const ex = exMap.get(it.exId); return { exId: it.exId, sets: it.sets.filter(counted).map(st => ({ w: +st.w || 0, r: +st.r, load: loadOf(st, ex) })) }; }) }))
     /* the coach reads lifting: a session of cardio alone isn't training load for it */
     .filter(s => s.items.some(it => it.sets.length));
   const nx = nextSplitDay(), last = log[log.length - 1], sp = nx ? nx.sp : (last && last.splitId && S.splits.get(last.splitId)) || null, day = nx && nx.sp.days[nx.i];
@@ -611,8 +629,8 @@ function route(enter = true) {
   const [v, a] = parsePath();
   const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg, from = S.view;
   if (S.edit && (v !== 'session' || arg !== S.edit.id)) endEdit();
-  /* a finished session can only be changed when it was opened from the Logbook */
-  if (!(v === 'session' && arg === S.lbCtx)) S.lbCtx = null;
+  /* a finished session can be changed wherever it's opened: its Edit button is always there (GitHub issue #3) */
+  S.lbCtx = v === 'session' ? arg : null;
   S.view = v; S.arg = arg; S.link = null; S.spLink = null;
   let dir = navDir; navDir = 'fwd';
   /* tab to tab: a sideways slide in the direction of the tab bar (the Logbook's Calendar sits in History's place) */
@@ -1478,10 +1496,10 @@ function volBars(weeks) {
   const bars = data.map((d, i) => { const h = d.v ? Math.max(3, d.v / max * (H - 8)) : 2, x = (i * bw + bw * .18).toFixed(1); return `<rect class="${d.v ? (i === weeks - 1 ? 'vb now' : 'vb') : 'vb0'}" x="${x}" y="${(H - h).toFixed(1)}" width="${(bw * .64).toFixed(1)}" height="${h.toFixed(1)}"/>`; }).join('');
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Weekly volume, last ${weeks} weeks">${bars}</svg><div class="axis"><span class="lbl">${weeks}w ago</span><span class="lbl">this week</span></div></div>`;
 }
-function exVolIn(days) { const t = Date.now() - days * 864e5, m = new Map(); for (const s of S.sessions.values()) { if (s.startedAt < t) continue; for (const it of s.items) { const v = it.sets.reduce((x, st) => x + (+st.r > 0 ? (+st.w || 0) * +st.r : 0), 0); if (v) m.set(it.exId, (m.get(it.exId) || 0) + v); } } return [...m].map(([id, v]) => [exOf(id)?.name || 'Exercise', v]).sort((a, b) => b[1] - a[1]); }
+function exVolIn(days) { const t = Date.now() - days * 864e5, m = new Map(); for (const s of S.sessions.values()) { if (s.startedAt < t) continue; for (const it of s.items) { const v = it.sets.reduce((x, st) => x + (counted(st) ? (+st.w || 0) * +st.r : 0), 0); if (v) m.set(it.exId, (m.get(it.exId) || 0) + v); } } return [...m].map(([id, v]) => [exOf(id)?.name || 'Exercise', v]).sort((a, b) => b[1] - a[1]); }
 function muscleSets(days) {
   const t = Date.now() - days * 864e5, m = new Map();
-  for (const s of S.sessions.values()) { if (s.startedAt < t) continue; for (const it of s.items) { const n = it.sets.filter(x => +x.r > 0).length; if (n) { const k = exOf(it.exId)?.muscle || 'Other'; m.set(k, (m.get(k) || 0) + n); } } }
+  for (const s of S.sessions.values()) { if (s.startedAt < t) continue; for (const it of s.items) { const n = it.sets.filter(counted).length; if (n) { const k = exOf(it.exId)?.muscle || 'Other'; m.set(k, (m.get(k) || 0) + n); } } }
   return [...m].sort((a, b) => b[1] - a[1]);
 }
 function hbars(rows, fmt = v => v) {
@@ -1508,7 +1526,7 @@ const planDays = (nx, full) => { const dn = new Set(doneToday().filter(s => s.sp
 
 const wTile = (label, value, caption, open) => `<div class="card-h"><span class="lbl">${label}</span>${open ? `<span class="w-ex" aria-hidden="true">${ICON.expand}</span>` : ''}</div><div class="tile"><span class="tile-n">${value}</span><span class="tile-c">${caption}</span></div>`;
 const mkv = pairs => `<div class="mkv">${pairs.map(([k, v]) => `<div><b>${v}</b><span class="lbl">${k}</span></div>`).join('')}</div>`;
-const thisWeek = () => weekSummary(sorted(), weekStart(Date.now()));
+const thisWeek = () => weekSummary(sorted().map(s => cleanOf(s)), weekStart(Date.now()));
 /* sessions this week, the one count everywhere (Home's This week, the Coach, today's plan): from the start of the
    week you chose in Settings, each with a set logged, as the Week widget counts them */
 const weekCount = () => { const from = weekStart(Date.now()); return sorted().filter(s => s.startedAt >= from && logged(s)).length; };
@@ -1716,7 +1734,7 @@ function vSession() {
   <div class="groups" id="gsum">${groupsHTML(groups)}</div>
   <textarea class="notes rv" data-f="notes" placeholder="${ro ? 'No notes' : 'Notes: how it felt, sleep, anything worth remembering'}" maxlength="4000"${ro ? ' readonly' : ''}>${esc(s.notes || '')}</textarea>
   ${live && !S.link ? `<div class="discard-bar rv"><button class="linkbtn discard" data-act="sess-del" data-id="${s.id}">${ICON.trash}Discard session</button></div>` : ''}
-  ${live || ed ? '' : `<div class="done-bar rv"><button class="btn" data-act="repeat" data-id="${s.id}">${roll('Repeat this session')}</button>${S.lbCtx === s.id ? `<button class="btn ghost" data-act="edit-date">${roll('Change date')}</button>` : ''}</div>`}
+  ${live || ed ? '' : `<div class="done-bar rv"><button class="btn" data-act="repeat" data-id="${s.id}">${roll('Repeat this session')}</button><button class="btn ghost" data-act="sess-edit">${ICON.pen}${roll('Edit')}</button></div>`}
   ${transport(s)}`;
 }
 const tierText = a => `${!a.int && a.ct ? 'Cardio' : tier(a.int)}${a.prs.length ? ` · <em class="pr">${a.prs.length} PR</em>` : ''}${a.calib ? ' · calibrating' : ''}`;
@@ -1838,18 +1856,28 @@ function wuRow(st, i) {
 }
 function setRow(st, i, gmap) {
   const g = gmap.get(st.id), p = S.A.set.get(st.id), sel = S.link && S.link.has(st.id), ro = locked(cur()) ? ' readonly' : '';
-  return `<div class="set${st.done ? ' done' : ''}${sel ? ' sel' : ''}"${S.link ? ` data-act="link-pick" data-set="${st.id}"` : ''}>
+  const sx = suspects().get(st.id);
+  return `<div class="set${st.done ? ' done' : ''}${sel ? ' sel' : ''}" data-susk="${sx ? sx.kind : ''}"${S.link ? ` data-act="link-pick" data-set="${st.id}"` : ''}>
   <button class="sno" data-act="set-menu" data-set="${st.id}" aria-label="Set ${i + 1} options">${i + 1}<span data-gtag="${st.id}">${g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''}</span>${st.rir != null ? `<span class="rir-t">${rirText(st.rir)} RIR</span>` : ''}</button>
   <input data-f="w" data-set="${st.id}" inputmode="decimal" enterkeyhint="next" value="${fmtW(st.w)}" placeholder="${st.pw != null ? fmtW(st.pw) : '0'}" aria-label="Weight, set ${i + 1}" autocomplete="off"${ro}>
   <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, set ${i + 1}" autocomplete="off"${ro}>
   <span class="int${p >= 99.5 ? ' top' : ''}" data-int="${st.id}">${setInt(st)}</span>
   <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark set not done' : 'Mark set done'}" aria-pressed="${!!st.done}">${ICON.check}</button>
-  ${prLine(st)}${rirAsk(st)}</div>`;
+  ${prLine(st)}${susLine(st)}${rirAsk(st)}</div>`;
 }
 /* reps in reserve: after a working set is ticked, how many more reps were left in it (0 to 4+). Optional: the row
    under the set waits for a tap and goes when the next set is ticked. */
 const rirText = v => v >= 4 ? '4+' : String(v);
 const rirAsk = st => S.rirAsk !== st.id || !st.done || locked(cur()) ? '' : `<div class="rir" role="group" aria-label="Reps left in the tank"><span class="lbl">Reps left?</span>${[0, 1, 2, 3, 4].map(v => `<button class="chip${st.rir === v ? ' on' : ''}" data-act="rir" data-set="${st.id}" data-v="${v}" aria-pressed="${st.rir === v}">${rirText(v)}</button>`).join('')}</div>`;
+/* the question under a set that looks like a typo: Keep it, or take the likely meant number; in a session that's
+   only being viewed, Fix it opens it for editing */
+const susVal = x => x.kind === 'r' ? `${x.v} reps` : `${fmtW(x.v)} ${unit()}`;
+const susUsual = x => x.usual == null ? '' : x.kind === 'r' ? `your usual ${x.usual}` : `your heaviest ${fmtW(x.usual)} ${unit()}`;
+function susInner(x, st) {
+  if (locked(cur())) return `<b>Typo?</b><span>${susVal(x)} is far more than ${susUsual(x) || 'usual'}. Left out of your records until you fix or keep it.</span><button class="sus-go" data-act="sus-edit">Fix it</button>`;
+  return `<b>${susVal(x)}?</b><span>${x.usual == null ? 'That’s a lot for this exercise' : x.kind === 'r' ? `You usually do ${x.usual}` : `Your heaviest is ${fmtW(x.usual)} ${unit()}`}</span><span class="sus-acts"><button class="chip" data-act="sus-keep" data-set="${st.id}">Keep</button>${x.fix != null ? `<button class="chip on" data-act="sus-fix" data-set="${st.id}" data-k="${x.kind}" data-v="${x.fix}">Make it ${x.kind === 'r' ? x.fix : fmtW(x.fix)}</button>` : ''}</span>`;
+}
+const susLine = st => { const x = suspects().get(st.id); return `<span class="set-sus" data-sus="${st.id}" role="status"${x ? '' : ' hidden'}>${x ? susInner(x, st) : ''}</span>`; };
 const prLine = st => { const ev = S.A.rec?.bySet.get(st.id); return `<span class="set-pr" data-prb="${st.id}" role="status"${ev ? '' : ' hidden'}>${ev ? prText(ev) : ''}</span>`; };
 function groupsHTML(groups) {
   return groups.map(g => { const names = [...new Set(g.m.map(x => exOf(x.it.exId)?.name || '?'))];
@@ -1886,6 +1914,8 @@ function liveRefresh() {
   for (const it of s.items) for (const st of it.sets) {
     const el = $(`[data-int="${st.id}"]`); if (el) { el.textContent = setInt(st); el.classList.toggle('top', (S.A.set.get(st.id) || 0) >= 99.5); }
     const gt = $(`[data-gtag="${st.id}"]`); if (gt) { const g = gmap.get(st.id); gt.innerHTML = g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''; }
+    const sb2 = $(`[data-sus="${st.id}"]`); if (sb2) { const x = S.A.sus.get(st.id), h = x ? susInner(x, st) : '';
+      if (sb2.innerHTML !== h) { sb2.innerHTML = h; sb2.hidden = !x; } const row = sb2.closest('.set'); if (row) row.dataset.susk = x ? x.kind : ''; }
     const pb = $(`[data-prb="${st.id}"]`); if (pb) { const ev = S.A.rec.bySet.get(st.id), h = ev ? prText(ev) : '';
       if (pb.innerHTML !== h) { const was = pb.hidden; pb.innerHTML = h; pb.hidden = !ev; if (ev && was) { pb.classList.remove('pop'); void pb.offsetWidth; pb.classList.add('pop'); buzz(14); } } }
   }
@@ -2062,10 +2092,15 @@ function vExercise() {
   const ex = exOf(S.arg), x = S.A.ex.get(ex.id);
   const hist = []; for (const s of sorted()) { for (const it of s.items) if (it.exId === ex.id) { const sets = it.sets.filter(st => +st.r > 0); if (sets.length) hist.push({ s, sets }); } if (hist.length >= 12) break; }
   const bs = x?.bestSet;
+  /* sets of it that look like typos, newest first, each opening its session ready to fix */
+  const sus = [...suspects().entries()].filter(([, v]) => v.exId === ex.id).map(([id, v]) => ({ id, v, s: S.sessions.get(v.sid) })).filter(o => o.s).sort((a, b) => b.s.startedAt - a.s.startedAt);
+  const susCard = sus.length ? `<section class="card span rv sus-card"><div class="card-h"><span class="lbl">${sus.length === 1 ? '1 set looks' : `${sus.length} sets look`} like a typo</span></div>
+    ${sus.slice(0, 5).map(o => { const st = o.s.items.flatMap(i => i.sets).find(z => z.id === o.id); const w = +(st.w ?? st.pw) || 0; return `<div class="sus-row"><span><b>${w ? `${fmtW(w)} ${unit()} × ${st.r}` : `${st.r} reps`}</b> <span class="muted">· ${fmtDate(o.s.startedAt)}${susUsual(o.v) ? ` · ${susUsual(o.v)}${o.v.kind === 'r' ? ' reps' : ''}` : ''}</span></span><button class="btn sm" data-act="sus-open" data-id="${o.s.id}">${roll('Fix it')}</button></div>`; }).join('')}
+    <p class="muted sus-why">Left out of your records, estimated max and the coach until you fix it, or keep it as it is.</p></section>` : '';
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Exercise</span><button class="btn ghost sm" data-act="edit-ex" data-id="${ex.id}">${roll('Edit')}</button></header>
   <h1 class="h1 rv" style="margin:14px 0 4px">${esc(ex.name)}${ex.isDefault ? '' : ' <span class="badge acc">custom</span>'}</h1><p class="muted rv">${esc(ex.muscle)} · ${ex.kind === 'bw' ? 'Bodyweight (load = bodyweight + added)' : 'Weighted'}${ex.archived ? ' · removed from list' : ''}</p>
   <div class="rv ex-pnote">${noteLine(ex, true)}</div>
-  <div class="dash" style="margin-top:18px">
+  <div class="dash" style="margin-top:18px">${susCard}
     <div class="card rv"><div class="card-h"><span class="lbl">${ex.oneRm > 0 ? 'Your 1RM' : 'Estimated 1RM'} · ${unit()}</span><button class="btn ghost sm" data-act="edit-orm" data-id="${ex.id}">${roll(ex.oneRm > 0 ? 'Edit' : 'Set 1RM')}</button></div>
       <div class="bignum md">${big(ex.oneRm > 0 ? fmtW(ex.oneRm) : x ? fmtW(roundW(x.best)) : '–')}<span class="dot"></span></div>
       <p class="muted" style="margin-top:14px;font-size:13px">${ex.oneRm > 0 ? `Saved ${fmtDate(ex.oneRmAt || Date.now())}${x ? ` · best estimate ${fmtW(roundW(x.best))} ${unit()}` : ''}` : bs ? `From ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set to see your estimate.'}</p>${exNext(ex)}</div>
@@ -2341,6 +2376,21 @@ let sheetFrom = null;
 function openSheet(html, mount) { sheetGen++; if ($('#sheet').hidden) sheetFrom = document.activeElement; const sh = $('#sheet'), sp0 = $('#sheet .sp'); sp0.style.transform = sp0.style.transition = sp0.style.animation = ''; $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); fluidApply($('#sheet-body'), null); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
 function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.remove('open'); w.setAttribute('aria-expanded', 'false'); } $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; const sp = $('#sheet .sp'); sp.style.transform = sp.style.transition = sp.style.animation = ''; 
   const from = sheetFrom; sheetFrom = null; if (from && from.isConnected && from !== document.body && matchMedia('(pointer:fine)').matches) try { from.focus({ preventScroll: true }); } catch {} }
+/* An iPhone's keyboard slides over the page without making it shorter, so a sheet pinned to the bottom ends up
+   under it: type in the exercise search and the list is hidden (GitHub issue #2). While a keyboard is up (the
+   visible part of the screen is clearly shorter than the page, on a touch screen), the sheet fits the visible part
+   above it and its list scrolls there. */
+(() => {
+  const vv = window.visualViewport; if (!vv) return;
+  const root = document.documentElement, touch = matchMedia('(pointer:coarse)');
+  const fit = () => {
+    const kb = Math.round(innerHeight - vv.height - vv.offsetTop), on = kb > 80 && touch.matches;
+    root.classList.toggle('kb-open', on);
+    if (on) { root.style.setProperty('--vv-top', Math.round(vv.offsetTop) + 'px'); root.style.setProperty('--vv-h', Math.round(vv.height) + 'px'); }
+    else { root.style.removeProperty('--vv-top'); root.style.removeProperty('--vv-h'); }
+  };
+  vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); fit();
+})();
 /* drag a sheet down from its top to dismiss it, like a native bottom sheet */
 (() => {
   const sp = $('#sheet .sp'); let y0 = null, dy = 0, t0 = 0;
@@ -2759,7 +2809,7 @@ function finishSheet(s, undo) {
   const prs = bestPerSession(S.A.rec.events.filter(e => e.sid === s.id));
   let best = null;
   for (const it of s.items) { const ex = exOf(it.exId); if (!ex || isCardio(ex)) continue;
-    for (const st of it.sets) { if (!(+st.r > 0)) continue; const v = e1rm(loadOf(st, ex), +st.r); if (!best || v > best.v) best = { v, st, ex }; } }
+    for (const st of it.sets) { if (!counted(st)) continue; const v = e1rm(loadOf(st, ex), +st.r); if (!best || v > best.v) best = { v, st, ex }; } }
   openSheet(`<div class="sh-h"><div><span class="lbl">${DAYS[new Date(s.startedAt).getDay()].slice(0, 3)} · ${fmtDate(s.startedAt)} · ${plural(min, 'min')}</span><h3>${esc(sessName(s))}, done</h3></div>${xBtn()}</div>
     <div class="ts-kv${a.sets ? '' : ' three'}">${stats}</div>${vs}
     ${prs.length ? `<span class="lbl fs-sub">${prs.length === 1 ? 'Record' : 'Records'}</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(exOf(p.exId)?.name || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}
@@ -2839,7 +2889,7 @@ function nudgeEdit() {
 }
 function lbHint() {
   const m = $('#view [data-act="sess-menu"]'); if (m) { m.classList.remove('nudge'); void m.offsetWidth; m.classList.add('nudge'); }
-  buzz(6); toast('To change it: ⋯ › Change this session');
+  buzz(6); toast('Tap Edit to change this session');
 }
 const recNote = a => a && a.prs.length ? ` · ${a.prs.length} record${a.prs.length > 1 ? 's' : ''}` : '';
 function saveEditSheet() {
@@ -2892,7 +2942,7 @@ function saveEdit(how) {
    a set that now beats it offers to raise it, and correcting the session it came from downward offers to drop it
    back to your best estimate. */
 function ormChanges(before, after) {
-  const top = (s, exId) => { let b = 0; if (s) { const ex = exOf(exId); for (const it of s.items) if (it.exId === exId) for (const st of it.sets) if (+st.r > 0) b = Math.max(b, e1rm(loadOf(st, ex), +st.r)); } return roundW(b); };
+  const top = (s, exId) => { let b = 0; if (s) { const ex = exOf(exId); for (const it of s.items) if (it.exId === exId) for (const st of it.sets) if (+st.r > 0 && !(st.id && suspects().has(st.id))) b = Math.max(b, e1rm(loadOf(st, ex), +st.r)); } return roundW(b); };
   const out = [];
   for (const id of new Set([...(before ? before.items : []), ...after.items].map(it => it.exId))) {
     const ex = exOf(id); if (!ex || !(ex.oneRm > 0)) continue;
@@ -2930,7 +2980,7 @@ function offerOneRm(changes, s, how = 'corrected') {
    The Logbook tab (History's old place) is the one place to log or change a past day. Its Calendar is a month,
    filled in like the Consistency heat map; tap a day to see its sessions (they open ready to Edit), log a session
    for it from your split or empty, or mark it a rest day. Its List (vHistory) is every session; those open ready
-   to Edit too. Sessions opened anywhere else are read-only, with ⋯ › Change this session (see S.lbCtx). */
+   to Edit too, as do sessions opened anywhere else (Home, an exercise's page): every finished session has Edit. */
 const dayStart = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
 const sessOn = k => [...S.sessions.values()].filter(s => s.endedAt && dayKey(s.startedAt) === k).sort((a, b) => a.startedAt - b.startedAt);
 const monthOf = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
@@ -3218,8 +3268,6 @@ function swapItem(s, it, ex, split) {
 function sessMenu() {
   const s = cur(); if (!s) return;
   if (editing(s)) return menuSheet(sessName(s), [{ label: 'Save', fn: saveEditSheet }, { label: 'Change date and time', fn: editDate }, { label: S.edit.orig ? 'Discard changes' : 'Discard this session', warn: true, fn: discardEdit }, ...(S.edit.orig ? [{ label: 'Delete session', warn: true, fn: () => askDelete(s.id) }] : [])]);
-  /* a finished session opened outside the Logbook can be repeated, not changed */
-  if (s.endedAt && S.lbCtx !== s.id) return menuSheet(sessName(s), [{ label: 'Repeat this session', hint: 'start a new one like it', fn: () => repeatSession(s.id) }, { label: 'Change this session', hint: 'opens it ready to edit', fn: () => editFromRow(s.id) }, { label: 'Delete session', warn: true, fn: () => askDelete(s.id) }]);
   menuSheet(sessName(s), [
     ...(s.endedAt ? [{ label: 'Edit session', hint: 'then save as today’s, or update this one', fn: startEdit }] : []),
     { label: 'Change date', fn: editDate },
@@ -3514,6 +3562,12 @@ const ACT = {
   'h-more': () => { hShown += H_PAGE; drawHList(); },
   'set-menu': el => setMenu(el.dataset.set),
   'add-wu': el => addWarmups(el.dataset.item),
+  'sus-keep': el => { const s = cur(), f = s && findSet(s, el.dataset.set); if (!f || locked(s)) return; f.st.ok = true; queue('s:' + s.id, 300); buzz(8); render(false); toast('Kept as it is'); },
+  'sus-fix': el => { const s = cur(), f = s && findSet(s, el.dataset.set); if (!f || locked(s)) return; const k = el.dataset.k === 'w' ? 'w' : 'r', was = f.st[k], v = +el.dataset.v;
+    f.st[k] = v; queue('s:' + s.id, 300); buzz(8); render(false);
+    toast(`Changed to ${k === 'r' ? `${v} reps` : `${fmtW(v)} ${unit()}`}`, { label: 'Undo', fn: () => { const g = findSet(cur(), f.st.id); if (!g) return; g.st[k] = was; queue('s:' + cur().id, 300); render(false); } }); },
+  'sus-edit': () => { const s = cur(); if (!s || !locked(s)) return; startEdit(); },
+  'sus-open': el => editFromRow(el.dataset.id),
   rir: el => { const s = cur(), f = s && findSet(s, el.dataset.set); if (!f || f.wu || locked(s)) return; const v = +el.dataset.v;
     f.st.rir = f.st.rir === v ? null : v; if (f.st.rir == null) delete f.st.rir; S.rirAsk = null; queue('s:' + s.id, 300); buzz(8); render(false); },
   'ex-note': el => noteSheet(el.dataset.id),

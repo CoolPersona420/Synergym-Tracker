@@ -17,6 +17,8 @@ export function cleanSet(o) {
   for (const [k, lo, hi, whole] of CARDIO_FIELDS) { const v = num(o[k]); if (v != null) out[k] = Math.min(hi, Math.max(lo, whole ? Math.round(v) : v)); }
   /* reps left in the tank after a set (0 to 4, where 4 means 4 or more) */
   const rir = num(o.rir); if (rir != null && rir >= 0) out.rir = Math.min(4, Math.round(rir));
+  /* a set far beyond the usual that its owner kept as it is (not a typo) */
+  if (o.ok === true) out.ok = true;
   return out;
 }
 const CARDIO_FIELDS = [['t', 0, 86400, true], ['pt', 0, 86400, true], ['d', 0, 1e6, false], ['pd', 0, 1e6, false], ['hr', 30, 250, true], ['kc', 0, 20000, true], ['e', 1, 10, true]];

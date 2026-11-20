@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.46, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.47, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.46-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.47-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -19,6 +19,9 @@ The version lives in `package.json` (`0.1.46-alpha`) and shows in Settings › A
   exercise can keep a note (seat, grip, setup) that shows on its card in every session. **Finish** shows a summary:
   intensity, volume, sets, time, the change on last time, records and the best set, with **Undo finish**.
   After a set is ticked, an optional **Reps left?** (0–4+, reps in reserve) is saved with it and shown under its number.
+  A number far beyond the usual (30+ reps and over three times the exercise's typical, or a weight over 2.5 times its
+  heaviest) asks **Keep** or **Make it …** before it counts, and is left out of records, estimated maxes, volume and the
+  coach until then; past ones are listed on the exercise's page with **Fix it**.
 - **Records (PRs):** each exercise knows its records. A weight PR is heavier than ever, a rep PR is more
   reps than ever at that weight or heavier, and beating both is marked as both. Sets are judged live as you
   type them, and each exercise page shows its heaviest set, most reps and best reps by weight.
@@ -56,8 +59,8 @@ The version lives in `package.json` (`0.1.46-alpha`) and shows in Settings › A
   shows what was trained and its volume, with the day you picked and the month summed up beside it, and a click on any
   day of the Consistency map opens it. A session logged for a past day counts everywhere: the week, the Consistency
   map, records, estimates and the coach. Rows also edit straight from the List (swipe one, or the pencil beside it on
-  a computer). Opened anywhere else (Home, an exercise's page), a session is read-only, and **⋯ › Change this
-  session** opens it ready to edit.
+  a computer). Every finished session has **Edit** wherever it's opened (Home, an exercise's page), at the top and the
+  bottom.
 - **Bodyweight log**, the **Logbook's List** with search, and an **exercise library** of your own with editable
   muscle groups.
 - **Cardio:** add a run, ride, row, swim (or any cardio of your own) to any session. Time is always logged;

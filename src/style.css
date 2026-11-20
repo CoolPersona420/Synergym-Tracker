@@ -2179,3 +2179,21 @@ html.ro-dragging,html.ro-dragging *{user-select:none;-webkit-user-select:none;cu
 .rir .lbl{margin-right:4px}
 .rir .chip{min-width:2.3rem;justify-content:center;padding-inline:.6rem}
 .rir-t{display:block;margin-top:3px;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.04em;color:var(--muted);white-space:nowrap}
+
+/* ---------- a set that looks like a typo: the number in red, a question under it (GitHub issue #3) ---------- */
+.set[data-susk="r"] [data-f="r"],.set[data-susk="w"] [data-f="w"]{border-color:var(--bad);color:var(--bad)}
+.set-sus{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin:-2px 0 6px 6px;padding:6px 10px;border-radius:var(--r-sm);
+  background:color-mix(in srgb,var(--bad) 9%,transparent);font-size:.85rem;color:var(--ink-2)}
+.set-sus b{font-family:var(--font-mono);font-size:var(--t-xs);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--bad)}
+.set-sus .sus-acts{display:flex;gap:6px;margin-left:auto}
+.sus-go{margin-left:auto;font-weight:700;text-decoration:underline;color:var(--ink)}
+.sus-card{border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.sus-card .card-h .lbl{color:var(--bad)}
+.sus-row{display:flex;align-items:center;gap:var(--s-1);padding:6px 0;border-bottom:1px solid var(--line)}
+.sus-row:last-of-type{border-bottom:0}
+.sus-row .btn{margin-left:auto;flex:none}
+.sus-why{font-size:13px;margin:var(--s-1) 0 0}
+
+/* ---------- with a phone's keyboard up, a sheet fits the visible part of the screen above it (GitHub issue #2) ---------- */
+html.kb-open .sheet{top:var(--vv-top,0px);bottom:auto;height:var(--vv-h,100%)}
+html.kb-open .sheet .sp{max-height:calc(var(--vv-h,100vh) - var(--s-1))}

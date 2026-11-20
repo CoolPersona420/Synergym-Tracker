@@ -10,6 +10,27 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.47-alpha · 20 November 2026
+
+**Fixes for the first two issues on GitHub**
+
+- **The exercise list stays above the keyboard (issue #2):** on an iPhone, typing in the exercise search slid the
+  keyboard over the list, so the matches were hidden. While a keyboard is up, the sheet now fits the visible part of
+  the screen above it, and its list scrolls there.
+- **Edit on every finished session (issue #3):** a session opened from Home or an exercise's page used to be
+  read-only, with editing tucked away in its ⋯ menu. Every finished session now has **Edit**, at the top and next to
+  Repeat at the bottom, wherever it's opened. Its numbers still don't change until you tap it.
+- **Typos are caught (issue #3):** one slip like 106 reps for 10 used to wreck an exercise's numbers (an estimated max
+  of 362 kg, a coach target of 80 × 106). Now a number far beyond your usual asks before it counts: **106 reps? You
+  usually do 8**, with **Keep** or **Make it 10** (and Undo). Reps are asked about from 30 and over three times your
+  usual; a weight from 40 kg and over two and a half times your heaviest; with little history, only 100+ reps or
+  500+ kg. Until you answer, the set is left out of records, estimated maxes, intensity, volume, hints and the coach.
+- **Old typos are found:** sets already logged that look like typos show on their session ("Typo? … Fix it") and on
+  the exercise's page ("1 set looks like a typo" with **Fix it**, which opens the session ready to edit). Fix one or
+  keep it, and the numbers come right everywhere.
+
+---
+
 ## 0.1.46-alpha · 19 November 2026
 
 **A steadier instant start**
