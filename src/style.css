@@ -2197,3 +2197,23 @@ html.ro-dragging,html.ro-dragging *{user-select:none;-webkit-user-select:none;cu
 /* ---------- with a phone's keyboard up, a sheet fits the visible part of the screen above it (GitHub issue #2) ---------- */
 html.kb-open .sheet{top:var(--vv-top,0px);bottom:auto;height:var(--vv-h,100%)}
 html.kb-open .sheet .sp{max-height:calc(var(--vv-h,100vh) - var(--s-1))}
+
+/* ---------- the update popup: in the middle of the screen, over everything, until Update now ---------- */
+.upd{position:fixed;inset:0;z-index:95;display:grid;place-items:center;padding:var(--s1)}
+.upd-scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);animation:fade .35s both}
+.upd-box{position:relative;width:min(22rem,100%);max-height:calc(100% - 2rem);overflow:auto;text-align:center;color:var(--ink);background:var(--surface);
+  border-radius:28px;padding:var(--s1) var(--s1) var(--s0);background-image:linear-gradient(180deg,var(--sheen),transparent 38%);
+  box-shadow:0 1.5rem 4rem rgba(0,0,0,.3),inset 0 1px 0 var(--rim-hi),0 0 0 1px var(--line);animation:updin .55s var(--spring) both}
+@keyframes updin{from{opacity:0;transform:translateY(1.2rem) scale(.96)}}
+.upd-ic{width:3.6rem;height:3.6rem;margin:2px auto var(--s0);border-radius:50%;display:grid;place-items:center;background:var(--solid);color:var(--solid-ink);box-shadow:var(--gloss)}
+.upd-ic .ico{width:26px;height:26px;stroke-width:2.2}
+.upd h2{font-family:var(--font-display);font-size:2rem;line-height:1;text-transform:uppercase;letter-spacing:.01em;margin:0 0 6px}
+.upd-v{font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.upd p{margin:var(--s0) 0;color:var(--ink-2);font-size:.95rem;line-height:1.4}
+.upd-new{list-style:none;margin:0 0 var(--s0);padding:var(--s-1) var(--s0);border-radius:var(--r-md);background:var(--surface-2);text-align:left;font-size:.88rem;display:grid;gap:6px}
+.upd-new li{display:flex;gap:8px;align-items:baseline}
+.upd-new li::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--ink);transform:translateY(-1px)}
+.upd .btn{width:100%}
+.upd .btn:disabled{opacity:.6}
+.upd small{display:block;margin-top:var(--s-1);color:var(--muted);font-size:12px;line-height:1.4}
+@media (prefers-reduced-motion:reduce){.upd-box,.upd-scrim{animation:none}}

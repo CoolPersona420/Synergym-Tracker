@@ -47,7 +47,8 @@ export function guideSections(device) {
     { id: 'install', icon: PHONE, t: 'Install the app', s: phone ? 'Put Synergym on your Home Screen.' : 'Open Synergym in its own window.',
       steps: phone
         ? ['<b>iPhone:</b> in Safari, tap <b>Share</b>, then <b>Add to Home Screen</b>.', '<b>Android:</b> in Chrome, tap the <b>⋮</b> menu, then <b>Install app</b> (or <b>Add to Home screen</b>).', 'Open it from the icon. It runs full screen and opens even without a connection. Installing also unlocks offline mode.']
-        : ['In Chrome or Edge, click the install icon at the right of the address bar.', 'Or open the browser menu and choose <b>Install Synergym</b>.'] }
+        : ['In Chrome or Edge, click the install icon at the right of the address bar.', 'Or open the browser menu and choose <b>Install Synergym</b>.'],
+      tip: 'When a new version is out, a popup in the middle of the screen asks you to update, with what’s new. It never interrupts a session: it waits until you’ve finished. Update now saves everything first.' }
   ];
 }
 

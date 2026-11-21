@@ -160,3 +160,12 @@ test('reps in reserve is kept on a set, from 0 to 4 (4 meaning 4 or more)', asyn
   assert.equal('rir' in cleanSet({ id: 'a', w: 80, r: 5, done: true, rir: -1 }), false);
   assert.equal('rir' in cleanSet({ id: 'a', w: 80, r: 5, done: true }), false);
 });
+
+test('what’s new for the update popup comes from the release notes: the first bold titles of that version', async () => {
+  const { highlights } = await import('../../src/lib/whatsnew.js');
+  const notes = `# Notes\n\n## 0.2.0-alpha · 1 Dec\n\n**Title**\n\n- **One thing (issue #2):** a\n  more\n- **Two things:** b\n- plain line\n- **Three (issues #3, #4)** c\n- **Four:** d\n\n## 0.1.9-alpha · 1 Nov\n\n- **Old:** x\n`;
+  assert.deepEqual(highlights(notes, '0.2.0-alpha'), ['One thing', 'Two things', 'Three']);
+  assert.deepEqual(highlights(notes, '0.1.9-alpha'), ['Old']);
+  assert.deepEqual(highlights(notes, '9.9.9'), []);
+  assert.deepEqual(highlights('', '0.2.0-alpha'), []);
+});

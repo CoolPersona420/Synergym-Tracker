@@ -2375,7 +2375,8 @@ let sheetGen = 0;
 let sheetFrom = null;
 function openSheet(html, mount) { sheetGen++; if ($('#sheet').hidden) sheetFrom = document.activeElement; const sh = $('#sheet'), sp0 = $('#sheet .sp'); sp0.style.transform = sp0.style.transition = sp0.style.animation = ''; $('#sheet-body').innerHTML = html; sh.hidden = false; document.body.style.overflow = 'hidden'; mount && mount($('#sheet-body')); fluidApply($('#sheet-body'), null); const f = $('#sheet-body').querySelector('input:not([type=hidden]),button'); if (f && matchMedia('(pointer:fine)').matches) f.focus(); }
 function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.remove('open'); w.setAttribute('aria-expanded', 'false'); } $('#sheet').hidden = true; $('#sheet-body').innerHTML = ''; document.body.style.overflow = ''; const sp = $('#sheet .sp'); sp.style.transform = sp.style.transition = sp.style.animation = ''; 
-  const from = sheetFrom; sheetFrom = null; if (from && from.isConnected && from !== document.body && matchMedia('(pointer:fine)').matches) try { from.focus({ preventScroll: true }); } catch {} }
+  const from = sheetFrom; sheetFrom = null; if (from && from.isConnected && from !== document.body && matchMedia('(pointer:fine)').matches) try { from.focus({ preventScroll: true }); } catch {}
+  if (UPD.ready) setTimeout(updMaybe, 400); }
 /* An iPhone's keyboard slides over the page without making it shorter, so a sheet pinned to the bottom ends up
    under it: type in the exercise search and the list is hidden (GitHub issue #2). While a keyboard is up (the
    visible part of the screen is clearly shorter than the page, on a touch screen), the sheet fits the visible part
@@ -2411,6 +2412,8 @@ function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.rem
   sp.addEventListener('touchcancel', () => { if (y0 == null) return; y0 = null; sp.style.transition = 'transform .32s var(--ease)'; sp.style.transform = ''; });
 })();
 document.addEventListener('keydown', e => {
+  /* the update popup keeps the keyboard: nothing behind it, and it can't be closed */
+  if ($('#upd')) { if (e.key === 'Tab' || e.key === 'Escape') { e.preventDefault(); $('#upd-go')?.focus(); } else if (!(e.key === 'Enter' || e.key === ' ') || document.activeElement?.id !== 'upd-go') e.preventDefault(); e.stopImmediatePropagation(); return; }
   /* an open sheet keeps the keyboard: Tab and Shift+Tab go round its own buttons and fields, not the page behind */
   if (e.key === 'Tab' && !$('#sheet').hidden) {
     const f = [...$$('#sheet .sp button, #sheet .sp input, #sheet .sp select, #sheet .sp textarea, #sheet .sp [href], #sheet .sp [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent !== null);
@@ -3802,23 +3805,58 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 addEventListener('focus', () => checkDevice());
 setInterval(() => { if (document.visibilityState === 'visible') checkDevice(); }, 60000);
 
-/* new version check: when the app comes back to the foreground, compare the deployed bundle with the running one.
-   Pull-to-refresh is off, so without this a phone tab could keep running an old build. */
+/* ---------- updates ----------
+   When a new version is out (the published page loads a different build than the one running), a popup in the
+   middle of the screen asks to update, and the app waits behind it until you do. It never interrupts a session:
+   while one is live or being edited, a sheet is open, or you're typing, it waits, and comes up once you're done.
+   version.json (built with each release) gives its version and what's new; without it the popup still works.
+   Update now saves anything waiting to upload first, and waits for a connection if there isn't one.
+   Checked on opening, on coming back to the app, and every 10 minutes. */
 let updT = 0;
+const UPD = { ready: false, info: null };
 async function checkUpdate() {
+  if (UPD.ready) return updMaybe();
   if (Date.now() - updT < 60000) return; updT = Date.now();
   try {
     const mine = document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src'); if (!mine) return;
     const html = await (await fetch('/', { cache: 'no-store' })).text(), next = (html.match(/\/assets\/index-[^"']+\.js/) || [])[0];
     if (!next || next === mine) return;
-    const busy = (S.view === 'session' && activeSession()) || !$('#sheet').hidden || isTyping();
-    if (!busy) { flushAll(); setTimeout(() => location.reload(), 400); return; }
-    const n = $('#net'); if (n) { n.hidden = false; n.classList.add('upd'); n.textContent = 'Update ready · tap to refresh'; n.onclick = () => { flushAll(); setTimeout(() => location.reload(), 300); }; }
+    try {
+      const r = await fetch('/version.json', { cache: 'no-store' }), j = r.ok ? await r.json() : null;
+      if (j && typeof j.version === 'string') UPD.info = { version: j.version.slice(0, 24), notes: (Array.isArray(j.notes) ? j.notes : []).filter(x => typeof x === 'string' && x).slice(0, 3).map(x => x.slice(0, 80)) };
+    } catch {}
+    UPD.ready = true; updMaybe();
   } catch {}
+}
+/* doing something that an update shouldn't cut into */
+const updBusy = () => !!activeSession() || !!S.edit || !$('#sheet').hidden || isTyping() || !!S.syncing;
+function updMaybe() { if (UPD.ready && !$('#upd') && !updBusy()) updShow(); }
+const bare = v => String(v || '').replace(/-.*$/, '');
+function updShow() {
+  const i = UPD.info;
+  document.body.insertAdjacentHTML('beforeend', `<div class="upd" id="upd" role="alertdialog" aria-modal="true" aria-labelledby="upd-t" aria-describedby="upd-d"><div class="upd-scrim"></div>
+    <div class="upd-box"><span class="upd-ic" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></span><h2 id="upd-t">Update ready</h2>${i ? `<span class="upd-v">Version ${esc(bare(i.version))} · was ${esc(bare(VERSION))}</span>` : ''}
+    <p id="upd-d">It takes a second. Everything you’ve logged is saved first.</p>
+    ${i && i.notes.length ? `<ul class="upd-new">${i.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+    <button class="btn lg" id="upd-go">Update now</button><small>Synergym needs the latest version to keep your log in sync.</small></div></div>`);
+  const b = $('#upd-go');
+  const idle = () => { if (!b.dataset.busy) { b.disabled = !navigator.onLine; b.textContent = navigator.onLine ? 'Update now' : 'Waiting for connection…'; } };
+  idle(); addEventListener('online', idle); addEventListener('offline', idle);
+  b.onclick = async () => {
+    if (!navigator.onLine) return idle();
+    b.dataset.busy = '1'; b.disabled = true; b.textContent = 'Saving…'; flushAll();
+    const t0 = Date.now(); while ((OB.pending.size || OB.inflight.size) && Date.now() - t0 < 5000) await sleep(150);
+    b.textContent = 'Updating…'; location.reload();
+  };
+  buzz(10); setTimeout(() => b.focus({ preventScroll: true }), 50);
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
 addEventListener('focus', checkUpdate);
 setInterval(checkUpdate, 10 * 60 * 1000);
+/* and soon after opening */
+setTimeout(checkUpdate, 8000);
+/* waiting for a session or a sheet to end: look again every few seconds */
+setInterval(() => { if (UPD.ready) updMaybe(); }, 4000);
 
 /* ================= offline mode (mobile home-screen app) =================
    An offline account keeps everything in IndexedDB on the phone and never talks to the server.

@@ -10,6 +10,22 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.48-alpha · 21 November 2026
+
+**Update when a new version is out, never mid-session**
+
+- **An update popup:** when a new version of Synergym is published, a popup in the middle of the screen says so,
+  with the new version and what's new in it, and the app waits behind it until you tap **Update now**. It can't be
+  closed or skipped, so everyone stays on the latest version. Before this, an update only showed as a small bar, or
+  the app reloaded by itself.
+- **Never during a session:** while a session is live (even if you've stepped away to Home) or you're editing one,
+  the popup waits. It comes up once you've finished or discarded it, and not while a sheet is open or you're typing.
+- **Nothing lost:** Update now saves anything still waiting to upload first. Without a connection it says "Waiting
+  for connection…" and goes ahead once you're back online.
+- **What's new is written for you:** each release's first few headlines from these notes show in the popup.
+
+---
+
 ## 0.1.47-alpha · 20 November 2026
 
 **Fixes for the first two issues on GitHub**
