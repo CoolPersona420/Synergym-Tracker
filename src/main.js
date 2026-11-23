@@ -2237,7 +2237,7 @@ function vSplits() {
 }
 function vSplit() {
   const sp = S.splits.get(S.arg), rec = S.recipients.get(sp.id), tr = sp.days.filter(d => !isRestDay(d)).length;
-  return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Split</span>
+  return `<header class="s-top sp-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Split</span>
     ${trainDays(sp).length ? `<button class="btn ghost sm cal-btn" data-act="cal-split" data-id="${sp.id}" aria-label="Add to calendar">${CAL_ICON}<span class="cal-l">${roll('Calendar')}</span></button>` : ''}<button class="btn ghost sm" data-act="share-split" data-id="${sp.id}">${ICON.share}${roll('Share')}</button><button class="iconbtn" data-act="split-menu" data-id="${sp.id}" aria-label="Split options">${ICON.dots}</button></header>
   <div class="rv" style="margin-top:12px"><textarea class="sp-name autosize" data-f="spname" rows="1" maxlength="60" aria-label="Split name" placeholder="Split name">${esc(sp.name)}</textarea>
   <textarea class="sp-desc" data-f="spdesc" maxlength="1000" placeholder="Describe it: goal, who it suits, how to progress" aria-label="Description">${esc(sp.description)}</textarea></div>

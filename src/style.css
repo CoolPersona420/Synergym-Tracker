@@ -382,6 +382,10 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
 
 /* ---------- session ---------- */
 .s-top{display:flex;align-items:center;gap:var(--s-1);padding-block:var(--s-2)}
+/* on the narrowest phones the page's small label gives way, so the buttons beside it always fit; the split
+   page, with three buttons, drops its label there rather than show part of it */
+.s-top > .lbl{min-width:0;overflow:hidden;white-space:nowrap}
+@media (max-width:22.5rem){.sp-top > .lbl{visibility:hidden}}
 .s-name{flex:1;min-width:0;height:2.6rem;border:0;background:transparent;font-size:var(--t1);font-weight:700;letter-spacing:-.02em;outline:none;padding:0 6px;border-radius:var(--r-sm)}
 .s-name:focus{background:var(--surface)}
 .s-name::placeholder{color:var(--ink)}
