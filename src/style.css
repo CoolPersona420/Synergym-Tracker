@@ -1516,6 +1516,12 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 .wk-g span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wk-g b{color:var(--good);font-variant-numeric:tabular-nums}
 .wk-none{font-size:.85rem}
+.wk-g b.dn{color:var(--ink-2)}
+/* This month: the full view opens on the month's one line */
+.mo-hero{display:grid;gap:6px}
+.mo-line{font-size:1.15rem;line-height:1.35}
+.mo-line b{font-family:var(--font-display);font-size:2rem;letter-spacing:.01em;color:var(--good)}
+.mo-line b.dn{color:var(--ink-2)}
 
 /* ---------- bodyweight ---------- */
 .chart .bw-line{fill:none;stroke:var(--ink);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}

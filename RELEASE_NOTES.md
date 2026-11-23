@@ -10,6 +10,25 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.50-alpha · 23 November 2026
+
+**How much stronger this month**
+
+- **Stronger than last month:** a new Home card, **This month**, says how much stronger you are than last month,
+  for example "+3.1% stronger than in October". Each lift's best estimated one-rep max this month is set against
+  its best last month, averaged over the lifts you trained in both, and the lifts that went up are listed.
+- **A fair race:** sessions and volume are counted against the same days of last month while the month is still
+  going, so the 23rd compares with the 23rd. Warm-ups and numbers flagged as likely typos are left out.
+- **A look back:** in the first five days of a month the card shows the month just gone ("October in review").
+  Open it for every lift, sessions, volume and records, for this month or last.
+- **On every Home:** it's added after **This week**, once, even if you chose your own cards. Remove it in Edit
+  home and it stays removed.
+- **Fixed:** a theme picked on another device now shows as soon as the app has the latest data, instead of after
+  the next restart. And opening the app from the copy kept on the phone no longer risks saving settings from that
+  older copy over newer ones.
+
+---
+
 ## 0.1.49-alpha · 23 November 2026
 
 **A quicker exercise search, and a clearer reps-left question**

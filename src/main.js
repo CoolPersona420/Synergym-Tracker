@@ -29,6 +29,7 @@ import { reorderDrag } from './ui/reorder.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
+import { monthSummary, monthStart } from './lib/month.js';
 import { trackErrors, startAnalytics } from './lib/telemetry.js';
 
 /* ================= config ================= */
@@ -1393,7 +1394,7 @@ function goalMenu(exId) {
 }
 
 /* ---------- Home widgets ---------- */
-const DEFAULT_WIDGETS = ['coach', 'week', 'intensity', 'consistency', 'recent'];
+const DEFAULT_WIDGETS = ['coach', 'week', 'month', 'intensity', 'consistency', 'recent'];
 /* stored as "id:size" (size s, m or l); older plain ids get the widget's default size */
 const WSIZES = [['s', 'S', 'Small'], ['m', 'M', 'Medium'], ['l', 'L', 'Large']], WSPAN = { s: 2, m: 3, l: 6 };
 function homeEntries() {
@@ -1406,6 +1407,7 @@ const saveEntries = list => {
   /* while the coach is off its card isn't listed, so put it back where it was: it returns when the coach does */
   const raw = Array.isArray(S.profile.widgets) ? S.profile.widgets : DEFAULT_WIDGETS, k = coachOn() ? -1 : raw.findIndex(r => String(r).split(':')[0] === 'coach'), out = list.map(e => e.id + ':' + e.size);
   if (k >= 0) out.splice(Math.min(k, out.length), 0, String(raw[k]));
+  out.push(...raw.filter(r => String(r).startsWith('~')));
   S.profile.widgets = out; queue('p', 400);
 };
 /* desktop grid is 6 columns: small 2, medium 3, large 6. Rows are packed in order and the last widget in a
@@ -1527,6 +1529,25 @@ const planDays = (nx, full) => { const dn = new Set(doneToday().filter(s => s.sp
 const wTile = (label, value, caption, open) => `<div class="card-h"><span class="lbl">${label}</span>${open ? `<span class="w-ex" aria-hidden="true">${ICON.expand}</span>` : ''}</div><div class="tile"><span class="tile-n">${value}</span><span class="tile-c">${caption}</span></div>`;
 const mkv = pairs => `<div class="mkv">${pairs.map(([k, v]) => `<div><b>${v}</b><span class="lbl">${k}</span></div>`).join('')}</div>`;
 const thisWeek = () => weekSummary(sorted().map(s => cleanOf(s)), weekStart(Date.now()));
+/* a month against the one before: this month so far, or ('last') the month just finished. In a month's first five
+   days the Home card looks back at the month just gone, since the new one has too little to say. */
+function monthAt(which = new Date().getDate() <= 5 ? 'last' : 'this') {
+  const now = Date.now(), cur = monthStart(now), from = which === 'last' ? monthStart(now, -1) : cur, to = which === 'last' ? cur - 1 : now;
+  const M = monthSummary(sorted().map(s => cleanOf(s)), from, to, { loadOf: (st, id) => loadOf(st, exOf(id)), isLift: id => { const e = exOf(id); return !!e && !isCardio(e); } });
+  M.prs = bestPerSession(S.A.rec.events).filter(p => p.t >= from && p.t <= to).length; M.done = which === 'last';
+  return M;
+}
+const monName = (t, short) => new Date(t).toLocaleDateString('en-GB', { month: short ? 'short' : 'long' });
+const pctTxt = p => { const a = Math.abs(p); return `${p >= 0 ? '+' : '−'}${a < 10 ? String(Math.round(a * 10) / 10) : Math.round(a)}%`; };
+/* the month in one line: stronger first (it's the point), then volume, then simply showing up */
+function monthLine(M) {
+  const was = monName(M.prevFrom);
+  if (M.strength != null) return M.strength >= 0.5 ? `<b>${pctTxt(M.strength)}</b> stronger than in ${was}` : M.strength > -0.5 ? `As strong as in ${was}` : `<b class="dn">${pctTxt(M.strength)}</b> on ${was}: a lighter month`;
+  if (M.volPct != null) return `<b>${pctTxt(M.volPct)}</b> volume on the same days of ${was}`;
+  return M.count ? `<b>${plural(M.count, 'session')}</b> in ${monName(M.from)}` : `Your first session in ${monName(M.from)} starts the count`;
+}
+const monthTitle = M => M.done ? `${monName(M.from)} in review` : `${monName(M.from)} so far`;
+const liftLine = l => `<div class="wk-g"><span>${esc(exOf(l.exId)?.name || 'Exercise')}</span><span class="muted">${fmtW(roundW(l.from))} → ${fmtW(roundW(l.to))}</span><b${l.pct < 0 ? ' class="dn"' : ''}>${pctTxt(l.pct)}</b></div>`;
 /* sessions this week, the one count everywhere (Home's This week, the Coach, today's plan): from the start of the
    week you chose in Settings, each with a set logged, as the Week widget counts them */
 const weekCount = () => { const from = weekStart(Date.now()); return sorted().filter(s => s.startedAt >= from && logged(s)).length; };
@@ -1651,6 +1672,20 @@ const WIDGETS = {
       return kvs([['Sessions', `${W.count}/${S.profile.target || 3}`], ['Volume', W.vol ? fmtVol(W.vol) : '–'], ['vs last week', volDelta(W)], ['Lifts up', W.gains.length]])
         + wSect('Lifts that went up', W.gains.length ? `<div class="wk-gs">${W.gains.map(x => `<div class="wk-g"><span>${esc(exOf(x.exId)?.name || 'Exercise')}</span><span class="muted">${fmtW(x.from)} → ${fmtW(x.to)}</span><b>+${fmtW(x.by)} ${unit()}</b></div>`).join('')}</div>` : nothing('Compared with your best in the four weeks before. Nothing has gone up yet this week.'))
         + wSect('Sessions this week', list.length ? `<div class="list">${list.map(rowSession).join('')}</div>` : nothing('Nothing logged yet this week.')); }
+  },
+  month: {
+    title: 'This month', desc: 'Your lifts, sessions and volume against last month', opts: [['this', 'This month'], ['last', 'Last month']],
+    card: (open, z) => { const M = monthAt();
+      if (z === 's') return wTile(M.done ? monName(M.from) : 'This month', M.strength != null ? pctTxt(M.strength) : `${M.count}`, M.strength != null ? `stronger than ${monName(M.prevFrom, true)}` : plural(M.count, 'session').replace(/^\d+ /, '') + (M.done ? '' : ' so far'), open);
+      const up = M.lifts.filter(l => l.pct > 0).slice(0, z === 'l' || phoneDash() ? 4 : 2);
+      return wHead(monthTitle(M), plural(M.count, 'session'), open) + `<div class="wk-h mo-h">${monthLine(M)}</div>`
+        + (up.length ? `<div class="wk-gs">${up.map(liftLine).join('')}</div>` : `<p class="muted wk-none">${M.lifts.length ? 'No lift is above last month’s best yet. Plenty of month left.' : `Train a lift you did in ${monName(M.prevFrom)} to compare it.`}</p>`)
+        + (z === 'l' ? mkv([['sessions', M.count], [`volume vs ${monName(M.prevFrom, true)}`, M.volPct == null ? '–' : pctTxt(M.volPct)], ['records', M.prs]]) : ''); },
+    full: which => { const M = monthAt(which), was = monName(M.prevFrom);
+      return `<section class="card mo-hero"><span class="lbl">${monthTitle(M)}</span><div class="mo-line">${monthLine(M)}</div></section>`
+        + kvs([['Sessions', `${M.count}`], [M.done ? `In ${was}` : `By now in ${was}`, M.done ? M.prevCount : M.prevSame], ['Volume', M.volPct == null ? '–' : pctTxt(M.volPct)], ['Records', M.prs]])
+        + wSect(`Lifts against ${was} · est. 1RM ${unit()}`, M.lifts.length ? `<div class="wk-gs">${M.lifts.map(liftLine).join('')}</div>` : nothing(`Train a lift you also did in ${was} and it’s compared here.`))
+        + `<p class="muted wf-note">Stronger compares each lift’s best estimated one-rep max this month with its best in ${was}, averaged over the ${plural(M.lifts.length, 'lift')} you trained in both. Sessions and volume are counted against the same days of ${was}${M.done ? ' (the whole month, now it’s over)' : ''}. Warm-ups and numbers flagged as likely typos are left out.</p>`; }
   },
   bw: {
     title: 'Bodyweight', desc: 'Your weight over time', opts: [[90, '90d'], [30, '30d'], [365, '1y'], [0, 'All']],
@@ -3680,7 +3715,7 @@ const ACT = {
   import: () => $('#imp').click(),
   close: closeSheet,
   'w-open': el => { S.homeRestore = { y: scrollY, x: $('#dash')?.scrollLeft || 0 }; go('widget', el.dataset.id); },
-  'w-opt': el => { WOPT[el.dataset.id] = +el.dataset.v; try { localStorage.setItem('sg-wopt', JSON.stringify(WOPT)); } catch {} render(false); },
+  'w-opt': el => { const v = el.dataset.v; WOPT[el.dataset.id] = /^\d+$/.test(v) ? +v : v; try { localStorage.setItem('sg-wopt', JSON.stringify(WOPT)); } catch {} render(false); },
   'w-close': () => back(),
   'rest-today': () => setRestToday(true),
   'next-pick': el => { el.classList.add('open'); el.setAttribute('aria-expanded', 'true'); nextMenu(); },
@@ -3938,10 +3973,29 @@ async function loadLocal() {
   LDIRTY.clear(); for (const k of d.dirty) LDIRTY.add(k);
 }
 /* what both kinds of start do once the data is in memory */
+/* a new Home card reaches people who chose their own cards too: it is put after "This week" once, and a "~id"
+   marker remembers that, so a card they remove stays removed. Only on the server's own data (or this phone's, when
+   signed out): the copy kept for an instant start may be older, and saving the profile from it would undo newer
+   changes made elsewhere. */
+const NEW_WIDGETS = [['month', 'week']];
+function offerNewWidgets() {
+  const raw = S.profile.widgets; if (!Array.isArray(raw)) return;
+  let out = [...raw], changed = false;
+  for (const [id, after] of NEW_WIDGETS) {
+    if (out.includes('~' + id)) continue;
+    if (!out.some(r => String(r).split(':')[0] === id)) { const k = out.findIndex(r => String(r).split(':')[0] === after); out.splice(k >= 0 ? k + 1 : Math.min(2, out.length), 0, id + ':' + (WIDGETS[id].size || 'm')); }
+    out.push('~' + id); changed = true;
+  }
+  if (changed) { S.profile.widgets = out.slice(0, 20); queue('p', 2000); }
+  return changed;
+}
+/* settings that act outside the data (the theme, the day a week starts): set when data arrives, again when the
+   server's copy replaces the one kept on this device, which may be older */
+function applyProfile() { if (S.profile.theme) applyTheme(S.profile.theme); setWeekStart(S.profile.weekStart); }
 function afterLoad() {
   S.loaded = true; flushAll();
-  if (S.profile.theme) applyTheme(S.profile.theme);
-  const p = S.profile; setWeekStart(p.weekStart);
+  applyProfile();
+  const p = S.profile;
   S.ob = { step: (S.local ? p.name : p.username) ? 3 : 2, name: p.name, username: p.username || '', unit: p.unit, bw: p.bw, exp: p.exp, goal: p.goal, days: p.target || 3, tpl: null, theme: themePref() };
 }
 async function startLocal() {
@@ -3951,7 +4005,7 @@ async function startLocal() {
   render(false);
   try { await loadLocal(); }
   catch (e) { console.error(e); S.loadError = 'Couldn’t open the data on this phone. Close the app fully and open it again.'; return render(true); }
-  restoreOutbox(); afterLoad();
+  restoreOutbox(); afterLoad(); offerNewWidgets();
   route(true);
 }
 /* a brand-new offline account: the starter exercise list, then onboarding */
@@ -4133,13 +4187,14 @@ async function startApp() {
     catch (e) { console.warn(e); if (S.user && S.user.id === uid) toast(navigator.onLine ? 'Couldn’t refresh. Showing what’s saved on this phone.' : 'Offline · showing what’s saved on this phone'); return; }
     if (!S.user || S.user.id !== uid) return;
     checkDevice(S.profile.activeSession);
-    if (dataSig() !== was) { snapSoon(500); soft(); }
+    const offered = offerNewWidgets();
+    if (offered || dataSig() !== was) { applyProfile(); snapSoon(500); soft(); }
     return;
   }
   restoreOutbox();
   try { await loadAll(); }
   catch (e) { console.error(e); S.loadError = navigator.onLine ? (e.message || 'The server didn’t respond.') : 'You’re offline. Connect and try again.'; return render(true); }
-  afterLoad(); snapSoon(500);
+  afterLoad(); offerNewWidgets(); snapSoon(500);
   if (S.claim) { S.claim = false; claimDevice(); } else checkDevice(S.profile.activeSession);
   const t = S.profile.onboarded && pendingPublic();
   if (t) return go('public', t, { replace: true });

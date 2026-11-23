@@ -128,7 +128,7 @@ test('widget sizes are offered on wider screens only', async ({ page }, info) =>
   await page.click('[data-act="edit-home"]');
   await page.waitForSelector('.wrow');
   const phone = info.project.name === 'phone';
-  await expect(page.locator('.wrow .wsz')).toHaveCount(phone ? 0 : 5);
+  await expect(page.locator('.wrow .wsz')).toHaveCount(phone ? 0 : 6);
   await page.keyboard.press('Escape');
   await page.goto('/w/week');
   await expect(page.locator('.wf-size')).toHaveCount(phone ? 0 : 1);

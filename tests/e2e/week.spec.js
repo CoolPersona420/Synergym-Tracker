@@ -9,12 +9,13 @@ test('the week can start on Sunday: this week’s count and the setting follow i
     return { id: crypto.randomUUID(), name: 'Push', started_at: t.toISOString(), ended_at: new Date(+t + 3600e3).toISOString(), items: [{ id: 'i' + n, exId: ex.id, sets: [{ id: 's' + n, w: 80, r: 8, done: true }] }] }; });
   const fake = new FakeSupabase({ exercises: [ex], sessions });
   await login(page, fake, 'A');
-  const week = async () => { await page.goto('/'); await page.locator('.ts-open').click(); return page.locator('#tsheet .ts-week b').textContent(); };
-  expect(await week()).toBe(`${(dow + 6) % 7} of 3`);
+  /* the app opens from the copy kept on the device and then takes the server's: wait for the count to settle */
+  const week = async () => { await page.goto('/'); await page.locator('.ts-open').click(); return page.locator('#tsheet .ts-week b'); };
+  await expect(await week()).toHaveText(`${(dow + 6) % 7} of 3`);
   await page.goto('/settings');
   await expect(page.locator('[data-act="d-week"][data-v="1"]')).toHaveAttribute('aria-pressed', 'true');
   await page.click('[data-act="d-week"][data-v="0"]');
   await expect(page.locator('[data-act="d-week"][data-v="0"]')).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => fake.profiles[0].week_start).toBe(0);
-  expect(await week()).toBe(`${dow} of 3`);
+  await expect(await week()).toHaveText(`${dow} of 3`);
 });
