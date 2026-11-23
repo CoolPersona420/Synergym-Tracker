@@ -129,6 +129,17 @@ create table if not exists public.split_shares (
 );
 create index if not exists split_shares_to on public.split_shares (to_user);
 create index if not exists split_shares_from_user_idx on public.split_shares (from_user);
+-- Invitations (0.1.52): a share waits until the person it was sent to accepts it (a copy goes into their splits)
+-- or declines it; the sender sees which, and can add a short message. Shares from before then wait too.
+alter table public.split_shares add column if not exists status text not null default 'pending';
+alter table public.split_shares add column if not exists message text;
+alter table public.split_shares add column if not exists responded_at timestamptz;
+do $$ begin
+  alter table public.split_shares add constraint split_shares_status_check check (status in ('pending', 'accepted', 'declined'));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.split_shares add constraint split_shares_message_check check (message is null or char_length(message) <= 140);
+exception when duplicate_object then null; end $$;
 
 -- ---------------------------------------------------------------- row level security
 
@@ -204,10 +215,12 @@ begin
   return n;
 end $$;
 
--- Share one of your splits with another user by username.
-create or replace function public.share_split(p_split uuid, p_username text)
+-- Share one of your splits with another user by username, as an invitation with an optional message (140
+-- characters). Inviting again after a decline asks again; someone who accepted already has a copy.
+drop function if exists public.share_split(uuid, text);
+create or replace function public.share_split(p_split uuid, p_username text, p_message text default null)
 returns text language plpgsql security definer set search_path = public as $$
-declare v_to uuid; v_name text := lower(btrim(coalesce(p_username, '')));
+declare v_to uuid; v_name text := lower(btrim(coalesce(p_username, ''))); v_msg text := nullif(left(btrim(coalesce(p_message, '')), 140), '');
 begin
   if auth.uid() is null then raise exception 'Sign in first'; end if;
   if left(v_name, 1) = '@' then v_name := substr(v_name, 2); end if;
@@ -220,9 +233,22 @@ begin
   select id into v_to from public.profiles where username = v_name;
   if v_to is null then raise exception 'No user called @%', v_name; end if;
   if v_to = auth.uid() then raise exception 'That is your own username'; end if;
-  insert into public.split_shares (split_id, from_user, to_user) values (p_split, auth.uid(), v_to)
-    on conflict (split_id, to_user) do nothing;
+  if exists (select 1 from public.split_shares where split_id = p_split and to_user = v_to and status = 'accepted') then
+    raise exception '@% already accepted this split', v_name;
+  end if;
+  insert into public.split_shares (split_id, from_user, to_user, status, message) values (p_split, auth.uid(), v_to, 'pending', v_msg)
+    on conflict (split_id, to_user) do update set status = 'pending', message = excluded.message, created_at = now(), responded_at = null;
   return v_name;
+end $$;
+
+-- Accept or decline an invitation sent to me. Accepting is only the answer: the app saves the copy.
+create or replace function public.respond_share(p_split uuid, p_accept boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Sign in first'; end if;
+  update public.split_shares set status = case when p_accept then 'accepted' else 'declined' end, responded_at = now()
+  where split_id = p_split and to_user = auth.uid() and status = 'pending';
+  if not found then raise exception 'That invitation isn''t waiting any more'; end if;
 end $$;
 
 create or replace function public.unshare_split(p_split uuid, p_username text)
@@ -231,24 +257,26 @@ returns void language sql security definer set search_path = public as $$
   where sh.split_id = p_split and sh.from_user = auth.uid() and sh.to_user = p.id and p.username = lower(btrim(p_username));
 $$;
 
--- Who a split of mine is shared with.
+-- Who a split of mine is shared with, and their answer.
+drop function if exists public.split_recipients(uuid);
 create or replace function public.split_recipients(p_split uuid)
-returns table (username text, shared_at timestamptz)
+returns table (username text, shared_at timestamptz, status text, responded_at timestamptz)
 language sql stable security definer set search_path = public as $$
-  select p.username, sh.created_at from public.split_shares sh join public.profiles p on p.id = sh.to_user
+  select p.username, sh.created_at, sh.status, sh.responded_at from public.split_shares sh join public.profiles p on p.id = sh.to_user
   where sh.split_id = p_split and sh.from_user = auth.uid()
   order by sh.created_at;
 $$;
 
--- Splits other users shared with me.
+-- Splits other users shared with me: invitations still waiting, and ones I accepted (not ones I declined).
+drop function if exists public.shared_with_me();
 create or replace function public.shared_with_me()
-returns table (split_id uuid, name text, description text, days jsonb, from_username text, shared_at timestamptz, updated_at timestamptz)
+returns table (split_id uuid, name text, description text, days jsonb, from_username text, shared_at timestamptz, updated_at timestamptz, status text, message text)
 language sql stable security definer set search_path = public as $$
-  select s.id, s.name, s.description, s.days, p.username, sh.created_at, s.updated_at
+  select s.id, s.name, s.description, s.days, p.username, sh.created_at, s.updated_at, sh.status, sh.message
   from public.split_shares sh
   join public.splits s on s.id = sh.split_id
   left join public.profiles p on p.id = sh.from_user
-  where sh.to_user = auth.uid()
+  where sh.to_user = auth.uid() and sh.status <> 'declined'
   order by sh.created_at desc;
 $$;
 
@@ -270,10 +298,10 @@ begin
 end $$;
 
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
-revoke execute on function public.restore_default_exercises(), public.share_split(uuid, text), public.unshare_split(uuid, text),
-  public.split_recipients(uuid), public.shared_with_me(), public.delete_account() from public, anon;
-grant execute on function public.restore_default_exercises(), public.share_split(uuid, text), public.unshare_split(uuid, text),
-  public.split_recipients(uuid), public.shared_with_me(), public.delete_account() to authenticated;
+revoke execute on function public.restore_default_exercises(), public.share_split(uuid, text, text), public.respond_share(uuid, boolean),
+  public.unshare_split(uuid, text), public.split_recipients(uuid), public.shared_with_me(), public.delete_account() from public, anon;
+grant execute on function public.restore_default_exercises(), public.share_split(uuid, text, text), public.respond_share(uuid, boolean),
+  public.unshare_split(uuid, text), public.split_recipients(uuid), public.shared_with_me(), public.delete_account() to authenticated;
 revoke execute on function public.get_public_split(uuid) from public;
 grant execute on function public.get_public_split(uuid) to anon, authenticated;
 

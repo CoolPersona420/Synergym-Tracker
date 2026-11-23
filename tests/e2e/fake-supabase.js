@@ -9,8 +9,10 @@ const pick = (row, cols) => !cols || cols === '*' ? row : Object.fromEntries(col
 export class FakeSupabase {
   /* registered: false models an email nobody has signed up with yet; signing up creates the account the way
      the real database does (an empty profile and the starter exercises, with the server's own ids) */
-  constructor({ email = 'tester@example.com', password = 'Lift1234', profile = {}, exercises = [], sessions = [], splits = [], registered = true, defaults = ['Bench Press', 'Back Squat', 'Deadlift', 'Pull-up'] } = {}) {
+  constructor({ email = 'tester@example.com', password = 'Lift1234', profile = {}, exercises = [], sessions = [], splits = [], registered = true, defaults = ['Bench Press', 'Back Squat', 'Deadlift', 'Pull-up'], incoming = [], users = ['alex', 'sam', 'jo', 'lee'] } = {}) {
     this.uid = crypto.randomUUID(); this.email = email; this.password = password; this.registered = registered; this.defaults = defaults;
+    /* split sharing: invitations sent to this account (as shared_with_me returns them), the ones it sent, and the other usernames that exist */
+    this.incoming = incoming.map(x => ({ status: 'pending', message: null, shared_at: new Date().toISOString(), updated_at: new Date().toISOString(), description: '', ...x })); this.outgoing = []; this.users = users;
     if (!registered) { this.profiles = []; this.exercises = []; this.sessions = []; this.splits = []; this.errors = []; this.log = []; this.calls = []; return; }
     this.profiles = [{ id: this.uid, username: 'tester', display_name: 'Test', onboarded: true, unit: 'kg', weekly_target: 3, rest_seconds: 90, rest_enabled: true, rest_sound: true, bodyweight: 80, active_session: null, bw_log: null, widgets: null, ...profile }];
     this.exercises = exercises.map(e => ({ user_id: this.uid, archived: false, is_default: true, ...e }));
@@ -67,6 +69,21 @@ export class FakeSupabase {
         return route.fulfill({ status: 204, body: '' });
       }
       if (rpc[1] === 'restore_default_exercises') return json(0);
+      const fail = message => json({ code: 'P0001', message }, 400);
+      if (rpc[1] === 'shared_with_me') return json(this.incoming.filter(x => x.status !== 'declined'));
+      if (rpc[1] === 'respond_share') {
+        const x = this.incoming.find(i => i.split_id === b.p_split && i.status === 'pending'); if (!x) return fail('That invitation isn’t waiting any more');
+        x.status = b.p_accept ? 'accepted' : 'declined'; this.log.push(`${name} ${x.status} ${x.name}`); return route.fulfill({ status: 204, body: '' });
+      }
+      if (rpc[1] === 'share_split') {
+        const u = String(b.p_username || '').trim().toLowerCase().replace(/^@/, ''); if (!this.users.includes(u)) return fail(`No user called @${u}`);
+        const o = this.outgoing.find(x => x.split_id === b.p_split && x.username === u); if (o && o.status === 'accepted') return fail(`@${u} already accepted this split`);
+        const msg = b.p_message ? String(b.p_message).trim().slice(0, 140) || null : null, at = new Date().toISOString();
+        if (o) Object.assign(o, { status: 'pending', message: msg, shared_at: at, responded_at: null }); else this.outgoing.push({ split_id: b.p_split, username: u, status: 'pending', message: msg, shared_at: at, responded_at: null });
+        return json(u);
+      }
+      if (rpc[1] === 'split_recipients') return json(this.outgoing.filter(x => x.split_id === b.p_split).map(({ username, shared_at, status, responded_at }) => ({ username, shared_at, status, responded_at })));
+      if (rpc[1] === 'unshare_split') { this.outgoing = this.outgoing.filter(x => !(x.split_id === b.p_split && x.username === String(b.p_username).toLowerCase())); return route.fulfill({ status: 204, body: '' }); }
       return json([]);
     }
     const t = p.match(/\/rest\/v1\/(\w+)/), rows = t && this.table(t[1]);

@@ -10,6 +10,22 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.52-alpha · 23 November 2026
+
+**Split invitations**
+
+- **Accept or decline:** a split shared with you now arrives as an invitation at the top of Splits, with who sent
+  it, when, its days, and their message if they wrote one. A number on the Splits tab says how many are waiting.
+  **Accept** saves a copy to your splits, ready to train (with room made first if you have six). **Decline** asks
+  once, then removes it. Open an invitation to look over every day and exercise before you answer.
+- **A message with it:** when you share a split you can add a short note (up to 140 characters). It's optional.
+- **See who said yes:** your share sheet shows each person as waiting, accepted or declined. After a decline, ↻
+  invites them again; someone who accepted already has their copy.
+- **Replaces "Shared with you":** that list is gone. A split shared before this update arrives as an invitation,
+  so nothing that was shared with you disappears.
+
+---
+
 ## 0.1.51-alpha · 23 November 2026
 
 **Reminders in your own calendar**

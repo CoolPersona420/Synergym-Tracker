@@ -2278,3 +2278,17 @@ html.kb-open .sheet .sp{max-height:calc(var(--vv-h,100vh) - var(--s-1))}
 .cal-wk .muted{font-size:.8rem}
 .cal-note{font-size:13px;margin:0}
 .cal-go{width:100%;justify-content:center;margin-top:var(--s0)}
+
+/* split invitations: a card to accept or decline, the count on the Splits tab, and each person's answer when sharing */
+.split-card.inv{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset}
+.inv-msg{font-size:.9rem;color:var(--ink-2);margin:0;overflow-wrap:anywhere}
+.inv-acts{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-1)}
+.inv-acts .btn{justify-content:center}
+.done-bar.inv-acts{display:grid}
+.nav-i{position:relative}
+.nav-badge{position:absolute;top:4px;left:calc(50% + 4px);min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--bad);color:#fff;font:700 11px/18px var(--font-body,system-ui);text-align:center;pointer-events:none}
+.sh-inv{display:grid;gap:8px}
+.person .stt{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
+.person .stt.accepted{color:var(--good)}.person .stt.pending{color:var(--ink-2)}.person .stt.declined{color:var(--bad)}
+/* in the computer's sidebar the count sits at the end of the Splits row */
+@media (min-width:60rem){.nav-badge{top:50%;left:auto;right:10px;translate:0 -50%}}

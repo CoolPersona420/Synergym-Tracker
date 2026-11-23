@@ -834,7 +834,8 @@ async function loadShared() {
   S.sharedAt = Date.now();
   const { data, error } = await sb.rpc('shared_with_me');
   if (error) return;
-  S.shared = (data || []).map(r => ({ id: r.split_id, name: r.name, description: r.description || '', days: cleanDays(r.days), from: r.from_username, sharedAt: Date.parse(r.shared_at) }));
+  S.shared = (data || []).map(r => ({ id: r.split_id, name: r.name, description: r.description || '', days: cleanDays(r.days), from: r.from_username, sharedAt: Date.parse(r.shared_at), status: r.status || 'pending', message: r.message || '' }));
+  renderNav();
   if (S.view === 'splits' || S.view === 'shared') soft();
 }
 let navKey = null;
@@ -864,6 +865,10 @@ function renderNav() {
       if (o) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
   } else { buildTabs(nav, fab, glow, end, it); nav.dataset.sig = sig; }
+  /* split invitations waiting for an answer: a count on the Splits tab */
+  const st = nav.querySelector(':scope > .nav-i[data-v="splits"]'), n = invites().length;
+  if (st) { let b = st.querySelector('.nav-badge'); if (n && !b) { b = document.createElement('span'); b.className = 'nav-badge'; b.setAttribute('aria-hidden', 'true'); st.append(b); }
+    if (b) { if (n) b.textContent = n > 9 ? '9+' : n; else b.remove(); } st.setAttribute('aria-label', n ? `Splits, ${plural(n, 'invitation')} waiting` : 'Splits'); }
   /* on a rest day it shows a moon and stars; tapping it still asks to undo the rest day before anything starts */
   const rest = !a && S.loaded && isRestToday(), mode = a ? 'live:' + a.id : rest ? 'rest' : 'idle';
   if (fab.dataset.mode !== mode) {
@@ -2217,20 +2222,21 @@ function dayBar(days, next = -1) {
   return `<div class="daybar">${days.map((d, i) => `<span class="${isRestDay(d) ? '' : 'on'}${i === next ? ' next' : ''}${isSecond(days, i) ? ' twin' : ''}" title="${dayLabel(days, i)}: ${esc(d.type || 'Untitled')}">${esc(isRestDay(d) ? 'rest' : (d.type || dayLabel(days, i).toLowerCase()))}</span>`).join('')}</div>`;
 }
 function vSplits() {
-  const mine = [...S.splits.values()].sort((a, b) => b.updatedAt - a.updatedAt), nx = nextSplitDay();
+  const mine = [...S.splits.values()].sort((a, b) => b.updatedAt - a.updatedAt), nx = nextSplitDay(), inv = invites();
   const card = sp => { const tr = sp.days.filter(d => !isRestDay(d)), exn = tr.reduce((x, d) => x + d.exercises.length, 0), shared = (S.recipients.get(sp.id) || []).length;
     return `<div class="split-card rv"><button class="sc-main" data-act="open-split" data-id="${sp.id}"><div><h3>${esc(sp.name)}</h3><div class="muted" style="font-size:13px;margin-top:2px">${plural(sp.days.length, 'day')} · ${tr.length} training · ${plural(exn, 'exercise')}${sp.copiedFrom ? ` · from ${esc(sp.copiedFrom)}` : ''}${sp.shareToken || shared ? ` · shared` : ''}</div></div>
     ${dayBar(sp.days, nx && nx.sp.id === sp.id ? nx.i : -1)}</button>
     <div class="sc-acts"><button class="btn ghost sm" data-act="open-split" data-id="${sp.id}">${ICON.pen}${roll('Edit')}</button><button class="btn ghost sm" data-act="dup-split" data-id="${sp.id}">${roll('Duplicate')}</button><button class="btn ghost sm" data-act="share-split" data-id="${sp.id}">${ICON.share}${roll('Share')}</button></div></div>`; };
   const tcard = t => `<button class="split-card tpl rv" data-act="tpl-view" data-id="${t.id}"><div><h3>${esc(t.name)}</h3><div class="muted" style="font-size:13px;margin-top:2px">${esc(t.desc)}</div></div>${dayBar(t.plan.map(([ty, ex]) => ({ type: ty, rest: !ex, exercises: [] })))}<div class="lbl">preview & use ↗</div></button>`;
-  const shcard = sp => `<button class="split-card rv" data-act="open-shared" data-id="${sp.id}"><div><h3>${esc(sp.name)}</h3><div class="from" style="margin-top:4px">from @${esc(sp.from || 'someone')} · ${fmtDate(sp.sharedAt)}</div></div>${dayBar(sp.days)}<div class="lbl">view ↗</div></button>`;
+  const shcard = sp => `<div class="split-card inv rv"><button class="sc-main" data-act="open-shared" data-id="${sp.id}"><div><h3>${esc(sp.name)}</h3><div class="from" style="margin-top:4px">from @${esc(sp.from || 'someone')} · ${agoText(sp.sharedAt)} · ${plural(sp.days.filter(d => !isRestDay(d)).length, 'training day')}</div></div>${dayBar(sp.days)}</button>
+    ${sp.message ? `<p class="inv-msg">“${esc(sp.message)}”</p>` : ''}<div class="inv-acts"><button class="btn line" data-act="inv-decline" data-id="${sp.id}">${roll('Decline')}</button><button class="btn" data-act="inv-accept" data-id="${sp.id}">${roll('Accept')}</button></div></div>`;
   return pageTop('Splits') + `
   <div class="rv pagehead" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 6px"><h1 class="h1">Splits</h1><button class="btn" data-act="new-split">${ICON.plus}${roll('New split')}</button></div>
   <p class="muted rv" style="font-size:13px;max-width:60ch">Plan your week: how many days, what each day trains, and the exercises with sets and reps. Start any day as a session, and share the plan with other lifters.</p>
+  ${inv.length ? `<div class="mgroup rv"><span class="lbl">Waiting for you</span><span class="lbl">${inv.length} new</span></div>
+  <div class="split-grid" style="margin:12px 0 18px">${inv.map(shcard).join('')}</div>` : ''}
   <div class="mgroup rv"><span class="lbl">Your splits</span><span class="lbl">${mine.length} of ${SPLIT_MAX}</span></div>
   <div class="split-grid" style="margin-top:12px">${mine.map(card).join('') || `<div class="empty rv"><b>No splits yet.</b>Create one to plan your training days. Push / Pull / Legs is a good place to start.</div>`}</div>
-  <div class="mgroup rv" style="margin-top:18px"><span class="lbl">Shared with you</span><span class="lbl">${S.shared.length}</span></div>
-  <div class="split-grid" style="margin-top:12px">${S.shared.map(shcard).join('') || `<div class="empty rv">When someone shares a split with @${esc(S.profile.username)}, it shows up here.</div>`}</div>
   <div class="mgroup rv" style="margin-top:18px"><span class="lbl">Templates</span><span class="lbl">${TEMPLATES.length}</span></div>
   <p class="muted rv" style="font-size:13px;margin-top:8px">Start from a proven plan. Using one makes your own copy to edit.</p>
   <div class="split-grid" style="margin-top:12px">${TEMPLATES.map(tcard).join('')}</div>`;
@@ -2298,12 +2304,33 @@ function dayCard(d, i, ro, days = [d]) {
     ${d.exercises.length ? `<div class="dex-h lbl"><span>Exercise</span>${cardioDay(d) ? '<span style="grid-column:span 2">Minutes</span>' : '<span>Sets</span><span>Reps</span>'}<span></span></div>${rows}` : `<p class="muted" style="font-size:13px">No exercises yet.</p>`}
     ${glist ? `<div class="groups">${glist}</div>` : ''}${foot}</div>`;
 }
+/* split invitations: shared with me and not yet answered */
+const invites = () => S.shared.filter(x => x.status === 'pending');
+const agoText = t => { const m = Math.round((Date.now() - t) / 6e4); return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? plural(Math.round(m / 60), 'hour') + ' ago' : fmtDate(t); };
 function vShared() {
   const sp = S.shared.find(x => x.id === S.arg);
   if (!sp) return vMissing('This split isn’t shared with you any more.');
+  /* an invitation: look it over, then accept (a copy goes into your splits) or decline */
+  if (sp.status === 'pending') return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Invitation</span></header>
+  ${splitReadOnly(sp, `from @${sp.from || 'someone'} · ${agoText(sp.sharedAt)}`)}
+  ${sp.message ? `<p class="inv-msg rv">“${esc(sp.message)}”</p>` : ''}
+  <div class="done-bar rv inv-acts"><button class="btn line" data-act="inv-decline" data-id="${sp.id}">${roll('Decline')}</button><button class="btn" data-act="inv-accept" data-id="${sp.id}">${roll('Accept')}</button></div>`;
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Shared split</span><button class="btn ghost sm" data-act="remove-shared" data-id="${sp.id}">${roll('Remove')}</button></header>
   ${splitReadOnly(sp, `from @${sp.from || 'someone'} · shared ${fmtDate(sp.sharedAt)}`)}
   <div class="done-bar rv"><button class="btn" data-act="copy-shared" data-id="${sp.id}">${roll('Save a copy to my splits')}</button></div>`;
+}
+/* accepting saves a copy to your splits (there has to be room for it first); declining tells the sender */
+async function answerInvite(id, accept) {
+  const sp = S.shared.find(x => x.id === id); if (!sp || sp.status !== 'pending') return;
+  if (accept && !splitRoom()) return;
+  const { error } = await sb.rpc('respond_share', { p_split: id, p_accept: accept });
+  if (error) { toast(navigator.onLine ? (error.message || 'Couldn’t answer it. Try again.') : 'You’re offline. Connect and try again.'); return loadShared(); }
+  sp.status = accept ? 'accepted' : 'declined';
+  if (!accept) S.shared = S.shared.filter(x => x.id !== id);
+  renderNav();
+  if (accept) return copySplit(sp, sp.from);
+  if (S.view === 'shared') go('splits', null, { replace: true }); else render(false);
+  toast(`Declined. @${sp.from || 'The sender'} will see that.`);
 }
 function splitReadOnly(sp, sub) {
   const tr = sp.days.filter(d => !isRestDay(d)).length;
@@ -2725,6 +2752,7 @@ function ensureExercise(x) {
 /* ================= calendar reminders =================
    A split's training days as weekly events in the phone's own calendar: it reminds before each one, and the
    event's link (/go/<split>/<day>) opens that workout here. Made on the phone as an .ics file, no server. */
+const RESHARE_ICON = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>';
 const CAL_ICON = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
 const WD_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 /* the days that are trained (not rest, not a same-day second session), in order */
@@ -3532,9 +3560,11 @@ async function shareSheet(id) {
     $('#sheet-body').innerHTML = `<div class="sh-h"><h3>Share ${esc(sp.name)}</h3>${xBtn()}</div>
     <div class="form">
       <div><span class="lbl">Send to a Synergym user</span>
-      <form id="sh-form" class="share-row" style="margin-top:8px"><input class="field" id="sh-u" placeholder="@username" autocapitalize="none" spellcheck="false" maxlength="21" autocomplete="off"><button class="btn" type="submit">Share</button></form>
-      <p class="muted" style="font-size:12px;margin-top:6px">They’ll find it under Splits › Shared with you, and can save a copy. Later edits you make show up for them too.</p></div>
-      ${rec.length ? `<div><span class="lbl">Shared with</span><div class="people" style="margin-top:8px">${rec.map(r => `<span class="person">@${esc(r.username)}<button data-unshare="${esc(r.username)}" aria-label="Stop sharing with ${esc(r.username)}">${ICON.x}</button></span>`).join('')}</div></div>` : ''}
+      <form id="sh-form" class="sh-inv" style="margin-top:8px"><div class="share-row"><input class="field" id="sh-u" placeholder="@username" autocapitalize="none" spellcheck="false" maxlength="21" autocomplete="off"><button class="btn" type="submit">Share</button></div>
+      <input class="field" id="sh-msg" placeholder="Add a message (optional)" maxlength="140" autocomplete="off" aria-label="Message (optional)"></form>
+      <p class="muted" style="font-size:12px;margin-top:6px">They get an invitation under Splits and can accept it (a copy is added to their splits) or decline. You’ll see their answer here.</p></div>
+      ${rec.length ? `<div><span class="lbl">Shared with</span><div class="people" style="margin-top:8px">${rec.map(r => { const st = r.status || 'pending';
+        return `<span class="person">@${esc(r.username)}<span class="stt ${st}">${st === 'pending' ? 'waiting' : st}</span>${st === 'declined' ? `<button data-reshare="${esc(r.username)}" aria-label="Invite ${esc(r.username)} again">${RESHARE_ICON}</button>` : ''}<button data-unshare="${esc(r.username)}" aria-label="${st === 'declined' ? `Remove ${esc(r.username)}` : `Stop sharing with ${esc(r.username)}`}">${ICON.x}</button></span>`; }).join('')}</div></div>` : ''}
       <div><span class="lbl">Anyone with the link</span>
       ${link ? `<div class="share-row" style="margin-top:8px"><input class="field" id="sh-link" value="${esc(link)}" readonly><button class="btn" id="sh-copy">Copy</button></div>
         <div class="btns" style="justify-content:flex-start;margin-top:8px">${navigator.share ? '<button class="btn ghost sm" id="sh-native">Share via…</button>' : ''}<button class="btn line sm" id="sh-off" style="color:var(--bad)">Turn off link</button></div>`
@@ -3542,12 +3572,13 @@ async function shareSheet(id) {
     </div>`;
     const r = $('#sheet-body');
     r.querySelector('#sh-form').onsubmit = async e => {
-      e.preventDefault(); const u = r.querySelector('#sh-u').value.trim(); if (!u) return;
+      e.preventDefault(); const u = r.querySelector('#sh-u').value.trim(), msg = r.querySelector('#sh-msg').value.trim(); if (!u) return;
       if (!(await flushNow('sp:' + id))) return toast('Couldn’t save the split first. Check your connection.');
-      const { data, error } = await sb.rpc('share_split', { p_split: id, p_username: u });
+      const { data, error } = await sb.rpc('share_split', { p_split: id, p_username: u, p_message: msg || null });
       if (error) return toast(error.message || 'Couldn’t share');
-      toast(`Shared with @${data}`); await loadRecipients(id); draw();
+      toast(`Invitation sent to @${data}`); await loadRecipients(id); draw();
     };
+    r.querySelectorAll('[data-reshare]').forEach(b => b.onclick = async () => { const { data, error } = await sb.rpc('share_split', { p_split: id, p_username: b.dataset.reshare, p_message: null }); if (error) return toast(error.message || 'Couldn’t share'); toast(`Invitation sent to @${data} again`); await loadRecipients(id); draw(); });
     r.querySelectorAll('[data-unshare]').forEach(b => b.onclick = async () => { const { error } = await sb.rpc('unshare_split', { p_split: id, p_username: b.dataset.unshare }); if (error) return toast('Couldn’t update sharing'); await loadRecipients(id); draw(); });
     r.querySelector('#sh-on')?.addEventListener('click', async () => { sp.shareToken = uuid(); touchSplit(sp, 0); await flushNow('sp:' + id); draw(); soft(); });
     r.querySelector('#sh-off')?.addEventListener('click', async () => { sp.shareToken = null; touchSplit(sp, 0); await flushNow('sp:' + id); draw(); soft(); toast('Link turned off'); });
@@ -3794,6 +3825,9 @@ const ACT = {
   'tpl-view': el => templateSheet(el.dataset.id),
   'dex-menu': el => dexMenu(+el.dataset.day, +el.dataset.x),
   'copy-shared': el => { const sp = S.shared.find(x => x.id === el.dataset.id); if (sp) copySplit(sp, sp.from); },
+  'inv-accept': el => answerInvite(el.dataset.id, true),
+  'inv-decline': el => { const sp = S.shared.find(x => x.id === el.dataset.id); if (!sp) return;
+    confirmSheet(`Decline ${sp.name}?`, `It goes from your Splits, and @${sp.from || 'the sender'} sees that you declined. They can send it again.`, 'Decline', () => answerInvite(sp.id, false)); },
   'remove-shared': el => confirmSheet('Remove shared split?', 'It disappears from your list. The owner keeps it.', 'Remove', async () => {
     const { error } = await sb.from('split_shares').delete().eq('split_id', el.dataset.id).eq('to_user', S.user.id);
     if (error) return toast('Couldn’t remove it. Try again.'); S.shared = S.shared.filter(x => x.id !== el.dataset.id); go('splits', null, { replace: true }); }),
@@ -4280,12 +4314,13 @@ async function startApp() {
     checkDevice(S.profile.activeSession);
     const offered = offerNewWidgets();
     if (offered || dataSig() !== was) { applyProfile(); snapSoon(500); soft(); }
+    loadShared();
     return;
   }
   restoreOutbox();
   try { await loadAll(); }
   catch (e) { console.error(e); S.loadError = navigator.onLine ? (e.message || 'The server didn’t respond.') : 'You’re offline. Connect and try again.'; return render(true); }
-  afterLoad(); offerNewWidgets(); snapSoon(500);
+  afterLoad(); offerNewWidgets(); snapSoon(500); loadShared();
   if (S.claim) { S.claim = false; claimDevice(); } else checkDevice(S.profile.activeSession);
   const t = S.profile.onboarded && pendingPublic();
   if (t) return go('public', t, { replace: true });
