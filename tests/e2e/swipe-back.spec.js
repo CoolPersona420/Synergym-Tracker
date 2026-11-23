@@ -32,7 +32,7 @@ test.describe('installed on an iPhone', () => {
   test('swiping in from the left edge goes back, and names where it goes on the way', async ({ page }) => {
     const fake = new FakeSupabase(benchHistory());
     await login(page, fake, 'A');
-    await page.locator('[data-w="coach"]').click();
+    await page.locator('[data-w="coach"] .co-wc').click();
     await expect(page).toHaveURL(/\/coach$/);
     await page.waitForTimeout(700);
     await down(page, 4);

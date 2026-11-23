@@ -144,7 +144,7 @@ test('the Coach page fits a phone screen without scrolling, one tab at a time', 
   test.skip(info.project.name !== 'phone', 'phone layout');
   const fake = withSplit();
   await login(page, fake, 'A');
-  await page.locator('[data-w="coach"]').click();
+  await page.locator('[data-w="coach"] .co-wc').click();
   await page.waitForSelector('.co-hero');
   const fits = () => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 2 || document.querySelector('.co-foot').getBoundingClientRect().top < innerHeight);
   expect(await fits()).toBe(true);
