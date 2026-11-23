@@ -2255,3 +2255,22 @@ html.kb-open .sheet .sp{max-height:calc(var(--vv-h,100vh) - var(--s-1))}
 .upd .btn:disabled{opacity:.6}
 .upd small{display:block;margin-top:var(--s-1);color:var(--muted);font-size:12px;line-height:1.4}
 @media (prefers-reduced-motion:reduce){.upd-box,.upd-scrim{animation:none}}
+
+/* calendar reminders: the split page's Calendar button (just its icon on a phone) and its sheet */
+@media (max-width:40rem){.cal-btn .cal-l{display:none}.cal-btn{padding-inline:.75rem}}
+.cal-sec{display:grid;gap:8px;margin:var(--s0) 0}
+.cal-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal-days button{height:2.6rem;display:grid;place-items:center;padding:0;border-radius:12px;background:var(--surface-2);font-weight:700;color:var(--ink-2);transition:background .2s,color .2s,transform .2s var(--ease)}
+.cal-days button.on{background:var(--solid);color:var(--solid-ink)}
+.cal-days button:active{transform:scale(.94)}
+.cal-two{grid-template-columns:minmax(0,1fr) auto;gap:var(--s-1);align-items:end}
+.cal-t,.cal-a{display:grid;gap:8px}
+.cal-t .field{height:2.75rem}
+.cal-a .seg{height:2.75rem;align-items:center}
+.cal-wk{display:grid;border-top:1px solid var(--line)}
+.cal-wk > div{display:grid;grid-template-columns:3.4rem minmax(0,1fr) auto;gap:var(--s-1);padding:10px 2px;border-bottom:1px solid var(--line);align-items:baseline}
+.cal-wk b{font-weight:700}
+.cal-wk span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-wk .muted{font-size:.8rem}
+.cal-note{font-size:13px;margin:0}
+.cal-go{width:100%;justify-content:center;margin-top:var(--s0)}

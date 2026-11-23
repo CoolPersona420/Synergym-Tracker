@@ -30,6 +30,7 @@ import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
 import { monthSummary, monthStart } from './lib/month.js';
+import { buildIcs, weekPlan, sessionMinutes, DEFAULT_DAYS } from './lib/ics.js';
 import { trackErrors, startAnalytics } from './lib/telemetry.js';
 
 /* ================= config ================= */
@@ -583,6 +584,7 @@ function parsePath() {
     case 'w': return seg[1] ? ['widget', seg[1]] : ['today'];
     case 'logbook': return ['logbook'];
     case 's': return seg[1] ? ['public', seg[1]] : ['today'];
+    case 'go': return ['go', seg.slice(1).join('/')];
     default: return ['today'];
   }
 }
@@ -628,6 +630,9 @@ const lbHead = (on, cls = '') => `<header class="wf-top lb-top ${cls}"><div><spa
 const lbSwitch = on => `<span class="seg lb-mode" role="tablist" aria-label="Logbook view">${[['logbook', 'Calendar'], ['history', 'List']].map(([v, l]) => `<button role="tab" class="${on === v ? 'on' : ''}" aria-selected="${on === v}" data-act="lb-mode" data-v="${v}">${l}</button>`).join('')}</span>`;
 function route(enter = true) {
   const [v, a] = parsePath();
+  /* a link from a calendar reminder: remember it, show Home, and open the workout once the data is in (after
+     signing in, if need be) */
+  if (v === 'go') { try { localStorage.setItem('sg-go', JSON.stringify({ to: a || '', at: Date.now() })); } catch {} history.replaceState({ d: depth }, '', '/'); return route(enter); }
   const arg = a ? decodeURIComponent(a) : null, changed = v !== S.view || arg !== S.arg, from = S.view;
   if (S.edit && (v !== 'session' || arg !== S.edit.id)) endEdit();
   /* a finished session can be changed wherever it's opened: its Edit button is always there (GitHub issue #3) */
@@ -808,6 +813,7 @@ addEventListener('resize', () => { if (S.view === 'today') sizeDash(); });
    widgets refit with it, frame by frame while the quote eases to its new height */
 const heroFit = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (S.view === 'today') sizeDash(); }) : null;
 function afterRender(entered) {
+  if (S.loaded && S.user && S.profile.onboarded) goPending();
   if (S.view === 'today') { sizeDash(); wireCarousel(); }
   if (S.view === 'logbook') wireLogbook();
   { const sv = S.view === 'session' ? cur() : null, v = $('#view'); v.classList.toggle('s-locked', locked(sv)); v.classList.toggle('s-editing', editing(sv)); }
@@ -2232,7 +2238,7 @@ function vSplits() {
 function vSplit() {
   const sp = S.splits.get(S.arg), rec = S.recipients.get(sp.id), tr = sp.days.filter(d => !isRestDay(d)).length;
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Split</span>
-    <button class="btn ghost sm" data-act="share-split" data-id="${sp.id}">${ICON.share}${roll('Share')}</button><button class="iconbtn" data-act="split-menu" data-id="${sp.id}" aria-label="Split options">${ICON.dots}</button></header>
+    ${trainDays(sp).length ? `<button class="btn ghost sm cal-btn" data-act="cal-split" data-id="${sp.id}" aria-label="Add to calendar">${CAL_ICON}<span class="cal-l">${roll('Calendar')}</span></button>` : ''}<button class="btn ghost sm" data-act="share-split" data-id="${sp.id}">${ICON.share}${roll('Share')}</button><button class="iconbtn" data-act="split-menu" data-id="${sp.id}" aria-label="Split options">${ICON.dots}</button></header>
   <div class="rv" style="margin-top:12px"><textarea class="sp-name autosize" data-f="spname" rows="1" maxlength="60" aria-label="Split name" placeholder="Split name">${esc(sp.name)}</textarea>
   <textarea class="sp-desc" data-f="spdesc" maxlength="1000" placeholder="Describe it: goal, who it suits, how to progress" aria-label="Description">${esc(sp.description)}</textarea></div>
   <div class="toolbar rv" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:12px"><span class="lbl">Days</span><span class="stepper" style="background:var(--surface)"><button data-act="days-step" data-d="-1" aria-label="Remove last day">−</button><span>${sp.days.length}</span><button data-act="days-step" data-d="1" aria-label="Add a day">+</button></span></div>
@@ -2715,6 +2721,90 @@ function ensureExercise(x) {
   if (!e) e = S.library.find(y => y.name.toLowerCase() === x.name.toLowerCase());
   if (!e) { e = { id: uuid(), name: x.name, muscle: x.muscle, kind: x.kind, archived: false, isDefault: false }; S.library.push(e); queue('x:' + e.id, 0); }
   return e;
+}
+/* ================= calendar reminders =================
+   A split's training days as weekly events in the phone's own calendar: it reminds before each one, and the
+   event's link (/go/<split>/<day>) opens that workout here. Made on the phone as an .ics file, no server. */
+const CAL_ICON = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
+const WD_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+/* the days that are trained (not rest, not a same-day second session), in order */
+const trainDays = sp => sp.days.map((d, i) => ({ d, i })).filter(({ d, i }) => !isRestDay(d) && !isSecond(sp.days, i)).map(({ d, i }) => ({ i, title: d.type || `Day ${i + 1}`, n: d.exercises.length, sets: d.exercises.reduce((x, e) => x + (+e.sets || 0), 0), names: d.exercises.map(e => exOf(e.exId)?.name || e.name).filter(Boolean) }));
+/* when you usually start: the middle of your last ten sessions' start times, to the quarter hour; else 18:00 */
+function usualTime() {
+  const m = sorted().slice(0, 10).map(s => { const d = new Date(s.startedAt); return d.getHours() * 60 + d.getMinutes(); }).sort((a, b) => a - b);
+  if (!m.length) return '18:00';
+  const q = Math.round(m[m.length >> 1] / 15) * 15 % 1440;
+  return `${pad(Math.floor(q / 60))}:${pad(q % 60)}`;
+}
+const calKey = id => 'sg-cal:' + id;
+/* a time as this device writes it (18:00 or 6:00 PM), the way the time box beside it shows it */
+const clock = t => { const [h, m] = t.split(':').map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+function calSheet(spid) {
+  const sp = S.splits.get(spid); if (!sp) return;
+  const tr = trainDays(sp); if (!tr.length) return toast('Add a training day to this split first');
+  let st = null; try { st = JSON.parse(localStorage.getItem(calKey(spid)) || 'null'); } catch {}
+  const C = { wd: st?.wd?.length ? st.wd : DEFAULT_DAYS[Math.min(7, tr.length)], time: /^\d\d:\d\d$/.test(st?.time || '') ? st.time : usualTime(), alarm: [15, 30, 60].includes(st?.alarm) ? st.alarm : 30 };
+  const draw = () => {
+    const P = weekPlan(tr, C.wd), n = P.rows.length;
+    $('#sheet-body').innerHTML = `<div class="sh-h"><h3>Add to your calendar</h3>${xBtn()}</div>
+    <p class="muted sh-note">Your phone’s calendar reminds you before each training day, and the reminder’s link opens that workout in Synergym.</p>
+    <div class="cal-sec"><span class="lbl" id="cal-dl">Training days</span>
+      <div class="cal-days" role="group" aria-labelledby="cal-dl">${WD_SHORT.map((d, i) => `<button class="${C.wd.includes(i) ? 'on' : ''}" data-cal-wd="${i}" aria-pressed="${C.wd.includes(i)}" aria-label="${d}">${d[0]}</button>`).join('')}</div></div>
+    <div class="cal-sec cal-two"><label class="cal-t"><span class="lbl">Time</span><input class="field" id="cal-time" type="time" value="${C.time}" step="900"></label>
+      <span class="cal-a"><span class="lbl" id="cal-al">Remind me</span><span class="seg" role="group" aria-labelledby="cal-al">${[[15, '15 min'], [30, '30 min'], [60, '1 h']].map(([v, l]) => `<button class="${C.alarm === v ? 'on' : ''}" data-cal-al="${v}" aria-pressed="${C.alarm === v}">${l}</button>`).join('')}</span></span></div>
+    <div class="cal-sec"><span class="lbl">Your week</span>
+      ${n ? `<div class="cal-wk">${P.rows.map(r => `<div><b>${WD_SHORT[r.wd]}</b><span>${esc(r.day ? r.day.title : 'Training')}</span><span class="muted">${clock(C.time)}${r.day ? ` · ${plural(r.day.n, 'exercise')}` : ''}</span></div>`).join('')}</div>` : `<p class="muted cal-note">Pick the days you train.</p>`}
+      ${n && !P.named ? `<p class="muted cal-note">${esc(sp.name)} has ${plural(tr.length, 'training day')}, so it rotates through the week: each reminder opens whatever is next in it.</p>` : ''}</div>
+    <p class="muted cal-note">Repeats every week. If you change the split or your days, delete these events in your calendar and add them again.</p>
+    <button class="btn cal-go" id="cal-add"${n ? '' : ' disabled'}>${CAL_ICON}<span>${n ? `Add ${plural(n, 'weekly event')}` : 'Add to calendar'}</span></button>`;
+  };
+  openSheet('', r => {
+    draw();
+    r.addEventListener('click', e => {
+      const w = e.target.closest('[data-cal-wd]'), a = e.target.closest('[data-cal-al]');
+      if (w) { const d = +w.dataset.calWd; C.wd = C.wd.includes(d) ? C.wd.filter(x => x !== d) : [...C.wd, d].sort((x, y) => x - y); buzz(6); draw(); }
+      else if (a) { C.alarm = +a.dataset.calAl; draw(); }
+      else if (e.target.closest('#cal-add')) calAdd(sp, tr, C);
+    });
+    r.addEventListener('change', e => { if (e.target.id === 'cal-time' && /^\d\d:\d\d$/.test(e.target.value)) { C.time = e.target.value; draw(); } });
+  });
+}
+function calAdd(sp, tr, C) {
+  const P = weekPlan(tr, C.wd); if (!P.rows.length) return;
+  const avg = Math.round(tr.reduce((x, t) => x + t.sets, 0) / tr.length), base = location.origin + '/go/' + sp.id;
+  const how = '\n\nOn iPhone the link opens in Safari (sign in there once), or open Synergym from your Home Screen.';
+  const events = P.rows.map(r => r.day
+    ? { wd: r.wd, title: `${r.day.title} · Synergym`, url: `${base}/${r.day.i}`, minutes: sessionMinutes(r.day.sets), uid: `${sp.id}-${r.wd}@synergym`,
+        notes: `${sp.name}: ${r.day.title}. ${r.day.names.join(', ')}.\n\nStart it: ${base}/${r.day.i}${how}` }
+    : { wd: r.wd, title: 'Training · Synergym', url: base, minutes: sessionMinutes(avg), uid: `${sp.id}-${r.wd}@synergym`,
+        notes: `${sp.name}: whatever is next in it.\n\nStart it: ${base}${how}` });
+  const ics = buildIcs({ events, time: C.time, alarm: C.alarm });
+  try { localStorage.setItem(calKey(sp.id), JSON.stringify(C)); } catch {}
+  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' })), a = document.createElement('a');
+  a.href = url; a.download = `${(sp.name || 'split').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'split'}-synergym.ics`;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  closeSheet(); toast(`Calendar file ready: open it to add ${plural(events.length, 'event')}`);
+}
+/* the link from a calendar event: the split's day, or ("/go/<split>") whatever is next in that split */
+function goPending() {
+  let p = null; try { p = JSON.parse(localStorage.getItem('sg-go') || 'null'); localStorage.removeItem('sg-go'); } catch {}
+  if (!p || !p.to || Date.now() - p.at > 864e5) return;
+  const [spid, di] = String(p.to).split('/');
+  setTimeout(() => goWorkout(spid, di), 0);
+}
+function goWorkout(spid, di) {
+  const a = activeSession(); if (a) { go('session', a.id); return toast('Your session is still going: here it is'); }
+  const sp = S.splits.get(spid); if (!sp) return toast('That split isn’t in your account any more');
+  const tr = trainDays(sp); if (!tr.length) return go('split', sp.id);
+  let i = di === undefined || di === '' ? NaN : +di;
+  if (!sp.days[i] || isRestDay(sp.days[i])) {
+    /* whatever is next in this split: the day after the last one trained from it, else its first */
+    const last = sorted().find(s => s.splitId === sp.id), k = last ? tr.findIndex(t => t.i > last.splitDay) : 0;
+    i = tr[k >= 0 ? k : 0].i;
+  }
+  const before = activeSession();
+  startFromSplit(sp.id, i);
+  const now = activeSession(); if (now && now !== before) toast(`${sp.days[i].type || 'Workout'} started from your calendar`);
 }
 function startFromSplit(spid, di, force = false) {
   const a = activeSession(); if (a) { toast('Finish your current session first'); return go('session', a.id); }
@@ -3605,6 +3695,7 @@ const ACT = {
   'today-sessions': todaySessions,
   'open-today': el => { closeSheet(); TP && TP.close(); go('session', el.dataset.id); },
   'start-day': el => startFromSplit(el.dataset.sp, +el.dataset.day),
+  'cal-split': el => calSheet(el.dataset.id),
   resume: el => go('session', el.dataset.id || activeSession()?.id),
   /* the Logbook's List is the Logbook: a session opened from it can be changed, as from its Calendar */
   open: el => { if (S.view === 'history') S.lbCtx = el.dataset.id; go('session', el.dataset.id); },

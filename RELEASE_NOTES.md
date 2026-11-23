@@ -10,6 +10,24 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.51-alpha · 23 November 2026
+
+**Reminders in your own calendar**
+
+- **Add a split to your calendar:** the new **Calendar** button on a split (an icon on a phone) puts your training
+  days in your phone's own calendar as weekly events. Pick the weekdays, a time and how early to be reminded, and
+  see the week it makes before adding anything. No account or server is involved: the app makes a calendar file
+  and your phone adds it.
+- **One tap to train:** each event's link opens that day's workout in Synergym, started and ready to log. If a
+  session is already going, it takes you back to it. Signed out, it opens the workout as soon as you sign in.
+- **Never the wrong day:** when a split has as many training days as the weekdays you pick, each event is named
+  (Mon Push, Wed Pull, Fri Legs). When it rotates through the week instead, the events say Training and open
+  whatever is next in the split.
+- **Good to know:** on iPhone, calendar links open in Safari rather than the Home Screen app, so sign in there once,
+  or open Synergym from your Home Screen. After changing a split, delete the old events and add them again.
+
+---
+
 ## 0.1.50-alpha · 23 November 2026
 
 **How much stronger this month**

@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.50, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.51, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.50-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.51-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -47,6 +47,8 @@ The version lives in `package.json` (`0.1.50-alpha`) and shows in Settings › A
   exercise keeps a one-rep max, and beating it offers to save the new one.
 - **Splits:** weekly plans with days, exercises, sets and reps and linked groups; start from a template,
   reorder days, and share by @username or by link. Home suggests the next day, or pick one from Up next.
+  **Calendar** adds a split's training days to the phone's own calendar as weekly events (an .ics file made on the
+  device): pick the weekdays, a time and a reminder; each event's link (/go/…) opens that day's workout, started.
   A day can be marked "same day as" the one before for training twice a day (Day 1 · 2nd session).
   Up to six splits; deleting one keeps its sessions and their split name in the Logbook.
 - **Done for today:** after a finished session Home shows today as completed with the next day waiting;
