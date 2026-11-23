@@ -10,6 +10,25 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.49-alpha · 23 November 2026
+
+**A quicker exercise search, and a clearer reps-left question**
+
+- **A quicker exercise search:** in the exercise picker the title and search stay pinned at the top while the list
+  scrolls under them, so the box never slides away behind the keyboard. Names that start with what you type come
+  first, then names with a word that does, with the matched letters marked; each exercise takes one line, so more
+  fit above the keyboard. A search looks through every muscle (the muscle chips step aside while you type), a ✕
+  clears it, and **Add "…"** for a new exercise sits at the end.
+- **A clearer reps-left question:** after a set is ticked, **How many more could you do?** is one bar from 0 (all
+  out) to 4+ (easy), with a dot on what you answered for that set last time, and **Skip** to put it away.
+- **A steer for the next set:** once you answer, a line says what to do with the next set: all out, consider a
+  step lighter; 1 or 2 left, keep the weight; 3 or more, you could add a step (reps instead, for bodyweight).
+- **Search, then Enter:** the top match is highlighted, and the keyboard's Search key (Enter on a computer) adds it.
+  With no match, it starts a new exercise of that name.
+- **Dots, not jargon:** under a set's number, four dots fill for the reps you had left, in place of "2 RIR".
+
+---
+
 ## 0.1.48-alpha · 21 November 2026
 
 **Update when a new version is out, never mid-session**

@@ -146,10 +146,11 @@ test('reps in reserve: after ticking a set, an optional tap says how many reps w
   await card.locator('.set [data-act="done"]').first().click();
   const ask = card.locator('.rir');
   await expect(ask).toHaveCount(1);
-  await expect(ask).toContainText('Reps left?');
+  await expect(ask).toContainText('How many more could you do?');
   await ask.locator('[data-v="2"]').click();
   await expect(card.locator('.rir')).toHaveCount(0);
-  await expect(card.locator('.sno').first()).toContainText('2 RIR');
+  await expect(card.locator('.sno').first().locator('.tank')).toContainText('2 left');
+  await expect(card.locator('.sno').first().locator('.tank i.f')).toHaveCount(2);
   await expect.poll(() => saved().items[0].sets[0].rir).toBe(2);
   /* ignoring it is fine: ticking the next set moves the question there */
   await card.locator('.set [data-act="done"]').nth(1).click();
@@ -161,12 +162,13 @@ test('reps in reserve: after ticking a set, an optional tap says how many reps w
   await card.locator('.sno').first().click();
   await page.locator('#sheet .menu button', { hasText: 'Reps left (RIR)' }).click();
   await card.locator('.set').first().locator('.rir [data-v="2"]').click();
-  await expect(card.locator('.sno').first()).not.toContainText('RIR');
+  await expect(card.locator('.sno').first().locator('.tank')).toHaveCount(0);
   await expect.poll(() => 'rir' in saved().items[0].sets[0]).toBe(false);
   /* one question at a time: set 3's went when set 1's was asked again. 4 means 4 or more */
   await expect(card.locator('.rir')).toHaveCount(0);
   await card.locator('.sno').nth(2).click();
   await page.locator('#sheet .menu button', { hasText: 'Reps left (RIR)' }).click();
   await card.locator('.set').nth(2).locator('.rir [data-v="4"]').click();
-  await expect(card.locator('.sno').nth(2)).toContainText('4+ RIR');
+  await expect(card.locator('.sno').nth(2).locator('.tank')).toContainText('4+ left');
+  await expect(card.locator('.sno').nth(2).locator('.tank i.f')).toHaveCount(4);
 });

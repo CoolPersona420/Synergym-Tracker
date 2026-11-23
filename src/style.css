@@ -712,6 +712,24 @@ span.dex-min{justify-content:center}
 .pk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-1);align-items:center;padding:var(--s-1) 4px;border-bottom:1px solid var(--line);width:100%}
 .pk .n{font-weight:600}
 .pk .sub{font-size:.8rem;color:var(--muted)}
+/* one line per exercise: the name, then its muscle beside it (wrapping under a long name) */
+.pk-t{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:.5rem;row-gap:2px;min-width:0}
+.pk mark{background:none;color:inherit;font-weight:800;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.pk.first{background:var(--surface-2);border-radius:var(--r-sm);border-bottom-color:transparent;width:calc(100% + var(--s-1));margin-inline:calc(var(--s-2) * -1);padding-inline:calc(var(--s-2) + 4px)}
+.pk-count{display:block;margin:var(--s-2) 4px 2px}
+@media (pointer:coarse) and (not (any-pointer:fine)){.pk-enter{display:none}}
+/* the top of the picker stays put while the list scrolls */
+.pk-top{position:sticky;top:calc(var(--s-1) * -1);z-index:2;margin:calc(var(--s-1) * -1) calc(var(--gr) * -1) 0 calc(var(--gl) * -1);padding:var(--s-1) var(--gr) var(--s-1) var(--gl);background:var(--bg);background-image:var(--page);background-attachment:local;border-bottom:1px solid transparent;transition:border-color .2s}
+.pk-top .sh-h{margin-bottom:var(--s-1)}
+.pk-top #pkm{margin-top:var(--s-1)}
+.pk-top #pkm[hidden]{display:none}
+.q-wrap{position:relative}
+.q-wrap .search{padding-left:2.75rem;padding-right:3rem;-webkit-appearance:none;appearance:none}
+.q-wrap .search::-webkit-search-cancel-button{display:none}
+.q-ico{position:absolute;left:1rem;top:50%;translate:0 -50%;width:18px;height:18px;color:var(--muted);pointer-events:none}
+.q-x{position:absolute;right:.3rem;top:50%;translate:0 -50%;width:2.4rem;height:2.4rem;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);color:var(--ink)}
+.q-x[hidden]{display:none}
+.q-x .ico{width:15px;height:15px;stroke-width:2.4}
 .pk .last{font-weight:700;color:var(--ink-2)}
 /* replacing an exercise: what's kept, then the same muscle's exercises under their own heading */
 .pk-note,.sh-note{font-size:13px;margin:-4px 0 var(--s-1)}
@@ -2175,10 +2193,24 @@ html.ro-dragging,html.ro-dragging *{user-select:none;-webkit-user-select:none;cu
 .ex-f{flex-wrap:wrap}
 
 /* ---------- reps in reserve: the question under a set just ticked, and the answer under its number ---------- */
-.rir{grid-column:1/-1;display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:2px 0 6px 6px}
-.rir .lbl{margin-right:4px}
-.rir .chip{min-width:2.3rem;justify-content:center;padding-inline:.6rem}
-.rir-t{display:block;margin-top:3px;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.04em;color:var(--muted);white-space:nowrap}
+.rir{grid-column:1/-1;margin:4px 0 8px;padding:var(--s-1) var(--s-1) var(--s-2);border-radius:var(--r-md);background:var(--surface-2);animation:rirIn .35s var(--ease) both}
+@keyframes rirIn{from{opacity:0;transform:translateY(-4px)}}
+.rir-h{display:flex;justify-content:space-between;align-items:center;gap:var(--s-1);margin:0 2px var(--s-2)}
+.rir-q{font-weight:700;font-size:.92rem;letter-spacing:-.01em}
+.rir-skip{font-size:.82rem;font-weight:600;color:var(--muted);padding:6px 4px;margin:-6px -4px}
+.rir-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;padding:3px;border-radius:calc(var(--r-sm) + 3px);background:var(--line)}
+.rir-bar button{position:relative;height:2.6rem;display:grid;place-items:center;border-radius:var(--r-sm);background:var(--bg);font-weight:700;font-size:1.05rem;font-variant-numeric:tabular-nums;transition:background .2s,color .2s,transform .2s var(--ease)}
+.rir-bar button:active{transform:scale(.94)}
+.rir-bar button.on{background:var(--solid);color:var(--solid-ink)}
+.rir-bar button.was::after{content:'';position:absolute;bottom:5px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor;opacity:.45}
+.rir-ends{display:flex;justify-content:space-between;margin:6px 2px 0;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.rir-was::before{content:'• '}
+.rir-tip{grid-column:1/-1;margin:2px 0 8px 6px;font-size:.82rem;color:var(--ink-2);animation:rirIn .35s var(--ease) both}
+.tank{display:flex;gap:2px;margin-top:4px}
+.tank i{width:5px;height:5px;border-radius:50%;background:var(--line)}
+.tank i.f{background:var(--ink-2)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.rir,.rir-tip{animation:none}}
 
 /* ---------- a set that looks like a typo: the number in red, a question under it (GitHub issue #3) ---------- */
 .set[data-susk="r"] [data-f="r"],.set[data-susk="w"] [data-f="w"]{border-color:var(--bad);color:var(--bad)}

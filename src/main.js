@@ -1776,7 +1776,7 @@ function exCard(it, gmap) {
   <button class="iconbtn" data-act="item-menu" data-item="${it.id}" aria-label="Exercise options">${ICON.dots}</button></div>
   ${noteLine(ex)}${suggLine(it, bw)}
   <div class="set-head lbl"><span>Set</span><span>${bw ? '+' + unit() : unit()}</span><span>Reps</span><span>Int</span><span></span></div>
-  ${it.wu ? '<p class="wu-note">Warm-ups first · not counted in records, intensity or volume</p>' : ''}<div class="sets">${(it.wu || []).map(wuRow).join('')}${it.sets.map((st, i) => setRow(st, i, gmap)).join('')}</div>
+  ${it.wu ? '<p class="wu-note">Warm-ups first · not counted in records, intensity or volume</p>' : ''}<div class="sets">${(it.wu || []).map(wuRow).join('')}${it.sets.map((st, i) => setRow(st, i, gmap, it)).join('')}</div>
   <div class="ex-f">${!bw && !it.wu && !locked(cur()) && !it.sets.some(x => x.done) ? `<button class="btn ghost sm" data-act="add-wu" data-item="${it.id}">${roll('+ Warm-up')}</button>` : ''}<button class="btn ghost sm" data-act="add-set" data-item="${it.id}">${roll('+ Set')}</button>${it.sets.length ? `<button class="btn line sm" data-act="add-drop" data-set="${it.sets[it.sets.length - 1].id}">${roll('+ Drop')}</button>` : ''}${bw ? '' : `<button class="btn ghost sm ex-plates" data-act="plates" data-item="${it.id}">${roll('Plates')}</button>`}</div></article>`;
 }
 /* A cardio exercise in a session: one bout, with time always and the metrics chosen for it (distance with its
@@ -1854,21 +1854,41 @@ function wuRow(st, i) {
   <span class="int">·</span>
   <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark warm-up not done' : 'Mark warm-up done'}" aria-pressed="${!!st.done}">${ICON.check}</button></div>`;
 }
-function setRow(st, i, gmap) {
+function setRow(st, i, gmap, it) {
   const g = gmap.get(st.id), p = S.A.set.get(st.id), sel = S.link && S.link.has(st.id), ro = locked(cur()) ? ' readonly' : '';
   const sx = suspects().get(st.id);
   return `<div class="set${st.done ? ' done' : ''}${sel ? ' sel' : ''}" data-susk="${sx ? sx.kind : ''}"${S.link ? ` data-act="link-pick" data-set="${st.id}"` : ''}>
-  <button class="sno" data-act="set-menu" data-set="${st.id}" aria-label="Set ${i + 1} options">${i + 1}<span data-gtag="${st.id}">${g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''}</span>${st.rir != null ? `<span class="rir-t">${rirText(st.rir)} RIR</span>` : ''}</button>
+  <button class="sno" data-act="set-menu" data-set="${st.id}" aria-label="Set ${i + 1} options">${i + 1}<span data-gtag="${st.id}">${g ? `<span class="gtag">${g.ab}·${g.letter}</span>` : ''}</span>${st.rir != null ? rirDots(st.rir) : ''}</button>
   <input data-f="w" data-set="${st.id}" inputmode="decimal" enterkeyhint="next" value="${fmtW(st.w)}" placeholder="${st.pw != null ? fmtW(st.pw) : '0'}" aria-label="Weight, set ${i + 1}" autocomplete="off"${ro}>
   <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, set ${i + 1}" autocomplete="off"${ro}>
   <span class="int${p >= 99.5 ? ' top' : ''}" data-int="${st.id}">${setInt(st)}</span>
   <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark set not done' : 'Mark set done'}" aria-pressed="${!!st.done}">${ICON.check}</button>
-  ${prLine(st)}${susLine(st)}${rirAsk(st)}</div>`;
+  ${prLine(st)}${susLine(st)}${rirAsk(st, i, it)}${rirTip(st, it)}</div>`;
 }
 /* reps in reserve: after a working set is ticked, how many more reps were left in it (0 to 4+). Optional: the row
    under the set waits for a tap and goes when the next set is ticked. */
 const rirText = v => v >= 4 ? '4+' : String(v);
-const rirAsk = st => S.rirAsk !== st.id || !st.done || locked(cur()) ? '' : `<div class="rir" role="group" aria-label="Reps left in the tank"><span class="lbl">Reps left?</span>${[0, 1, 2, 3, 4].map(v => `<button class="chip${st.rir === v ? ' on' : ''}" data-act="rir" data-set="${st.id}" data-v="${v}" aria-pressed="${st.rir === v}">${rirText(v)}</button>`).join('')}</div>`;
+/* under a finished set's number: four dots, one filled for each rep that was left (the words are for screen readers) */
+const rirDots = v => `<span class="tank" title="${rirText(v)} left in the tank">${[1, 2, 3, 4].map(k => `<i${v >= k ? ' class="f"' : ''}></i>`).join('')}<span class="vh">${rirText(v)} left</span></span>`;
+/* the question: one bar from "all out" to "easy", with a dot on what this set was last time, and a way to skip it */
+function rirAsk(st, i, it) {
+  if (S.rirAsk !== st.id || !st.done || locked(cur())) return '';
+  const prev = it && lastSetsFor(it.exId, S.arg), was = prev && prev[i] ? prev[i].rir : null;
+  return `<div class="rir" role="group" aria-label="Reps left in the tank"><div class="rir-h"><span class="rir-q">How many more could you do?</span><button class="rir-skip" data-act="rir-skip">Skip</button></div>
+  <div class="rir-bar">${[0, 1, 2, 3, 4].map(v => `<button class="${st.rir === v ? 'on' : ''}${was === v ? ' was' : ''}" data-act="rir" data-set="${st.id}" data-v="${v}" aria-pressed="${st.rir === v}" aria-label="${v === 0 ? 'None, all out' : `${rirText(v)} more`}${was === v ? ', same as last time' : ''}">${rirText(v)}</button>`).join('')}</div>
+  <div class="rir-ends"><span>All out</span>${was != null ? '<span class="rir-was">last time</span>' : ''}<span>Easy</span></div></div>`;
+}
+/* once answered, a one-line steer for the next set of the same exercise: ease off when it was all out, keep it at
+   1 or 2, add a step when there was plenty left. Only while there is a next set, and only until it's ticked. */
+function rirTip(st, it) {
+  if (!S.rirTip || S.rirTip !== st.id || st.rir == null || !it || locked(cur())) return '';
+  const k = it.sets.indexOf(st); if (!it.sets.slice(k + 1).some(x => !x.done)) return '';
+  const ex = exOf(it.exId), bw = ex && ex.kind === 'bw', step = `${loadStep()} ${unit()}`, v = st.rir;
+  const t = v === 0 ? ['All out.', bw ? 'Next set, aim for a rep or two fewer.' : `Next set, consider ${step} less.`]
+    : v <= 2 ? ['Right on target.', 'Keep the weight for the next set.']
+    : ['Plenty left.', bw ? 'Next set, go for a couple more reps.' : `Next set, you could add ${step}.`];
+  return `<p class="rir-tip" role="status"><b>${t[0]}</b> ${t[1]}</p>`;
+}
 /* the question under a set that looks like a typo: Keep it, or take the likely meant number; in a session that's
    only being viewed, Fix it opens it for editing */
 const susVal = x => x.kind === 'r' ? `${x.v} reps` : `${fmtW(x.v)} ${unit()}`;
@@ -2482,15 +2502,21 @@ function removeExercise(id) {
   else confirmSheet(`Delete ${ex.name}?`, 'It has no logged sets, so it is deleted from your list.', 'Delete', () => { S.library = S.library.filter(e => e.id !== id); queue('x:' + id, 0); if (S.view === 'exercise') back(); else render(false); toast('Deleted'); });
 }
 
+const SEARCH_ICON = '<svg class="ico q-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>';
 /* exercise picker (session / split) */
 function openPicker(mode, extra = {}) {
   S.pk = { mode, m: '', q: '', added: 0, ...extra };
   const title = mode === 'session' ? 'Add exercise' : mode === 'replace' ? `Replace ${esc(extra.name)}` : `Add to ${dayLabel(S.splits.get(extra.split)?.days, extra.day)}`;
-  openSheet(`<div class="sh-h"><h3>${title}</h3>${xBtn()}</div>
+  /* the title, search and muscle chips stay pinned while the list scrolls under them; the chips step aside while
+     you type (a search looks through every muscle), and the keyboard's Search/Enter key takes the top match */
+  openSheet(`<div class="pk-top"><div class="sh-h"><h3>${title}</h3>${xBtn()}</div>
   ${mode === 'replace' ? `<p class="muted pk-note">Keeps its place and its ${plural(extra.n, 'set')}. Hints come from the new exercise’s last time.</p>` : ''}
-  <input class="search" id="pkq" placeholder="Search your exercises" autocomplete="off" maxlength="60">
-  <div class="hscroll" id="pkm" style="margin-top:12px"></div><div id="pkl" class="pk-list"></div>`, r => {
-    r.querySelector('#pkq').addEventListener('input', e => { S.pk.q = e.target.value; pickerList(); });
+  <div class="q-wrap">${SEARCH_ICON}<input class="search" id="pkq" type="search" placeholder="Search your exercises" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" maxlength="60" aria-controls="pkl">
+  <button class="q-x" data-act="pk-clear" aria-label="Clear search" hidden>${ICON.x}</button></div>
+  <div class="hscroll" id="pkm"></div></div><div id="pkl" class="pk-list" aria-live="polite"></div>`, r => {
+    const q = r.querySelector('#pkq');
+    q.addEventListener('input', () => { S.pk.q = q.value; pickerList(); });
+    q.addEventListener('keydown', e => { if (e.key !== 'Enter' || e.isComposing) return; e.preventDefault(); $('#pkl .pk')?.click(); });
     pickerList();
   });
 }
@@ -2498,41 +2524,53 @@ function openPicker(mode, extra = {}) {
 const OTHER_EX = { Chest: 'cable press, machine fly', Back: 'chest-supported row, rack pull', Shoulders: 'landmine press, Y-raise', Biceps: 'spider curl, cable curl',
   Triceps: 'JM press, kickback', Quads: 'hack squat, sissy squat', Hamstrings: 'Nordic curl, good morning', Glutes: 'glute bridge, hip abduction', Calves: 'seated calf raise, tibialis raise',
   Core: 'Pallof press, dead bug', 'Full body': 'thruster, sled push' };
+/* search: names that start with what's typed first, then a word in them, then anywhere; the matched letters marked */
+const hitAt = (name, ql) => { const n = name.toLowerCase(); if (n.startsWith(ql)) return 0; const w = n.indexOf(' ' + ql); return w >= 0 ? w + 1 : n.indexOf(ql); };
+const hitRank = (name, ql) => { const i = hitAt(name, ql); return i === 0 ? 0 : i > 0 && name[i - 1] === ' ' ? 1 : 2; };
+function hitName(name, ql) {
+  const i = ql ? hitAt(name, ql) : -1;
+  return i < 0 ? esc(name) : `${esc(name.slice(0, i))}<mark>${esc(name.slice(i, i + ql.length))}</mark>${esc(name.slice(i + ql.length))}`;
+}
 function pickerList() {
   const q = S.pk.q.trim(), ql = q.toLowerCase(), rp = S.pk.mode === 'replace' ? S.pk : null;
   /* a replacement is the same sort as what it replaces: a lift for a lift, cardio for cardio */
-  const m = rp && rp.cardio ? 'Cardio' : S.pk.m, fits = e => !rp || (isCardio(e) === rp.cardio && e.id !== rp.exId);
+  const m = rp && rp.cardio ? 'Cardio' : q ? '' : S.pk.m, fits = e => !rp || (isCardio(e) === rp.cardio && e.id !== rp.exId);
   /* Cardio sits next to All: what's in the library, then the built-in kinds not added yet */
-  $('#pkm').hidden = !!(rp && rp.cardio);
+  $('#pkm').hidden = !!(rp && rp.cardio) || !!q;
+  const qx = $('#sheet-body .q-x'); if (qx) qx.hidden = !S.pk.q;
   $('#pkm').innerHTML = rp && rp.cardio ? '' : ['', ...(rp ? [] : ['Cardio']), ...muscles().filter(x => x !== 'Cardio')].map(x => `<button class="chip${m === x ? ' on' : ''}" data-act="pk-m" data-m="${esc(x)}">${esc(x || 'All')}</button>`).join('');
   const uses = id => S.A.ex.get(id)?.n || S.A.cr.ex.get(id)?.n || 0, sid0 = S.pk.mode === 'session' || rp ? S.arg : null;
   const inSess = rp ? new Set(cur()?.items.map(x => x.exId)) : null;
   const lib = S.library.filter(e => !e.archived && fits(e) && (!m || (m === 'Cardio' ? isCardio(e) || e.muscle === 'Cardio' : e.muscle === m)) && (!ql || e.name.toLowerCase().includes(ql)))
-    .sort((a, b) => uses(b.id) - uses(a.id) || a.name.localeCompare(b.name));
+    .sort((a, b) => (ql ? hitRank(a.name, ql) - hitRank(b.name, ql) : 0) || uses(b.id) - uses(a.id) || a.name.localeCompare(b.name));
   const kinds = m === 'Cardio' || (ql && (!rp || rp.cardio)) ? CARDIO.filter(c => (!ql || c.name.toLowerCase().includes(ql)) && !S.library.some(e => isCardio(e) && !e.archived && e.name.toLowerCase() === c.name.toLowerCase())) : [];
   const exact = q && S.library.some(e => e.name.toLowerCase() === ql);
   const row = e => {
     const here = inSess && inSess.has(e.id) ? ' · in this session' : '';
     if (isCardio(e)) { const b = lastBoutFor(e.id, sid0), du = cMeasure(e).du;
-      return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<br><span class="sub">Cardio${here}</span></span><span class="last">${b ? `${fmtDur(b.t)}${b.d ? ` · ${fmtDist(b.d, du)} ${du}` : ''}` : ''}</span></button>`; }
+      return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span class="pk-t"><span class="n">${hitName(e.name, ql)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<span class="sub">Cardio${here}</span></span><span class="last">${b ? `${fmtDur(b.t)}${b.d ? ` · ${fmtDist(b.d, du)} ${du}` : ''}` : ''}</span></button>`; }
     const last = lastSetsFor(e.id, sid0);
     const t = last ? last.reduce((b, st) => e1rm(loadOf(st, e), st.r) > e1rm(loadOf(b, e), b.r) ? st : b, last[0]) : null;
-    return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<br><span class="sub">${esc(e.muscle)}${e.kind === 'bw' ? ' · bodyweight' : ''}${here}</span></span><span class="last">${t ? `${fmtW(+t.w || 0)}×${t.r}` : ''}</span></button>`;
+    return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span class="pk-t"><span class="n">${hitName(e.name, ql)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<span class="sub">${esc(e.muscle)}${e.kind === 'bw' ? ' · bodyweight' : ''}${here}</span></span><span class="last">${t ? `${fmtW(+t.w || 0)}×${t.r}` : ''}</span></button>`;
   };
   let h = '';
-  if (q && !exact) h += `<button class="pk" data-act="pk-new"><span><span class="n">Add “${esc(q)}”</span><br><span class="sub">New exercise in your list</span></span><span class="lbl">new</span></button>`;
+  const addNew = q && !exact ? `<button class="pk" data-act="pk-new"><span class="pk-t"><span class="n">Add “${esc(q)}”</span><span class="sub">New exercise in your list</span></span><span class="lbl">new</span></button>` : '';
   /* replacing a lift, with nothing typed or picked: the ones for the same muscle first */
   const same = rp && !rp.cardio && !m && !q && rp.muscle ? lib.filter(e => e.muscle === rp.muscle) : [];
   if (same.length) {
     const other = lib.filter(e => e.muscle !== rp.muscle);
     h += `<span class="lbl pk-sec">Also works ${esc(rp.muscle.toLowerCase())}</span>${same.map(row).join('')}${other.length ? `<span class="lbl pk-sec">Everything else</span>${other.map(row).join('')}` : ''}`;
   } else h += lib.map(row).join('');
-  h += kinds.map(c => `<button class="pk" data-act="pk-cardio" data-k="${c.key}"><span><span class="n">${esc(c.name)}</span><br><span class="sub">Cardio</span></span><span class="lbl">add</span></button>`).join('');
-  if (m === 'Cardio' && !q) h += `<button class="pk" data-act="pk-new"><span><span class="n">Other cardio…</span><br><span class="sub">Name your own: assault bike, hiking, a class</span></span><span class="lbl">new</span></button>`;
+  h += kinds.map(c => `<button class="pk" data-act="pk-cardio" data-k="${c.key}"><span class="pk-t"><span class="n">${hitName(c.name, ql)}</span><span class="sub">Cardio</span></span><span class="lbl">add</span></button>`).join('');
+  if (m === 'Cardio' && !q) h += `<button class="pk" data-act="pk-new"><span class="pk-t"><span class="n">Other cardio…</span><span class="sub">Name your own: assault bike, hiking, a class</span></span><span class="lbl">new</span></button>`;
   /* every muscle group ends with a way to add your own to it, already filed under that group */
-  else if (m && !q) h += `<button class="pk pk-other" data-act="pk-new"><span><span class="n">Other ${esc(m.toLowerCase())} exercise…</span><br><span class="sub">${OTHER_EX[m] ? `Name your own: ${OTHER_EX[m]}` : `Name your own and it’s filed under ${esc(m)}`}</span></span><span class="lbl">new</span></button>`;
+  else if (m && !q) h += `<button class="pk pk-other" data-act="pk-new"><span class="pk-t"><span class="n">Other ${esc(m.toLowerCase())} exercise…</span><span class="sub">${OTHER_EX[m] ? `Name your own: ${OTHER_EX[m]}` : `Name your own and it’s filed under ${esc(m)}`}</span></span><span class="lbl">new</span></button>`;
+  /* while searching: how many matched, the best one marked as what Enter picks, and adding a new one last */
+  if (q) { const n = lib.length + kinds.length;
+    h = (n ? `<span class="lbl pk-count">${n} ${n === 1 ? 'match' : 'matches'}<span class="pk-enter"> · ↵ picks the first</span></span>` : '') + h + addNew; }
   if (!h) h = `<div class="empty">No exercises match. Type a name to add a new one.</div>`;
   $('#pkl').innerHTML = h;
+  if (q) $('#pkl .pk')?.classList.add('first');
 }
 function picked(ex) {
   if (S.pk.mode === 'session') { closeSheet(); addExercise(ex.id); }
@@ -2739,7 +2777,7 @@ function addDrop(setId) {
 }
 function toggleDone(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
-  if (st.done) { st.done = false; if (S.rirAsk === st.id) S.rirAsk = null; queue('s:' + s.id, 300); render(false); return; }
+  if (st.done) { st.done = false; if (S.rirAsk === st.id) S.rirAsk = null; if (S.rirTip === st.id) S.rirTip = null; queue('s:' + s.id, 300); render(false); return; }
   const ex = exOf(f.it.exId);
   if (f.wu) {
     if (st.w == null && st.pw != null) st.w = st.pw;
@@ -2759,7 +2797,7 @@ function toggleDone(setId) {
   if (st.w == null && st.pw != null) st.w = st.pw;
   if (st.r == null && st.pr != null) st.r = st.pr;
   if (!(+st.r > 0)) { render(false); return toast('Add reps first'); }
-  st.done = true; S.rirAsk = st.id; queue('s:' + s.id, 300); buzz(12);
+  st.done = true; S.rirAsk = st.id; S.rirTip = null; queue('s:' + s.id, 300); buzz(12);
   let nextName = null;
   if (st.g && !s.endedAt) { const g = groupsOf(s).find(x => x.g === st.g); if (g) { const idx = g.m.findIndex(x => x.st.id === st.id); const nxt = g.m.slice(idx + 1).find(x => !x.st.done); if (nxt) nextName = exOf(nxt.it.exId)?.name; } }
   render(false);
@@ -3173,7 +3211,7 @@ function setMenu(setId) {
   const items = [...plates, ...(isCardio(ex) ? [] : [{ label: 'Superset with…', hint: 'a set of another exercise', fn: () => supersetSheet(setId) }]),
     { label: 'Add drop set after this', hint: '80% weight', fn: () => addDrop(setId) },
     { label: 'Duplicate set', fn: () => { const c = { ...clone(st), id: sid(), done: false, g: null }; delete c.rir; f.it.sets.splice(f.i + 1, 0, c); queue('s:' + s.id, 300); render(false); } }];
-  if (st.done && !isCardio(ex)) items.push({ label: 'Reps left (RIR)', hint: st.rir != null ? rirText(st.rir) : 'how many more you had', fn: () => { S.rirAsk = st.id; render(false); } });
+  if (st.done && !isCardio(ex)) items.push({ label: 'Reps left (RIR)', hint: st.rir != null ? rirText(st.rir) : 'how many more you had', fn: () => { S.rirAsk = st.id; S.rirTip = null; render(false); } });
   if (st.g) items.push({ label: 'Unlink from group', fn: () => { st.g = null; cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
   items.push({ label: 'Delete set', warn: true, fn: () => { f.it.sets.splice(f.i, 1); cleanGroups(s); queue('s:' + s.id, 300); render(false); } });
   menuSheet(`${exOf(f.it.exId)?.name || 'Set'} · set ${f.i + 1}`, items);
@@ -3553,6 +3591,7 @@ const ACT = {
     { label: S.showArchived ? 'Hide removed exercises' : 'Show removed exercises', fn: () => { S.showArchived = !S.showArchived; render(false); } }
   ]),
   'pk-m': el => { S.pk.m = el.dataset.m; pickerList(); },
+  'pk-clear': () => { const q = $('#pkq'); q.value = S.pk.q = ''; pickerList(); q.focus(); },
   'pk-pick': el => picked(exOf(el.dataset.id)),
   'pk-cardio': el => { const ex = ensureCardio(el.dataset.k); if (ex) picked(ex); },
   'c-m': el => cardioMetric(el.dataset.item, el.dataset.k),
@@ -3572,7 +3611,8 @@ const ACT = {
   'sus-edit': () => { const s = cur(); if (!s || !locked(s)) return; startEdit(); },
   'sus-open': el => editFromRow(el.dataset.id),
   rir: el => { const s = cur(), f = s && findSet(s, el.dataset.set); if (!f || f.wu || locked(s)) return; const v = +el.dataset.v;
-    f.st.rir = f.st.rir === v ? null : v; if (f.st.rir == null) delete f.st.rir; S.rirAsk = null; queue('s:' + s.id, 300); buzz(8); render(false); },
+    f.st.rir = f.st.rir === v ? null : v; if (f.st.rir == null) delete f.st.rir; S.rirAsk = null; S.rirTip = f.st.rir != null ? f.st.id : null; queue('s:' + s.id, 300); buzz(8); render(false); },
+  'rir-skip': () => { S.rirAsk = null; render(false); },
   'ex-note': el => noteSheet(el.dataset.id),
   'sugg-use': el => useSuggestion(el.dataset.item),
   plates: el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); const st = it && [...it.sets].reverse().find(x => (x.w ?? x.pw) > 0); plateSheet(st ? st.w ?? st.pw : (el.dataset.w ? +el.dataset.w : null)); },

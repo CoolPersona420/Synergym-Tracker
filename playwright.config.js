@@ -9,7 +9,8 @@ export default defineConfig({
   timeout: 60000,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  use: { baseURL: 'http://localhost:4173', serviceWorkers: 'block' },
+  /* PW_CHROMIUM points at a Chromium already on the machine, when the pinned one isn't installed */
+  use: { baseURL: 'http://localhost:4173', serviceWorkers: 'block', ...(process.env.PW_CHROMIUM ? { launchOptions: { executablePath: process.env.PW_CHROMIUM } } : {}) },
   projects: [
     { name: 'phone', use: { ...devices['Pixel 7'] } },
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } }

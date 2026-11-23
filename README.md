@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.48, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.49, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.48-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.49-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -18,7 +18,11 @@ The version lives in `package.json` (`0.1.48-alpha`) and shows in Settings › A
   toward records, intensity or volume); drag an exercise by its grip to reorder it (sessions and split days); an
   exercise can keep a note (seat, grip, setup) that shows on its card in every session. **Finish** shows a summary:
   intensity, volume, sets, time, the change on last time, records and the best set, with **Undo finish**.
-  After a set is ticked, an optional **Reps left?** (0–4+, reps in reserve) is saved with it and shown under its number.
+  After a set is ticked, an optional **How many more could you do?** (0–4+, reps in reserve) is answered on one bar
+  from all out to easy, with last time's answer marked and **Skip**; it's saved with the set, shown as dots under its
+  number, and gives a one-line steer for the next set (ease off, keep the weight, or add a step).
+  The exercise picker's search stays pinned while the list scrolls, lists names that start with what's typed first
+  (matched letters marked), searches every muscle, and the keyboard's Search/Enter key adds the top match.
   A number far beyond the usual (30+ reps and over three times the exercise's typical, or a weight over 2.5 times its
   heaviest) asks **Keep** or **Make it …** before it counts, and is left out of records, estimated maxes, volume and the
   coach until then; past ones are listed on the exercise's page with **Fix it**.
