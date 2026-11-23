@@ -8,7 +8,7 @@ import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
 import { DEFAULT_EXERCISES } from './data/exercises.js';
 import { reduced, LITE, isIOS } from './lib/env.js';
-import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, deck, roll, toast } from './lib/util.js';
+import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays, cleanKind } from './lib/sanitize.js';
 import { CARDIO, METRICS, howOf, defaultMetrics, parseTime, fmtDur, fmtMin, distUnit, fmtDist, parseDist, pace, fmtPace, effortInt, effortWord, scanCardio, CARDIO_LABEL } from './lib/cardio.js';
 import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
@@ -17,7 +17,6 @@ import { ICON, brand, lockup, big, disp, countUp } from './ui/brand.js';
 import { THEMES, themePref, isDark, applyTheme, markDark, themePicker } from './ui/themes.js';
 import { SPL, QS, setSplashHooks, splashIn, splashOut, quickIn, quickOut } from './ui/splash.js';
 import { TEMPLATES, recommendTemplate } from './data/templates.js';
-import { QUOTES } from './data/quotes.js';
 import { guideSections, tourSlides } from './ui/guide.js';
 import { rubberBand } from './ui/rubber.js';
 import { edgeBack } from './ui/edgeback.js';
@@ -809,8 +808,7 @@ function sizeDash() {
   d.style.setProperty('--dash-h', Math.max(15 * 16, Math.floor(innerHeight - (d.getBoundingClientRect().top + scrollY) - below - dock)) + 'px');
 }
 addEventListener('resize', () => { if (S.view === 'today') sizeDash(); });
-/* the greeting can change height after it's drawn (tapping the quote for another, its font arriving), so the
-   widgets refit with it, frame by frame while the quote eases to its new height */
+/* the greeting can change height after it's drawn (its font arriving), so the widgets refit with it */
 const heroFit = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (S.view === 'today') sizeDash(); }) : null;
 function afterRender(entered) {
   if (S.loaded && S.user && S.profile.onboarded) goPending();
@@ -1064,24 +1062,9 @@ async function setUsername(raw) {
 }
 const pendingPublic = () => { try { const t = localStorage.getItem('sg-open-split'); localStorage.removeItem('sg-open-split'); return t; } catch { return null; } };
 
-/* greeting and quote vary per visit, but stay put while you use the app */
+/* the greeting varies per visit, but stays put while you use the app */
 const SEED = Math.random();
 const pick = (arr, salt = 0) => arr[Math.floor(((SEED * 9301 + salt * 49297) % 1) * arr.length)];
-/* tapping the quote deals the next one: the words fade, the box eases to its new height, the new words fade in */
-const QD = deck(QUOTES.length);
-function nextQuote(fig) {
-  QD.next();
-  /* taps during a swap just move further along; the swap shows wherever it got to */
-  if (fig._swap) return;
-  const put = () => { const [t, a] = QUOTES[QD.current()]; fig.querySelector('blockquote').textContent = t; fig.querySelector('.q-a').textContent = a; };
-  if (reduced) return put();
-  fig._swap = true; fig.classList.add('out');
-  setTimeout(() => {
-    const h0 = fig.offsetHeight; put(); const h1 = fig.offsetHeight;
-    fig.classList.remove('out'); fig._swap = false;
-    if (h0 !== h1) fig.animate({ height: [`${h0}px`, `${h1}px`], overflow: ['hidden', 'hidden'] }, { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
-  }, 170);
-}
 /* up-next dropdown: desktop shows a small pill over the day name; phones show one outlined field holding both */
 const pickBtn = (label, day, sub, o = {}) => `<button class="what what-pick${o.cls ? ' ' + o.cls : ''}" ${o.attrs || 'data-act="next-pick" aria-haspopup="dialog" aria-expanded="false"'} aria-label="${o.aria || 'Change what’s up next'}">
   <span class="wp-d" aria-hidden="true"><span class="wp-chip"><span class="wp-t">${label}</span>${o.deskIcon === false ? '' : `<i class="dd">${o.icon || ICON.down}</i>`}</span><b>${day}</b></span>
@@ -1118,7 +1101,7 @@ function vToday() {
     /* trained today: show it as done; the split's next day waits for the next visit */
     const last = done[0], tot = done.reduce((t, x) => { const q = S.A.sess.get(x.id); return q ? { sets: t.sets + q.sets, vol: t.vol + q.vol } : t; }, { sets: 0, vol: 0 });
     lines = [pick([`Nice work, ${hi},`, `Well done, ${hi},`, `Good work, ${hi},`], 9), ...pick([['today’s work', '<em>is done</em>.'], ['session', '<em>complete</em>.'], ['that’s a wrap', '<em>for today</em>.']], 7)];
-    cta = `<div class="what done-today"><span class="dt-field"><span class="dt-t"><i>Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</i><b>${done.slice().reverse().map(x => esc(sessName(x))).join(' + ')}</b></span><span class="dt-c" aria-hidden="true">${ICON.check}</span></span><span>${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></div>
+    cta = `<div class="what done-today"><span class="dt-field"><span class="dt-t"><i>Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</i><b>${done.slice().reverse().map(x => esc(sessName(x))).join(' + ')}</b><span class="dt-s">${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></span><span class="dt-c" aria-hidden="true">${ICON.check}</span></span></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${done.length > 1 ? `<button class="btn line sm" data-act="today-sessions">View sessions</button>` : `<button class="btn line sm" data-act="open" data-id="${last.id}">View session</button><button class="btn line sm" data-act="second">${ICON.plus}Second session</button>`}</div>`;
   } else if (isRestToday()) {
     lines = [pick([`Hey ${hi},`, `Easy does it, ${hi},`, `Rest well, ${hi},`], 10), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
@@ -1142,11 +1125,11 @@ function vToday() {
     cta = `<div class="what"></div>
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   }
-  const [qt, qa] = QUOTES[QD.current()], ents = homeEntries(), spans = packSpans(ents.map(e => WSPAN[e.size])), ws = ents.map(e => e.id);
+  const ents = homeEntries(), spans = packSpans(ents.map(e => WSPAN[e.size])), ws = ents.map(e => e.id);
   return pageTop('Home', '', false) + `
   <section class="hero rv">
     <div class="hero-top"><div><button class="lbl eyebrow ts-open" data-act="today-sum" aria-label="Today’s summary" aria-haspopup="dialog">${DAYS[now.getDay()].toLowerCase()} · ${fmtDate(now)} · <span data-now="t">${fmtTime(now)}</span>${ICON.down}</button>${disp(lines)}</div>
-      <figure class="quote" data-act="quote-next" role="button" tabindex="0" aria-live="polite" title="Another quote"><blockquote>${esc(qt)}</blockquote><figcaption><span class="q-a">${esc(qa)}</span><i class="q-next" aria-hidden="true">${ICON.shuffle}</i></figcaption></figure></div>
+</div>
     <div class="hero-cta">${cta}</div>
   </section>
   ${ws.length ? `<div class="dash" id="dash">${ents.map((e, i) => wCard(e.id, phoneDash() ? 'm' : e.size, spans[i])).join('')}</div>
@@ -3691,7 +3674,6 @@ const ACT = {
   'goal-new': el => goalSheet(el.dataset.id || null),
   'coach-switch': () => { S.profile.coachOn = !coachOn(); queue('p', 0); render(false); toast(coachOn() ? 'Coach on. Its card is back on Home.' : 'Coach off. Switch it back on in Settings any time.'); },
   'coach-close': () => back(),
-  'quote-next': el => nextQuote(el),
   /* the plan is the Coach's first tab, so it gets the plain /coach address */
   'coach-go': el => { const t = el.dataset.t || 'plan'; S.coachTab = t; go('coach', t === 'plan' ? null : t); },
   /* a day's square on the heat map: that day, in the Logbook */
@@ -3885,7 +3867,7 @@ const ACT = {
 };
 /* app feel on phones: a light haptic tick on key taps (Android; iOS has no web vibration) */
 const coarse = matchMedia('(pointer:coarse)');
-const BUZZ = new Set(['day-move', 'w-open', 'w-close', 'coach-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install', 'quote-next']);
+const BUZZ = new Set(['day-move', 'w-open', 'w-close', 'coach-close', 'nav', 'start', 'start-menu', 'start-day', 'resume', 'dash-go', 'unit', 'install']);
 const buzz = (ms = 8) => { if (!coarse.matches || reduced) return; try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
 /* what changes a session; on a finished one these wait for Edit */
 const LOCKED_ACTS = new Set(['add-ex', 'add-set', 'add-drop', 'done', 'sugg-use', 'link-toggle', 'link-pick', 'link-do', 'unlink', 'c-m', 'c-eff']);

@@ -274,13 +274,9 @@ header.top{display:flex;justify-content:space-between;align-items:center;gap:var
   /* a compact greeting, so the widgets show at first glance: still the bold display type, about two thirds the size */
   .hero .display{font-size:clamp(1.65rem,7.4vw,2.15rem);margin-top:var(--s-2)}
   .hero .hero-top{gap:var(--s-1)}
-  .hero .quote{padding-left:var(--s-1)}
-  .hero .quote blockquote{font-size:.92rem;line-height:1.38}
-  .hero .quote figcaption{margin-top:3px}
   .hero .hero-cta{margin-top:var(--s-1);padding-top:var(--s-1)}
 }
-/* short phones (iPhone SE and smaller): the quote gives way to the widgets */
-@media (max-width:47.99rem) and (max-height:740px){.hero .quote{display:none}}
+
 @media (min-width:48rem){
   .hero{display:grid;grid-template-columns:1.618fr 1fr;column-gap:var(--s2);padding:var(--s2)}
   .hero .statgrid{margin-top:0;align-self:end}
@@ -1110,7 +1106,7 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
 }
 
 /* ======================================================================
-   Home v3: board without dots, quote, five stats, widgets, fluid controls
+   Home v3: board without dots, five stats, widgets, fluid controls
    ====================================================================== */
 .hero-art{display:none}
 .statgrid{grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--s1) var(--s0)}
@@ -1118,19 +1114,8 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
 .stat.hi{grid-column:span 3}
 .stat:not(.hi) .n{font-size:clamp(1.9rem,7vw,2.4rem)}
 .stat:not(.hi) .l{font-size:.85rem}
-.quote{margin:var(--s1) 0 0;max-width:34rem;padding-left:var(--s0);border-left:2px solid var(--line)}
-.quote blockquote{margin:0;font-family:var(--font-serif);font-style:italic;font-weight:300;font-size:clamp(1.02rem,3.6vw,1.2rem);line-height:1.45;color:var(--ink-2)}
-.quote blockquote::before{content:"“"}.quote blockquote::after{content:"”"}
-.quote figcaption{margin-top:6px;font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.quote figcaption::before{content:"— "}
-#view.enter .quote{animation:rise 1s var(--ease) .45s both}
 /* tap for another: a quiet shuffle mark by the name; the words fade out and back in */
-.quote[data-act]{cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;transition:border-color .2s}
-.quote blockquote,.quote figcaption{transition:opacity .17s var(--ease),transform .17s var(--ease)}
-.quote.out blockquote,.quote.out figcaption{opacity:0;transform:translateY(-3px)}
-.quote figcaption{display:flex;align-items:center;gap:6px}
 .q-next{display:inline-flex;opacity:.55;transition:opacity .2s}.q-next .ico{width:13px;height:13px}
-@media (hover:hover){.quote[data-act]:hover{border-left-color:var(--accent)}.quote[data-act]:hover .q-next{opacity:1}}
 
 /* widgets */
 @media (min-width:48rem){#dash{grid-auto-flow:row dense}}
@@ -1314,14 +1299,9 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 .split-card{min-width:0}
 .split-card > *{min-width:0;max-width:100%}
 
-/* Home board without the stat block: greeting and quote share the top row, the + row sits below */
+/* Home board without the stat block: the greeting across the top, the + row below it */
 .hero{display:block!important}
 .hero-top{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s1)}
-.hero-top .quote{margin-top:0}
-@media (min-width:48rem){
-  .hero-top{grid-template-columns:minmax(0,1.618fr) minmax(0,1fr);align-items:end;gap:var(--s2)}
-  .hero-top .quote{justify-self:end;max-width:24rem;margin-bottom:.4rem}
-}
 .hero .hero-cta{margin-top:var(--s1)}
 
 /* phones: no top title bar on any page; a solid strip keeps content from showing behind the status bar */
@@ -2292,3 +2272,11 @@ html.kb-open .sheet .sp{max-height:calc(var(--vv-h,100vh) - var(--s-1))}
 .person .stt.accepted{color:var(--good)}.person .stt.pending{color:var(--ink-2)}.person .stt.declined{color:var(--bad)}
 /* in the computer's sidebar the count sits at the end of the Splits row */
 @media (min-width:60rem){.nav-badge{top:50%;left:auto;right:10px;translate:0 -50%}}
+
+/* the day's numbers sit inside the card of the session they describe */
+.hero-cta .done-today .dt-t .dt-s{font-size:.8rem;color:var(--hero-ink-2);line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* phone Home: one even rhythm from the greeting down to the first widget */
+@media (max-width:47.99rem){
+  .hero .hero-cta{margin-top:var(--s0);padding-top:var(--s0);gap:.75rem}
+  .hero{margin-bottom:var(--s-2)}
+}

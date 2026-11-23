@@ -1,9 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { FakeSupabase, login, benchHistory } from './fake-supabase.js';
-import { QUOTES } from '../../src/data/quotes.js';
 
 const phoneOnly = info => test.skip(info.project.name !== 'phone', 'phone only');
-const LONGEST = QUOTES.reduce((a, b) => b[0].length > a[0].length ? b : a)[0];
 
 test('online onboarding: six steps, theme choice saved, then the tour', async ({ page }) => {
   const fake = new FakeSupabase({ profile: { onboarded: false, username: null, display_name: null } });
@@ -180,8 +178,6 @@ test('phone: a compact greeting, so the first widget starts in the top 40% of th
     const page = await (await browser.newContext({ viewport: { width, height }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })).newPage();
     await login(page, new FakeSupabase(benchHistory()), 'A');
     await page.waitForTimeout(900);
-    /* measured with the longest quote, wherever the shuffle starts */
-    await page.evaluate(t => { const b = document.querySelector('.hero .quote blockquote'); if (b) b.textContent = t; }, LONGEST);
     const m = await page.evaluate(() => {
       const r = el => el.getBoundingClientRect(), q = s => document.querySelector(s);
       const fab = [r(q('.nav-train')), ...(q('.nav-train .nl') ? [r(q('.nav-train .nl'))] : [])];
@@ -200,33 +196,6 @@ test('a widget opened full screen shows the page itself, not a flat block', asyn
   await page.goto('/w/week');
   await expect(page.locator('.wfull')).toBeVisible();
   expect(await page.locator('.wfull').evaluate(e => { const c = getComputedStyle(e); return [c.backgroundColor, c.backgroundImage]; })).toEqual(['rgba(0, 0, 0, 0)', 'none']);
-});
-
-test('tapping the Home quote deals another: each quote once before any repeats, with its own author, by key too', async ({ page }, info) => {
-  await login(page, new FakeSupabase({ ...benchHistory(), profile: { widgets: ['week:s', 'intensity:l', 'recent:m', 'bw:s'] } }), 'A');
-  const q = page.locator('.hero .quote'), by = new Map(QUOTES), phone = info.project.name === 'phone';
-  await expect(q).toBeVisible();
-  await expect(q).toHaveAttribute('role', 'button');
-  const now = async () => [await q.locator('blockquote').textContent(), await q.locator('.q-a').textContent()];
-  /* on phones the widgets refit as the quote changes height: Edit home stays just above the + button */
-  const gap = () => page.evaluate(() => { const e = document.querySelector('#view .home-edit').getBoundingClientRect(), n = document.querySelector('#nav'); return Math.round(Math.min(n.getBoundingClientRect().top, n.querySelector('.nav-train').getBoundingClientRect().top) - e.bottom); });
-  const seen = [await now()];
-  for (let i = 1; i < QUOTES.length; i++) {
-    await q.click();
-    await expect.poll(async () => (await now())[0]).not.toBe(seen[i - 1][0]);
-    seen.push(await now());
-    if (phone) { await page.waitForTimeout(350); const g = await gap(); expect(g, seen[i][0]).toBeGreaterThanOrEqual(0); expect(g, seen[i][0]).toBeLessThan(60); }
-  }
-  expect(new Set(seen.map(s => s[0])).size).toBe(QUOTES.length);
-  for (const [t, a] of seen) expect(a, t).toBe(by.get(t));
-  /* round two starts with a different quote from the last one shown */
-  await q.focus(); await page.keyboard.press('Enter');
-  await expect.poll(async () => (await now())[0]).not.toBe(seen.at(-1)[0]);
-  /* the quote stays put while the page redraws */
-  const kept = (await now())[0];
-  await page.click('[data-act="rest-today"]');
-  await expect(page.locator('[data-act="rest-undo"]')).toBeVisible();
-  expect((await now())[0]).toBe(kept);
 });
 
 test('switching theme updates the dock at once: the dark marker follows the theme just chosen', async ({ page }, info) => {

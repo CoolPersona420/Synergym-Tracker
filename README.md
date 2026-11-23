@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.1.52, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.1.53, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.1.52-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.1.53-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -57,7 +57,7 @@ The version lives in `package.json` (`0.1.52-alpha`) and shows in Settings › A
   starting again that day asks first, unless the split plans a second session. Two sessions a day at most.
 - **Rest days:** mark today as a rest day on Home; the start button turns into a moon and stars, and no
   session can be started until the rest day is undone.
-- **Home:** a greeting and a quote (tap it for another: Stoics, Dorian Yates, CBum and more), the next session, and widgets you choose and size: the coach, this week's summary, this month against last
+- **Home:** a greeting, the next session (once you've trained, today's session with its sets and volume), and widgets you choose and size: the coach, this week's summary, this month against last
   (how much stronger by each lift's best estimated 1RM, with sessions and volume against the same days; in a month's
   first five days it looks back at the month just gone),
   bodyweight trend, intensity, consistency (a year of it on a phone in two rows of half a year), volume, muscle focus, records, top lifts and your week's plan.
@@ -194,7 +194,7 @@ without minifying (`npx vite build --minify false && npx vite preview`) and reco
 | `src/lib/` | logic with no UI: the coach, progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, error reports and stats |
 | `public/sw.js` | the service worker: the offline app shell |
 | `src/ui/` | brand and icons, themes, the login and open splashes, the user guide, and the gestures: sliding along the dock (`dockdrag.js`) and along switches (`segdrag.js`), swiping rows (`swiperow.js`), the iPhone edge-swipe back (`edgeback.js`), the pull-down today panel (`toppanel.js`) and the rubber-band page (`rubber.js`) |
-| `src/data/` | starter split templates, quotes |
+| `src/data/` | starter split templates |
 
 ## Offline mode (phone app)
 

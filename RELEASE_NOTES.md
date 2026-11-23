@@ -10,6 +10,19 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.1.53-alpha · 23 November 2026
+
+**A calmer Home**
+
+- **No more quotes:** Home's greeting stands on its own, without the motivational quote under it. On a computer
+  the greeting now runs across the full width instead of sharing it with the quote.
+- **Even spacing on phones:** the greeting, today's card, its buttons and your first widget now sit at an even
+  distance from each other, so your widgets start higher on the screen.
+- **Today's numbers in their card:** once you've trained, the sets, volume and what's next show inside the
+  "Completed today" card, under the session they describe.
+
+---
+
 ## 0.1.52-alpha · 23 November 2026
 
 **Split invitations**
