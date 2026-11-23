@@ -46,15 +46,14 @@ test('Change picks another machine: hints, targets and the saved item follow it'
   const { live, saved } = await setup(page);
   const card = await addTri(page, live);
   await card.locator('.su').click();
-  await expect(page.locator('#sheet h3')).toHaveText('Setup · Triceps Pushdown');
-  await expect(page.locator('#sheet')).toContainText('Weights on different machines don’t compare');
-  await expect(page.locator('#su-list .su-r')).toHaveCount(3);
-  await expect(page.locator('#su-list .su-r.on')).toContainText('Hammer Strength');
-  await expect(page.locator('#su-list .su-r').first()).toContainText('last 40×10');
-  await page.locator('#su-list .su-r').first().click();
-  await expect(page.locator('#su-go')).toHaveText(/Use A/);
-  await expect(page.locator('label[for="su-setup"]')).toHaveText('Setup on A');
-  await page.locator('#su-go').click();
+  await expect(page.locator('#sheet h3')).toHaveText('Triceps Pushdown setup');
+  /* A, B and + Another; B (the latest) is picked, its setup in the fields */
+  await expect(page.locator('.qs-ms .chip')).toHaveCount(3);
+  await expect(page.locator('.qs-ms .chip.on')).toContainText('Hammer Strength');
+  await expect(page.locator('#qs-name')).toHaveValue('Hammer Strength');
+  await page.locator('.qs-ms .chip').first().click();
+  await expect(page.locator('#qs-go')).toHaveText(/Use A/);
+  await page.locator('#qs-go').click();
   await expect(page.locator('#toast')).toContainText('Triceps Pushdown on A · Cable stack');
   await expect(card.locator('.su .su-l')).toHaveText('A');
   await expect(card.locator('.sugg .lbl').first()).toHaveText('Last on A');
@@ -62,7 +61,7 @@ test('Change picks another machine: hints, targets and the saved item follow it'
   await expect.poll(() => saved().items.find(i => i.exId !== live.items[0].exId)?.mc).toBe('mA');
 });
 
-test('intensity and records count each machine on its own: a hard set on the lighter machine reads hard, and beats its own record', async ({ page }) => {
+test('intensity, records and the 1RM count each machine on its own; a set that beats the 1RM raises it there and then', async ({ page }) => {
   const { live } = await setup(page);
   const card = await addTri(page, live);
   const row = card.locator('.set').first();
@@ -72,32 +71,57 @@ test('intensity and records count each machine on its own: a hard set on the lig
   /* against B's best (25×12), not A's 40×10, which would make it about 70 */
   await expect(row.locator('.int')).toHaveText(/^1\d\d$/);
   await expect(row.locator('.set-pr')).toContainText('Weight PR');
+  await expect(page.locator('#toast')).toContainText('New 1RM: 38.5 kg on Triceps Pushdown · B');
 });
 
-test('a setup note becomes the first machine’s setup when machines are added', async ({ page }) => {
-  const { live, fake, tri, saved } = await setup(page, { machines: [], note: 'Seat 4, rope' });
-  const card = await addTri(page, live);
-  await expect(card.locator('.ex-note')).toContainText('Your setup · Seat 4, rope');
+test('setup is tapped in: the fields fit the exercise, and the card shows the line', async ({ page }) => {
+  const smith = { id: crypto.randomUUID(), name: 'Smith Squat', muscle: 'Quads', kind: 'w' };
+  const live = { id: crypto.randomUUID(), name: 'Legs', started_at: new Date(Date.now() - 6e5).toISOString(), ended_at: null, items: [{ id: 'S1', exId: smith.id, sets: [{ id: 's1', w: null, r: null, done: false }] }] };
+  const fake = new FakeSupabase({ defaults: [], exercises: [smith], sessions: [live] });
+  await login(page, fake, 'A');
+  await page.goto('/session/' + live.id);
+  const card = page.locator('article[data-item="S1"]');
+  await expect(card.locator('.ex-note-add')).toHaveText('Add setup: hook, pins, stance');
+  await card.locator('.ex-note-add').click();
+  await expect(page.locator('#sheet h3')).toHaveText('Smith Squat setup');
+  await expect(page.locator('.qf .mk-x')).toHaveText(['Bar hook', 'Safety pins']);
+  const hook = page.locator('.qf[data-f="hook"]');
+  await hook.locator('[data-step="1"]').click();
+  await hook.locator('[data-step="1"]').click();
+  await expect(hook.locator('input')).toHaveValue('2');
+  await page.locator('.qf[data-f="pins"] input').fill('8');
+  await page.locator('.qrow[data-f="stance"] [data-cv="Shoulder-width"]').click();
+  await page.locator('#qs-addnote').click();
+  await page.fill('#qs-note', 'knees out');
+  await expect(page.locator('#qs-prev')).toHaveText('Hook 2 · Pins 8 · Shoulder-width stance · knees out');
+  await page.locator('#qs-go').click();
+  await expect(card.locator('.ex-note')).toContainText('Your setup · Hook 2 · Pins 8 · Shoulder-width stance · knees out');
+  await expect.poll(() => fake.exercises[0].note).toBe('Hook 2 · Pins 8 · Shoulder-width stance · knees out');
+  /* opened again, it reads back into the fields */
   await card.locator('.ex-note').click();
-  await expect(page.locator('#sheet h3')).toHaveText('Setup · Triceps Pushdown');
-  await page.locator('#su-addm').click();
-  await expect(page.locator('#su-setup')).toHaveValue('Seat 4, rope');
-  await expect(page.locator('#su-name')).toBeFocused();
-  await page.fill('#su-name', 'Cable stack');
-  await page.fill('#su-what', 'pulley at the top');
-  await page.locator('#su-go').click();
-  await expect(card.locator('.su')).toContainText('Cable stack · Seat 4, rope');
-  await expect.poll(() => fake.exercises.find(e => e.id === tri.id).machines?.map(m => [m.name, m.what, m.setup])).toEqual([['Cable stack', 'pulley at the top', 'Seat 4, rope']]);
-  expect(fake.exercises.find(e => e.id === tri.id).note).toBeNull();
-  const mc = fake.exercises.find(e => e.id === tri.id).machines[0].id;
-  await expect.poll(() => saved().items.find(i => i.exId === tri.id)?.mc).toBe(mc);
-  /* a second one, added from the same sheet */
-  await card.locator('.su').click();
-  await page.locator('#su-list .su-r.add').click();
-  await page.fill('#su-name', 'Hammer');
-  await page.locator('#su-go').click();
+  await expect(page.locator('.qf[data-f="pins"] input')).toHaveValue('8');
+  await expect(page.locator('.qrow[data-f="stance"] .chip.on')).toHaveText('Shoulder-width');
+  await expect(page.locator('#qs-note')).toHaveValue('knees out');
+});
+
+test('the setup you had becomes machine A when you add another', async ({ page }) => {
+  const { live, fake, tri, saved } = await setup(page, { machines: [], note: 'Seat 4 · Rope' });
+  const card = await addTri(page, live);
+  await expect(card.locator('.ex-note')).toContainText('Your setup · Seat 4 · Rope');
+  await card.locator('.ex-note').click();
+  await expect(page.locator('.qf[data-f="seat"] input')).toHaveValue('4');
+  await expect(page.locator('.qrow[data-f="att"] .chip.on')).toHaveText('Rope');
+  await page.locator('#qs-more').click();
+  await expect(page.locator('#qs-name')).toBeFocused();
+  await page.fill('#qs-name', 'Hammer');
+  await expect(page.locator('.qs-ms .chip.on')).toContainText('Hammer');
+  await expect(page.locator('#qs-prev')).toContainText('Nothing set yet');
+  await page.locator('#qs-go').click();
   await expect(card.locator('.su .su-l')).toHaveText('B');
-  await expect.poll(() => fake.exercises.find(e => e.id === tri.id).machines.length).toBe(2);
+  await expect.poll(() => fake.exercises.find(e => e.id === tri.id).machines?.map(m => [m.name, m.setup])).toEqual([['Machine A', 'Rope · Seat 4'], ['Hammer', '']]);
+  expect(fake.exercises.find(e => e.id === tri.id).note).toBeNull();
+  const mc = fake.exercises.find(e => e.id === tri.id).machines[1].id;
+  await expect.poll(() => saved().items.find(i => i.exId === tri.id)?.mc).toBe(mc);
 });
 
 test('the exercise page shows each machine; tap one to follow it; older sessions can be tagged all at once, with Undo', async ({ page }) => {
@@ -110,7 +134,7 @@ test('the exercise page shows each machine; tap one to follow it; older sessions
   await expect(rows.nth(2)).toContainText('2 sessions before machines');
   /* it follows B, the latest: B's estimate, not A's heavier one */
   await expect(page.locator('.mc-r.on')).toContainText('Hammer Strength');
-  await expect(page.locator('.dash .card .card-h .lbl').filter({ hasText: 'Estimated 1RM' })).toHaveText(/Estimated 1RM · B/);
+  await expect(page.locator('.orm-card .card-h .lbl')).toHaveText(/^1RM · B/);
   await expect(page.locator('.recs .card-h .lbl').first()).toContainText('Records · B');
   await rows.nth(0).click();
   await expect(page.locator('.mc-r.on')).toContainText('Cable stack');
@@ -132,13 +156,30 @@ test('a machine with sets logged on it stays; an unused one can be removed', asy
   const { fake, tri } = await setup(page, { machines: [A, B, { id: 'mC', name: 'Spare', what: '', setup: '' }] });
   await page.goto('/exercises/' + tri.id);
   await page.locator('.mc-acts [data-act="ex-setup"]').click();
-  await page.locator('#su-list .su-r').first().click();
-  await page.locator('.su-more summary').click();
-  await expect(page.locator('.su-why')).toContainText('has sets logged on it');
-  await page.locator('#su-list .su-r', { hasText: 'Spare' }).click();
-  await page.locator('.su-more summary').click();
-  await page.locator('#su-del').click();
-  await expect(page.locator('#su-list .su-r:not(.add)')).toHaveCount(2);
-  await page.locator('#su-go').click();
+  await page.locator('.qs-ms .chip').first().click();
+  await expect(page.locator('#qs-del')).toHaveCount(0);
+  await page.locator('.qs-ms .chip', { hasText: 'Spare' }).click();
+  await page.locator('#qs-del').click();
+  await expect(page.locator('.qs-ms .chip')).toHaveCount(3);
+  await page.locator('#qs-go').click();
   await expect.poll(() => fake.exercises.find(e => e.id === tri.id).machines.map(m => m.id)).toEqual(['mA', 'mB']);
+});
+
+test('each machine has its own 1RM: set one by hand on B and the page, and B only, follow it', async ({ page }) => {
+  const { fake, tri } = await setup(page);
+  await page.goto('/exercises/' + tri.id);
+  await expect(page.locator('.orm-card .bignum')).toContainText('35');
+  await expect(page.locator('.orm-card')).toContainText('Updates by itself');
+  await page.locator('.orm-card [data-act="edit-orm"]').click();
+  await expect(page.locator('#sheet h3')).toHaveText('Triceps Pushdown · B 1RM');
+  await page.fill('#orm-v', '40');
+  await page.click('#orm-save');
+  await expect(page.locator('.orm-card .bignum')).toContainText('40');
+  await expect(page.locator('.orm-card')).toContainText('Set by you');
+  await expect.poll(() => fake.exercises.find(e => e.id === tri.id).machines.find(m => m.id === 'mB').orm).toBe(40);
+  expect(fake.exercises.find(e => e.id === tri.id).one_rm ?? null).toBeNull();
+  /* A keeps its own */
+  await page.locator('.mc-card .mc-r').first().click();
+  await expect(page.locator('.orm-card .card-h .lbl')).toHaveText(/^1RM · A/);
+  await expect(page.locator('.orm-card .bignum')).toContainText('53.5');
 });

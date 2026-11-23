@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.2.0, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.2.1, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.2.0-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.2.1-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -16,8 +16,9 @@ The version lives in `package.json` (`0.2.0-alpha`) and shows in Settings › Ab
   muscle's listed first), keeping its sets; with sets already logged it asks whether to keep them and swap the
   rest, or move them all. **+ Warm-up** adds warm-ups that build to the working weight (W1, W2…; never counted
   toward records, intensity or volume); drag an exercise by its grip to reorder it (sessions and split days); an
-  exercise has one setup line on its card: a note (seat, grip) or, for an exercise done on more than one machine,
-  the machine it's on today (each with a name, what it is and your setup). Each machine is its own lift for hints,
+  exercise has one setup line on its card, tapped in rather than typed: the settings that fit the exercise (a Smith
+  machine's hook and pins, a cable's pulley and attachment, a seat, a grip, a bench angle) as − / + numbers and chips,
+  plus a note; for an exercise done on more than one machine, the machine it's on today, each with its own setup. Each machine is its own lift for hints,
   targets, intensity, estimated max, records, typo checks and the coach; volume and sets add up across them. The
   exercise page shows each machine (tap one and the page follows it) and tags older sessions in one go. **Finish** shows a summary:
   intensity, volume, sets, time, the change on last time, records and the best set, with **Undo finish**.
@@ -47,7 +48,8 @@ The version lives in `package.json` (`0.2.0-alpha`) and shows in Settings › Ab
     blocks that set that lift's targets.
 - **Plate calculator:** the plates for each side of the bar for any weight, with your bar remembered.
 - **Intensity and records:** every set and session gets an intensity score against your best; each
-  exercise keeps a one-rep max, and beating it offers to save the new one.
+  lift (an exercise, or each of its machines) has a 1RM: the higher of one you set by hand and your best set's
+  estimate, so it updates itself when a set beats it (and follows a corrected set back down).
 - **Splits:** weekly plans with days, exercises, sets and reps and linked groups; start from a template,
   reorder days, and share by @username (an invitation, with an optional message, that the other person accepts,
   saving a copy to their splits, or declines; the sender sees each answer) or by link. Home suggests the next day, or

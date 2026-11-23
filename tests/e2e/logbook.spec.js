@@ -115,7 +115,7 @@ async function editLast(page, last, sets) {
   await page.locator('#sheet button', { hasText: 'Update' }).click();
 }
 
-test('an edit that beats a saved 1RM offers to raise it; the coach plans from the corrected session', async ({ page }) => {
+test('an edit that beats a 1RM set by hand raises it by itself; the coach plans from the corrected session', async ({ page }) => {
   const data = benchHistory(), ex = data.exercises[0], last = data.sessions[0];
   Object.assign(ex, { one_rm: 100, one_rm_at: new Date(ago(20)).toISOString() });
   const fake = new FakeSupabase(data);
@@ -124,36 +124,23 @@ test('an edit that beats a saved 1RM offers to raise it; the coach plans from th
   const coachBefore = await page.locator('#view .card', { hasText: 'next time' }).first().innerText();
   await page.goto('/');
   await editLast(page, last, [['s31', 110]]);
-  await expect(page.locator('#sheet h3')).toHaveText('New 1RM PR?');
-  await expect(page.locator('#sheet .orm-list')).toContainText('139.5');
-  await page.click('#orm-apply');
-  await expect.poll(() => exRow(fake, ex.id).one_rm).toBe(139.5);
-  await expect(page.locator('#toast')).toContainText('1RM: 139.5');
+  await expect(page.locator('#toast')).toContainText('new 1RM 139.5 kg on Bench Press');
+  /* nothing to accept: your 1RM is the higher of the one you set and your best set */
+  expect(exRow(fake, ex.id).one_rm).toBe(100);
   await page.goto('/exercises/' + ex.id);
-  await expect(page.locator('#view .card').first()).toContainText('Your 1RM');
+  await expect(page.locator('.orm-card .bignum')).toContainText('139.5');
+  await expect(page.locator('.orm-card')).toContainText('Updates by itself');
   await expect.poll(() => page.locator('#view .card', { hasText: 'next time' }).first().innerText()).not.toBe(coachBefore);
 });
 
-test('correcting the session a saved 1RM came from offers to lower it; Undo takes it back', async ({ page }) => {
+test('correcting the session a 1RM set by hand came from takes it back to the estimate; Undo restores it', async ({ page }) => {
   const data = benchHistory(), ex = data.exercises[0], last = data.sessions[0];
   Object.assign(ex, { one_rm: 101.5, one_rm_at: last.ended_at });
   const fake = new FakeSupabase(data);
   await login(page, fake, 'A');
   await editLast(page, last, [['s31', 70], ['s32', 70], ['s33', 70]]);
-  await expect(page.locator('#sheet h3')).toHaveText('Lower your 1RM?');
-  await page.click('#orm-apply');
+  await expect(page.locator('#toast')).toContainText('Bench Press 1RM back to');
   await expect.poll(() => exRow(fake, ex.id).one_rm).toBe(null);
   await page.locator('#toast .toast-act').click();
   await expect.poll(() => exRow(fake, ex.id).one_rm).toBe(101.5);
-});
-
-test('Not now keeps the saved 1RM', async ({ page }) => {
-  const data = benchHistory(), ex = data.exercises[0], last = data.sessions[0];
-  Object.assign(ex, { one_rm: 100, one_rm_at: new Date(ago(20)).toISOString() });
-  const fake = new FakeSupabase(data);
-  await login(page, fake, 'A');
-  await editLast(page, last, [['s31', 110]]);
-  await page.locator('#sheet button', { hasText: 'Not now' }).click();
-  await page.waitForTimeout(600);
-  expect(exRow(fake, ex.id).one_rm).toBe(100);
 });

@@ -43,7 +43,7 @@ test('a live session has a Discard button that asks first', async ({ page }) => 
   await expect.poll(() => row(fake, id)).toBeUndefined();
 });
 
-test('deleting the session a saved 1RM came from offers to go back to the estimate', async ({ page }) => {
+test('deleting the session a 1RM set by hand came from takes it back to the estimate, with Keep 1RM', async ({ page }) => {
   const data = benchHistory(), ex = data.exercises[0], last = data.sessions[0];
   Object.assign(ex, { one_rm: 101.5, one_rm_at: last.ended_at });
   const fake = new FakeSupabase(data);
@@ -53,10 +53,10 @@ test('deleting the session a saved 1RM came from offers to go back to the estima
   await page.click('[data-act="sess-menu"]');
   await page.locator('#sheet button', { hasText: 'Delete session' }).click();
   await confirm(page).click();
-  await expect(page.locator('#sheet h3')).toHaveText('Lower your 1RM?');
-  await expect(page.locator('#sheet')).toContainText('session you just deleted');
-  await page.click('#orm-apply');
+  await expect(page.locator('#toast')).toContainText('Session deleted · Bench Press 1RM back to');
   await expect.poll(() => fake.exercises.find(e => e.id === ex.id).one_rm).toBe(null);
+  await page.locator('#toast .toast-act', { hasText: 'Keep 1RM' }).click();
+  await expect.poll(() => fake.exercises.find(e => e.id === ex.id).one_rm).toBe(101.5);
 });
 
 test('on a computer, a History row shows a bin while hovered; it asks, then the row goes', async ({ page }, info) => {

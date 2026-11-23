@@ -27,6 +27,7 @@ import { segDrag } from './ui/segdrag.js';
 import { reorderDrag } from './ui/reorder.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
+import { setupFields, parseSetup, formatSetup, setupHint } from './lib/setup.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
 import { monthSummary, monthStart } from './lib/month.js';
 import { buildIcs, weekPlan, sessionMinutes, DEFAULT_DAYS } from './lib/ics.js';
@@ -304,6 +305,19 @@ function lastMc(exId) {
   return null;
 }
 const lastKey = exId => { const mc = lastMc(exId); return mc ? exId + '@' + mc : exId; };
+/* a 1RM set by hand for a lift: the exercise's, or a machine's own. Your 1RM is the higher of it and your best set's
+   estimate, so it keeps itself up to date: a set that beats it raises it, and fixing that set brings it back. */
+function savedOrm(key) {
+  const ex = exOf(key), mc = mcOf(key); if (!ex) return null;
+  if (mc) { const m = machineOf(ex, mc); return m && m.orm > 0 ? { kg: m.orm, at: m.ormAt || null } : null; }
+  return ex.oneRm > 0 ? { kg: ex.oneRm, at: ex.oneRmAt || null } : null;
+}
+function setSavedOrm(key, kg, at = Date.now()) {
+  const ex = exOf(key), mc = mcOf(key); if (!ex) return;
+  if (mc) { const m = machineOf(ex, mc); if (!m) return; if (kg > 0) { m.orm = kg; m.ormAt = at; } else { delete m.orm; delete m.ormAt; } }
+  else { ex.oneRm = kg > 0 ? kg : null; ex.oneRmAt = kg > 0 ? at : null; }
+  queue('x:' + ex.id, 0);
+}
 /* the lift an exercise page shows: the machine picked on the page, else the one last used */
 const exKey = ex => { const p = S.exPick && S.exPick.id === ex.id ? S.exPick.k : null; return p && (p === ex.id || machineOf(ex, mcOf(p))) ? p : lastKey(ex.id); };
 const loadOf = (st, ex) => { const w = +st.w || 0; return ex?.kind === 'bw' ? (+S.profile.bw || 75) + w : w; };
@@ -361,8 +375,8 @@ function compute() {
     for (const [ex, sc] of sb_) { const prev = best.get(ex) || 0; if (sc > prev) best.set(ex, sc); if ((seen.get(ex) || 0) < 2) calib = true; }
     let vol = 0, wsum = 0, isum = 0, sets = 0;
     for (const it of s.items) {
-      /* a saved 1RM is the exercise's without a machine */
-      const ex = exMap.get(baseId(it.exId)), orm = ex && !mcOf(it.exId) && ex.oneRm > 0 && ex.oneRmAt && ex.oneRmAt <= (s.endedAt || Date.now()) ? ex.oneRm : 0, ref = Math.max(best.get(it.exId) || 0, orm);
+      /* a 1RM set by hand (the exercise's, or the machine's) counts from when it was set */
+      const ex = exMap.get(baseId(it.exId)), so = savedOrm(it.exId), orm = so && so.at && so.at <= (s.endedAt || Date.now()) ? so.kg : 0, ref = Math.max(best.get(it.exId) || 0, orm);
       for (const st of it.sets) {
         const r = +st.r || 0; if (r <= 0) continue; sets++;
         const v = (+st.w || 0) * r; vol += v; exVol.set(it.exId, (exVol.get(it.exId) || 0) + v);
@@ -387,17 +401,18 @@ function compute() {
   }
   S.A = A; return A;
 }
-/* 1RM: the confirmed value if the user saved one, otherwise the best estimate from finished sessions */
+/* the best estimated 1RM for a lift from finished sessions, leaving out one session if asked */
 function prevBestE1rm(exId, excludeSid) {
   const e = compute().ex.get(exId); if (!e) return 0;
   return e.top1Sid && e.top1Sid === excludeSid ? e.top2 : e.top1;
 }
-const oneRmOf = (key, excludeSid) => { const ex = exOf(key); return ex && !mcOf(key) && ex.oneRm > 0 ? ex.oneRm : prevBestE1rm(key, excludeSid); };
+/* your 1RM for a lift: the higher of the one set by hand and the best estimate (leaving out one session) */
+const oneRmOf = (key, excludeSid) => Math.max(savedOrm(key)?.kg || 0, prevBestE1rm(key, excludeSid));
 const roundW = kg => { const st = unit() === 'lb' ? 1 : 0.5; return fromU(Math.round(toU(kg) / st) * st); };
 function liveTop(s, it) { const ex = exOf(it.exId), sus = suspects(); let b = 0, bs = null; for (const st of it.sets) { if (sus.has(st.id)) continue; const v = e1rm(loadOf(st, ex), +st.r || 0); if (v > b) { b = v; bs = st; } } return { v: b, st: bs }; }
 function ormLine(s, it) {
   const ex = exOf(it.exId); if (!ex) return '';
-  const base = oneRmOf(liftKey(it), s.id), top = liveTop(s, it).v, saved = ex.oneRm > 0 && !it.mc;
+  const base = oneRmOf(liftKey(it), s.id), top = liveTop(s, it).v, saved = (savedOrm(liftKey(it))?.kg || 0) >= base - 1e-6 && base > 0;
   if (!base && !top) return `${esc(ex.muscle)} · first log`;
   const b = S.A.rec?.before.get(s.id + ':' + liftKey(it));
   let t = `${esc(ex.muscle)}${b && b.w >= 0 ? ` · PR ${prSet({ w: b.w, r: b.wr }, ex)}` : ''} · ${saved ? '1RM' : 'est. 1RM'} ${base ? fmtW(roundW(base)) + ' ' + unit() : '—'}`;
@@ -405,33 +420,27 @@ function ormLine(s, it) {
   else if (top > 0 && !base) t += ` · today ${fmtW(roundW(top))}`;
   return t;
 }
-const declined1rm = new Map();
-function maybePromptOneRm(s, it, st) {
-  /* a saved 1RM is for the exercise without a machine: a machine's sets show their records instead */
-  const ex = exOf(it.exId); if (!ex || it.mc || s.endedAt || suspects().has(st.id)) return;
-  const v = e1rm(loadOf(st, ex), +st.r || 0), base = oneRmOf(it.exId, s.id);
+/* a ticked set that beats your 1RM raises it there and then (your 1RM is the higher of the one you set and your best
+   set's estimate): a short message says so, once per new value. Fix the set and the 1RM follows it back. */
+const ormSaid = new Map();
+function oneRmNote(s, it, st) {
+  const ex = exOf(it.exId), k = liftKey(it); if (!ex || isCardio(ex) || s.endedAt || suspects().has(st.id)) return;
+  const v = e1rm(loadOf(st, ex), +st.r || 0), base = oneRmOf(k, s.id);
   if (!(v > 0) || !(base > 0) || v <= base * 1.0001) return;
-  const val = roundW(v); if (val <= base) return;
-  if ((declined1rm.get(ex.id) || 0) >= val) return;
-  const u = unit(), single = (+st.r || 0) === 1;
-  openSheet(`<div class="sh-h"><h3>New 1RM PR?</h3>${xBtn()}</div>
-  <div class="pr-hero"><span class="lbl">${esc(ex.name)}</span><div class="bignum md"><span class="n">${fmtW(val)}</span><span class="pr-u">${u}</span></div>
-  <p class="muted">${single ? 'A true single' : `Estimated from ${fmtW(loadOf(st, ex))} ${u} × ${st.r}`}. Your ${ex.oneRm > 0 ? 'saved 1RM is' : 'best estimate so far is'} ${fmtW(roundW(base))} ${u} (+${fmtW(val - roundW(base)) || 0} ${u}).</p></div>
-  <div class="btns"><button class="btn ghost" id="orm-no">Not now</button><button class="btn" id="orm-yes">Update my 1RM</button></div>`, r => {
-    r.querySelector('#orm-no').onclick = () => { declined1rm.set(ex.id, val); closeSheet(); };
-    r.querySelector('#orm-yes').onclick = () => { ex.oneRm = val; ex.oneRmAt = Date.now(); queue('x:' + ex.id, 0); closeSheet(); render(false); toast(`${ex.name} 1RM is now ${fmtW(val)} ${u}`); };
-  });
+  const val = roundW(v), sk = s.id + ':' + k; if (val <= base || (ormSaid.get(sk) || 0) >= val) return;
+  ormSaid.set(sk, val);
+  toast(`New 1RM: ${fmtW(val)} ${unit()} on ${liftName(k)}`);
 }
-function editOneRm(id) {
-  const ex = exOf(id); if (!ex) return; const est = prevBestE1rm(id), u = unit();
-  openSheet(`<div class="sh-h"><h3>${esc(ex.name)} 1RM</h3>${xBtn()}</div><div class="form">
-  <label>One-rep max (${u})<input class="field" id="orm-v" inputmode="decimal" value="${ex.oneRm > 0 ? fmtW(ex.oneRm) : ''}" placeholder="${est ? fmtW(roundW(est)) : '0'}"></label>
-  <p class="muted" style="font-size:13px">${est ? `Your best estimate from logged sets is ${fmtW(roundW(est))} ${u}.` : 'Log a few sets and Synergym will estimate it for you.'} Synergym asks to update this whenever a set beats it.</p></div>
-  <div class="btns">${ex.oneRm > 0 ? '<button class="btn line" id="orm-clear" style="margin-right:auto">Use estimate instead</button>' : ''}${est ? `<button class="btn ghost" id="orm-est">Use ${fmtW(roundW(est))}</button>` : ''}<button class="btn" id="orm-save">Save</button></div>`, r => {
-    const save = v => { if (!(v > 0 && v < 2000)) return toast('Enter a weight above 0'); ex.oneRm = v; ex.oneRmAt = Date.now(); queue('x:' + ex.id, 0); closeSheet(); render(false); toast(`1RM saved: ${fmtW(v)} ${u}`); };
+/* set a 1RM by hand (a tested max) for a lift: the exercise, or one of its machines */
+function editOneRm(key) {
+  const ex = exOf(key); if (!ex) return; const est = prevBestE1rm(key), u = unit(), sv = savedOrm(key), mc = mcOf(key);
+  openSheet(`<div class="sh-h"><h3>${esc(liftName(key))} 1RM</h3>${xBtn()}</div><div class="form">
+  <label>One-rep max (${u})<input class="field" id="orm-v" inputmode="decimal" value="${sv ? fmtW(sv.kg) : ''}" placeholder="${est ? fmtW(roundW(est)) : '0'}"></label>
+  <p class="muted" style="font-size:13px">${est ? `Your best estimate from logged sets${mc ? ' on this machine' : ''} is ${fmtW(roundW(est))} ${u}.` : 'Log a few sets and Synergym will estimate it for you.'} Your 1RM is the higher of this and your best set, so a set that beats it raises it by itself.</p></div>
+  <div class="btns">${sv ? '<button class="btn line" id="orm-clear" style="margin-right:auto">Use estimate instead</button>' : ''}<button class="btn" id="orm-save">Save</button></div>`, r => {
+    const save = v => { if (!(v > 0 && v < 2000)) return toast('Enter a weight above 0'); setSavedOrm(key, v); closeSheet(); render(false); toast(`1RM saved: ${fmtW(v)} ${u}`); };
     r.querySelector('#orm-save').onclick = () => save(fromU(parseFloat(r.querySelector('#orm-v').value.replace(',', '.'))));
-    r.querySelector('#orm-est')?.addEventListener('click', () => save(roundW(est)));
-    r.querySelector('#orm-clear')?.addEventListener('click', () => { ex.oneRm = null; ex.oneRmAt = null; queue('x:' + ex.id, 0); closeSheet(); render(false); toast('Using your best estimate'); });
+    r.querySelector('#orm-clear')?.addEventListener('click', () => { setSavedOrm(key, 0); closeSheet(); render(false); toast('Using your best estimate'); });
   });
 }
 /* muscle groups: the user's own list (falls back to the defaults) */
@@ -552,7 +561,7 @@ function coach() {
   const ctx = { now, exp: p.exp, target: p.target, round: snapW, split: sp && { id: sp.id, name: sp.name, days: sp.days }, lastSplitDay: last && sp && last.splitId === sp.id ? last.splitDay : null,
     nextMuscles: day ? [...new Set(day.exercises.filter(x => x.kind !== 'c').map(x => x.muscle))] : [], muscleOf: id => exMap.get(baseId(id))?.muscle,
     /* a goal follows the machine the lift was last done on */
-    goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)).map(g => ({ ...g, key: lastKey(g.exId) })), savedOf: id => { const e = !mcOf(id) && exMap.get(id); return e && e.oneRm > 0 ? { kg: e.oneRm, at: e.oneRmAt } : null; } };
+    goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)).map(g => ({ ...g, key: lastKey(g.exId) })), savedOf: id => savedOrm(id) };
   const a = analyse(log, ctx);
   /* trained today: the call is for tomorrow morning */
   if (doneToday().length) { const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(8, 0, 0, 0); a.next = { ...withBreak(readiness(log, a.series, { ...ctx, now: t.getTime() }), a.deload), when: 'tomorrow' }; }
@@ -1437,8 +1446,8 @@ function goalSheet(exId = null) {
     const read = () => { const id = exEl.value, v = fromU(parseFloat(String(kgEl.value).replace(',', '.'))), d = byEl.value ? new Date(byEl.value + 'T12:00').getTime() : null;
       const old = goals.find(g => g.exId === id); return { id, kg: v, by: d, at: old ? old.at : Date.now(), from: old ? old.from : null }; };
     const show = () => {
-      const x = read(), ex = exOf(x.id), saved = ex && ex.oneRm > 0 ? { kg: ex.oneRm, at: ex.oneRmAt } : null;
-      const p = goalPlan({ exId: x.id, kg: x.kg > 0 ? x.kg : 1, by: x.by, at: x.at, from: x.from }, a.series.get(lastKey(x.id)), { ...a.ctx, saved: mcOf(lastKey(x.id)) ? null : saved });
+      const x = read(), saved = savedOrm(lastKey(x.id));
+      const p = goalPlan({ exId: x.id, kg: x.kg > 0 ? x.kg : 1, by: x.by, at: x.at, from: x.from }, a.series.get(lastKey(x.id)), { ...a.ctx, saved });
       if (!kgEl.value) kgEl.placeholder = p.cur > 0 ? `e.g. ${fmtW(Math.ceil(p.cur * 1.1 / fromU(loadStep())) * fromU(loadStep()))}` : 'e.g. 100';
       if (!(p.cur > 0)) { pre.innerHTML = `<p class="muted">No sets of this lift yet. Save the goal and the plan appears after your first session with it.</p>`; return; }
       if (!(x.kg > 0)) { pre.innerHTML = `<p class="muted">Your estimated max now: <b>${fmtW(roundW(p.cur))} ${u}</b>.</p>`; return; }
@@ -1451,7 +1460,7 @@ function goalSheet(exId = null) {
     r.querySelector('#gl-save').onclick = () => {
       const x = read(), ex = exOf(x.id);
       if (!(x.kg > 0 && x.kg < 2000)) return toast('Enter a target weight');
-      const p = goalPlan({ exId: x.id, kg: x.kg, at: Date.now() }, a.series.get(lastKey(x.id)), { ...a.ctx, saved: ex && ex.oneRm > 0 && !mcOf(lastKey(x.id)) ? { kg: ex.oneRm, at: ex.oneRmAt } : null });
+      const p = goalPlan({ exId: x.id, kg: x.kg, at: Date.now() }, a.series.get(lastKey(x.id)), { ...a.ctx, saved: savedOrm(lastKey(x.id)) });
       const keep = goals.filter(g => g.exId !== x.id && g.exId !== exId);
       S.profile.liftGoals = [...keep, { id: uuid(), exId: x.id, kg: x.kg, by: x.by, at: x.at, from: x.from || (p.cur > 0 ? Math.round(p.cur * 100) / 100 : null) }];
       queue('p', 0); closeSheet(); render(false); toast(`Goal saved: ${ex ? ex.name : 'lift'} ${fmtW(x.kg)} ${u}`);
@@ -1462,7 +1471,7 @@ function goalMenu(exId) {
   const g = (S.profile.liftGoals || []).find(x => x.exId === exId), ex = exOf(exId); if (!g) return;
   const drop = () => { S.profile.liftGoals = (S.profile.liftGoals || []).filter(x => x.exId !== exId); queue('p', 0); render(false); };
   menuSheet(`${ex ? ex.name : 'Lift'} · ${fmtW(g.kg)} ${unit()}`, [
-    { label: 'I lifted it', hint: 'Saves it as your one-rep max and closes the goal', fn: () => { if (ex) { ex.oneRm = g.kg; ex.oneRmAt = Date.now(); queue('x:' + ex.id, 0); } drop(); toast(`Goal reached: ${fmtW(g.kg)} ${unit()}. Set the next one.`); } },
+    { label: 'I lifted it', hint: 'Saves it as your one-rep max and closes the goal', fn: () => { if (ex) setSavedOrm(lastKey(ex.id), g.kg); drop(); toast(`Goal reached: ${fmtW(g.kg)} ${unit()}. Set the next one.`); } },
     { label: 'Edit goal', fn: () => goalSheet(exId) },
     { label: 'Delete goal', warn: true, fn: () => confirmSheet('Delete this goal?', 'Your sessions and records stay; only the goal and its plan go.', 'Delete', () => { drop(); toast('Goal deleted'); }) }
   ]);
@@ -1596,8 +1605,9 @@ function prText(ev) {
     : ev.kind === 'wr' ? `heavier, and more reps · was ${was}` : `heaviest yet · was ${was}`;
   return `<b>${PR_LABEL[ev.kind]}</b><span>${why}</span>`;
 }
-const topLifts = () => [...S.A.ex].map(([id, e]) => ({ ex: exOf(id), e })).filter(x => x.ex && !x.ex.archived).sort((a, b) => b.e.n - a.e.n || b.e.best - a.e.best);
-const liftRow = ({ ex, e }) => `<button class="row" data-act="open-ex" data-id="${ex.id}"><span class="tri"></span><span class="row-m"><span class="t">${esc(ex.name)}</span><span class="sub">${plural(e.n, 'session')} · ${ex.oneRm > 0 ? 'saved 1RM' : 'est. 1RM'}</span></span><span class="row-r"><span class="d">${fmtW(roundW(ex.oneRm > 0 ? ex.oneRm : e.best))}</span><span class="ichip">${unit()}</span></span></button>`;
+/* each lift (an exercise, or one of its machines) with its 1RM: the higher of the one set by hand and the best estimate */
+const topLifts = () => [...S.A.ex].map(([k, e]) => ({ k, ex: exOf(k), e, orm: Math.max(savedOrm(k)?.kg || 0, e.best) })).filter(x => x.ex && !x.ex.archived).sort((a, b) => b.e.n - a.e.n || b.orm - a.orm);
+const liftRow = ({ k, ex, e, orm }) => `<button class="row" data-act="open-ex" data-id="${ex.id}"><span class="tri"></span><span class="row-m"><span class="t">${esc(liftName(k))}</span><span class="sub">${plural(e.n, 'session')} · 1RM</span></span><span class="row-r"><span class="d">${fmtW(roundW(orm))}</span><span class="ichip">${unit()}</span></span></button>`;
 const planDays = (nx, full) => { const dn = new Set(doneToday().filter(s => s.splitId === nx.sp.id).map(s => s.splitDay));
   return `<div class="plan${full ? ' full' : ''}">${nx.sp.days.map((d, i) => `<div class="pd${i === nx.i ? ' next' : ''}${isRestDay(d) ? ' rest' : ''}${dn.has(i) ? ' done' : ''}${isSecond(nx.sp.days, i) ? ' second' : ''}"><span class="lbl">${dayLabel(nx.sp.days, i)}${i === nx.i ? ' · next' : dn.has(i) ? ' · done' : ''}</span><b>${esc(isRestDay(d) ? 'Rest' : d.type || 'Training')}</b>${full && !isRestDay(d) ? `<span class="sub">${d.exercises.map(x => esc(x.name)).join(' · ') || 'No exercises yet'}</span>` : ''}</div>`).join('')}</div>`; };
 
@@ -1731,7 +1741,7 @@ const WIDGETS = {
   lifts: {
     title: 'Top lifts', desc: 'Your 1RM on the lifts you train most',
     card: (open, z) => { const t = topLifts();
-      if (z === 's') { const x = t[0]; return wTile('Top lift', x ? `${fmtW(roundW(x.ex.oneRm > 0 ? x.ex.oneRm : x.e.best))}<small>${unit()}</small>` : '–', x ? esc(x.ex.name) : 'Nothing logged yet', open); }
+      if (z === 's') { const x = t[0]; return wTile('Top lift', x ? `${fmtW(roundW(x.orm))}<small>${unit()}</small>` : '–', x ? esc(liftName(x.k)) : 'Nothing logged yet', open); }
       return wHead('Top lifts', `1RM · ${unit()}`, open) + (t.length ? `<div class="list">${t.slice(0, z === 'l' ? 7 : 4).map(liftRow).join('')}</div>` : nothing('Your best lifts show up after your first session.')); },
     full: () => { const t = topLifts(); return wSect('Every exercise you’ve logged', t.length ? `<div class="list">${t.map(liftRow).join('')}</div>` : nothing('Nothing logged yet.')); }
   },
@@ -1873,7 +1883,7 @@ function setupLine(ex, it = null, page = false) {
   }
   const di = it && !page ? ` data-item="${it.id}"` : '';
   if (ex.note) return `<button class="ex-note" data-act="ex-setup" data-id="${ex.id}"${di} aria-label="Edit the setup for ${esc(ex.name)}">${ICON.pen}<span><b>Your setup</b> · ${esc(ex.note)}</span></button>`;
-  return open ? `<button class="ex-note-add" data-act="ex-setup" data-id="${ex.id}"${di}>${ICON.pen}Add setup: machine, seat, grip</button>` : '';
+  return open ? `<button class="ex-note-add" data-act="ex-setup" data-id="${ex.id}"${di}>${ICON.pen}Add setup: ${setupHint(setupFields(ex.name, ex.kind))}</button>` : '';
 }
 /* the item's sets not logged yet take the hints of the machine it's now on (typed numbers stay) */
 function rehint(s, it) {
@@ -1881,69 +1891,79 @@ function rehint(s, it) {
   const last = lastSetsFor(liftKey(it), s.id);
   it.sets.forEach((st, i) => { if (setLogged(st) || st.done) return; const l = last && last[Math.min(i, last.length - 1)]; st.pw = l ? l.w ?? null : null; if (l) st.pr = l.r ?? st.pr; });
 }
-const lastOn = (ex, mc) => { const l = lastSetsFor(ex.id + '@' + mc); if (!l || !l.length) return ''; const t = l.reduce((a, b) => (+b.w || 0) > (+a.w || 0) ? b : a); return `last ${ex.kind === 'bw' && !+t.w ? `${t.r} reps` : `${fmtW(+t.w || 0)}×${t.r}`}`; };
 const mcUsed = (exId, mc) => sorted().some(s => s.items.some(i => i.exId === exId && i.mc === mc && i.sets.some(setLogged)));
-/* The setup sheet. Without machines: your setup as a note, and "Done on more than one machine? Add machines".
-   With machines: which one (for an item in a session), each one's name, what it is and your setup on it, and adding
-   another. The first machine takes the note as its setup. Nothing is saved until Save / Use. */
+/* The setup sheet: tap, don't type. The fields fit the exercise (lib/setup.js): numbers with − / + (or typed),
+   choices as chips, a note if you want one, and the line the card will show. Done on more than one machine? Each
+   machine keeps its own setup and name; from a session card, the one picked is the one this item is on. The first
+   machine takes the setup you had. Nothing is saved until Save / Use. */
 function setupSheet(exId, itemId = null, o = {}) {
   const ex = exOf(exId); if (!ex) return;
   const s = itemId && cur(), it = s && !locked(s) ? s.items.find(x => x.id === itemId) : null;
-  const ms = machinesOf(ex).map(m => ({ ...m }));
-  if (!ms.length && !o.adding) {
-    openSheet(`<div class="sh-h"><h3>Setup · ${esc(ex.name)}</h3>${xBtn()}</div>
-    <p class="muted sh-note">It stays with the exercise and shows on its card in every session.</p>
-    <textarea class="field note-f" id="nt-v" maxlength="200" rows="3" placeholder="Seat 4, grip just outside the rings, feet tucked">${esc(ex.note || '')}</textarea>
-    ${isCardio(ex) ? '' : '<button class="su-addm" id="su-addm">+ Done on more than one machine? Add machines</button>'}
-    <div class="btns">${ex.note ? `<button class="btn line" id="nt-del" style="margin-right:auto;color:var(--bad)">${roll('Remove')}</button>` : ''}<button class="btn" id="nt-save">${roll('Save')}</button></div>`, r => {
-      const save = v => { ex.note = v.trim().slice(0, 200); queue('x:' + ex.id, 0); closeSheet(); render(false); toast(ex.note ? 'Setup saved' : 'Setup removed'); };
-      r.querySelector('#nt-save').onclick = () => save(r.querySelector('#nt-v').value);
-      r.querySelector('#nt-del')?.addEventListener('click', () => save(''));
-      r.querySelector('#su-addm')?.addEventListener('click', () => setupSheet(exId, itemId, { adding: true, seed: r.querySelector('#nt-v').value }));
-      const t = r.querySelector('#nt-v'); setTimeout(() => { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }, 60);
-    });
-    return;
-  }
-  const fresh = () => { const m = { id: sid(), name: '', what: '', setup: ms.length ? '' : String(o.seed ?? ex.note ?? '').trim().slice(0, 200), fresh: true }; ms.push(m); return m.id; };
-  let sel = o.adding ? fresh() : it && machineOf(ex, it.mc) ? it.mc : lastMc(ex.id) || ms[0].id;
-  const L = i => String.fromCharCode(65 + i);
+  const F = setupFields(ex.name, ex.kind), cardio = isCardio(ex), L = i => String.fromCharCode(65 + i);
+  /* the draft: the exercise's own setup, or one per machine */
+  let list = machinesOf(ex).map(m => ({ ...m, ...parseSetup(m.setup, F) }));
+  const solo = { id: null, name: '', ...parseSetup(ex.note, F) };
+  let sel = list.length ? (it && machineOf(ex, it.mc) ? it.mc : lastMc(ex.id) || list[0].id) : null, noteOpen = false;
+  const mm = () => list.length > 0, cur_ = () => mm() ? list.find(m => m.id === sel) || list[0] : solo;
+  const addMachine = () => {
+    if (!mm()) { list = [{ ...solo, id: sid(), name: '', what: '', fresh: true }]; }
+    const m = { id: sid(), name: '', what: '', v: {}, note: '', fresh: true }; list.push(m); sel = m.id; noteOpen = false;
+  };
+  if (o.adding && !cardio) addMachine();
+  const lineOf = m => formatSetup(m.v, F, m.note);
+  const num = f => { const v = cur_().v[f.id]; return `<div class="qf" data-f="${f.id}"><span class="mk-x">${esc(f.label)}</span><div class="stp"><button data-step="-1" aria-label="${esc(f.label)} down">−</button><input inputmode="numeric" enterkeyhint="done" value="${v ?? ''}" placeholder="–" aria-label="${esc(f.label)}" autocomplete="off"><button data-step="1" aria-label="${esc(f.label)} up">+</button></div></div>`; };
+  const chips = f => { const v = cur_().v[f.id]; return `<div class="qrow" data-f="${f.id}"><span class="mk-x">${esc(f.label)}</span><div class="chips" role="radiogroup" aria-label="${esc(f.label)}">${f.opts.map(([c]) => `<button class="chip${v === c ? ' on' : ''}" role="radio" aria-checked="${v === c}" data-cv="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>`; };
   const draw = r => {
-    const i = ms.findIndex(m => m.id === sel), m = ms[i], used = !m.fresh && mcUsed(ex.id, m.id);
-    r.querySelector('#su-list').innerHTML = ms.map((x, k) => `<button class="su-r${x.id === sel ? ' on' : ''}" role="radio" aria-checked="${x.id === sel}" data-mc="${x.id}"><span class="su-l" aria-hidden="true">${L(k)}</span><span class="su-rt"><b>${esc(x.name || `Machine ${L(k)}`)}</b><small>${esc([x.setup || x.what, x.fresh ? 'new' : lastOn(ex, x.id)].filter(Boolean).join(' · ') || 'no setup yet')}</small></span><span class="su-dot" aria-hidden="true"></span></button>`).join('')
-      + (ms.length < 12 ? `<button class="su-r add" data-mc="+"><span class="su-l" aria-hidden="true">+</span><span class="su-rt"><b>Add a machine</b><small>a name, what it is, your setup</small></span></button>` : '');
-    r.querySelector('#su-ed').innerHTML = `<label class="lbl" for="su-setup">Setup on ${L(i)}</label>
-      <textarea class="field note-f" id="su-setup" maxlength="200" rows="2" placeholder="Seat 4, rope, pulley at the top">${esc(m.setup)}</textarea>
-      <details class="su-more"${m.fresh ? ' open' : ''}><summary>Name and what it is</summary><div class="su-2">
-        <label>Name<input class="field" id="su-name" maxlength="24" autocomplete="off" placeholder="Machine ${L(i)}" value="${esc(m.name)}"></label>
-        <label>What it is<input class="field" id="su-what" maxlength="60" autocomplete="off" placeholder="Cable stack, plate-loaded…" value="${esc(m.what)}"></label></div>
-        ${used ? `<p class="muted su-why">${esc(m.name || 'It')} has sets logged on it, so it stays.</p>` : `<button class="btn line sm" id="su-del" style="color:var(--bad)">${roll(`Remove ${L(i)}`)}</button>`}</details>`;
-    r.querySelector('#su-go').innerHTML = roll(it ? `Use ${L(i)}` : 'Save');
-    const f = k => r.querySelector('#su-' + k); f('setup').oninput = () => { m.setup = f('setup').value; }; f('name').oninput = () => { m.name = f('name').value; }; f('what').oninput = () => { m.what = f('what').value; };
-    f('del')?.addEventListener('click', () => { ms.splice(i, 1); if (!ms.length) { saveAll(); return; } sel = ms[Math.max(0, i - 1)].id; draw(r); });
-    if (m.fresh && !m.name) setTimeout(() => f('name')?.focus(), 60);
+    const m = cur_(), i = mm() ? list.indexOf(m) : -1, gone = mm() && !m.fresh && mcUsed(ex.id, m.id);
+    r.querySelector('#qs').innerHTML = `
+      ${mm() ? `<div class="qs-ms" role="radiogroup" aria-label="Machines">${list.map((x, k) => `<button class="chip${x === m ? ' on' : ''}" role="radio" aria-checked="${x === m}" data-mc="${x.id}"><b>${L(k)}</b> ${esc(x.name || `Machine ${L(k)}`)}</button>`).join('')}${list.length < 12 ? '<button class="chip" data-mc="+">+ Another</button>' : ''}</div>
+        <div class="qs-nm"><input class="field" id="qs-name" maxlength="24" autocomplete="off" placeholder="Name for machine ${L(i)}" value="${esc(m.name)}" aria-label="Name of machine ${L(i)}">${gone ? '' : `<button class="qs-del" id="qs-del">Remove ${L(i)}</button>`}</div>` : ''}
+      ${F.some(f => f.num) ? `<div class="qf-grid">${F.filter(f => f.num).map(num).join('')}</div>` : ''}
+      ${F.filter(f => !f.num).map(chips).join('')}
+      ${m.note || noteOpen ? `<textarea class="field note-f qs-note" id="qs-note" maxlength="160" rows="2" placeholder="Anything else: knees out, belt on" aria-label="Note">${esc(m.note)}</textarea>` : '<button class="qs-addnote" id="qs-addnote">+ Add a note</button>'}
+      <div class="qf-prev"><span class="mk-x">On the card</span><b id="qs-prev">${esc(lineOf(m)) || '<span class="muted">Nothing set yet</span>'}</b></div>
+      ${!mm() && !cardio ? '<div class="qrow"><span class="mk-x">Machine</span><div class="chips"><button class="chip on" aria-pressed="true" tabindex="-1">This one</button><button class="chip" id="qs-more">+ Another machine</button></div></div>' : ''}`;
+    r.querySelector('#qs-go').innerHTML = roll(it && mm() ? `Use ${L(i)}` : 'Save');
+    if (m.fresh && !m.name) setTimeout(() => r.querySelector('#qs-name')?.focus(), 60);
   };
-  /* the exercise keeps the cleaned list; with none left, the last one's setup goes back to being the note */
+  const prev = r => { const m = cur_(), t = lineOf(m), el = r.querySelector('#qs-prev'); if (el) el.innerHTML = esc(t) || '<span class="muted">Nothing set yet</span>'; };
+  /* the exercise keeps it; with no machines left, the last one's setup goes back to being the exercise's */
   const saveAll = () => {
-    const had = machinesOf(ex).length, list = ms.map((x, k) => ({ id: x.id, name: x.name.trim() || `Machine ${L(k)}`, what: x.what.trim(), setup: x.setup.trim() }));
-    const goneAll = machinesOf(ex).filter(x => !list.some(y => y.id === x.id)), gone = goneAll[goneAll.length - 1];
-    ex.machines = cleanMachines(list);
-    /* an item still pointing at a removed machine (nothing logged on it) goes back to not set */
+    const had = machinesOf(ex).length;
+    if (!mm()) { ex.note = lineOf(solo); queue('x:' + ex.id, 0); closeSheet(); render(false); return toast(ex.note ? 'Setup saved' : 'Setup cleared'); }
+    const out = list.map((x, k) => ({ id: x.id, name: x.name.trim() || `Machine ${L(k)}`, what: x.what || '', setup: lineOf(x), ...(x.orm > 0 ? { orm: x.orm, ormAt: x.ormAt } : {}) }));
+    const goneAll = machinesOf(ex).filter(x => !out.some(y => y.id === x.id));
+    ex.machines = cleanMachines(out);
     if (goneAll.length) for (const x of sorted()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && goneAll.some(g => g.id === i.mc)) { delete i.mc; ch = true; } if (ch) queue('s:' + x.id, 0); }
-    if (!had && list.length) ex.note = '';
-    if (!list.length && gone && !ex.note) ex.note = gone.setup || '';
+    if (!had) ex.note = '';
     queue('x:' + ex.id, 0);
-    if (it && list.length) { it.mc = sel; rehint(s, it); queue('s:' + s.id, 0); }
+    if (it) { it.mc = sel; rehint(s, it); queue('s:' + s.id, 0); }
     closeSheet(); render(false);
-    const m = list.find(x => x.id === sel);
-    toast(it && m ? `${ex.name} on ${mLetter(ex, sel)} · ${m.name}` : list.length ? `${plural(list.length, 'machine')} saved` : 'Back to one setup');
+    const m = out.find(x => x.id === sel);
+    toast(it && m ? `${ex.name} on ${mLetter(ex, sel)} · ${m.name}` : `${plural(out.length, 'machine')} saved`);
   };
-  openSheet(`<div class="sh-h"><h3>Setup · ${esc(ex.name)}</h3>${xBtn()}</div>
-  <p class="muted sh-note">Weights on different machines don’t compare, so hints, targets and records follow the machine you pick here.</p>
-  <span class="lbl su-h">${it ? 'Machine today' : 'Machines'}</span><div class="su-list" id="su-list" role="radiogroup" aria-label="Machines"></div>
-  <div class="su-ed" id="su-ed"></div>
-  <div class="btns"><button class="btn" id="su-go"></button></div>`, r => {
-    r.querySelector('#su-list').addEventListener('click', e => { const b = e.target.closest('[data-mc]'); if (!b) return; sel = b.dataset.mc === '+' ? fresh() : b.dataset.mc; draw(r); });
-    r.querySelector('#su-go').onclick = saveAll;
+  openSheet(`<div class="sh-h"><h3>${esc(ex.name)} setup</h3>${xBtn()}</div><div id="qs" class="qs"></div>
+  <div class="qs-foot">${!machinesOf(ex).length && ex.note && !o.adding ? `<button class="btn line" id="qs-clear">${roll('Clear')}</button>` : ''}<button class="btn" id="qs-go"></button></div>`, r => {
+    const q = r.querySelector('#qs');
+    q.addEventListener('click', e => {
+      const m = cur_(), b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.step) { const f = b.closest('.qf').dataset.f, v = m.v[f]; m.v[f] = v == null ? (+b.dataset.step > 0 ? 1 : null) : Math.max(0, Math.min(999, Math.round(v) + +b.dataset.step)); if (m.v[f] == null) delete m.v[f]; b.parentElement.querySelector('input').value = m.v[f] ?? ''; buzz(6); return prev(r); }
+      if (b.dataset.cv != null) { const f = b.closest('.qrow').dataset.f, on = m.v[f] === b.dataset.cv; if (on) delete m.v[f]; else m.v[f] = b.dataset.cv;
+        for (const c of b.parentElement.children) { const y = !on && c === b; c.classList.toggle('on', y); c.setAttribute('aria-checked', y); } return prev(r); }
+      if (b.dataset.mc) { if (b.dataset.mc === '+') addMachine(); else sel = b.dataset.mc; noteOpen = false; return draw(r); }
+      if (b.id === 'qs-more') { addMachine(); return draw(r); }
+      if (b.id === 'qs-addnote') { noteOpen = true; draw(r); return r.querySelector('#qs-note')?.focus(); }
+      if (b.id === 'qs-del') { const i = list.indexOf(m); list.splice(i, 1); if (list.length) sel = list[Math.max(0, i - 1)].id; else { Object.assign(solo, { v: m.v, note: m.note }); sel = null; } return draw(r); }
+    });
+    q.addEventListener('input', e => {
+      const m = cur_(), t = e.target;
+      if (t.id === 'qs-name') { m.name = t.value; const c = q.querySelector(`[data-mc="${m.id}"]`); if (c) c.lastChild.textContent = ' ' + (t.value || `Machine ${L(list.indexOf(m))}`); return; }
+      if (t.id === 'qs-note') { m.note = t.value; return prev(r); }
+      const f = t.closest('.qf')?.dataset.f; if (!f) return;
+      const v = parseInt(t.value.replace(/\D/g, ''), 10); if (Number.isFinite(v)) m.v[f] = Math.min(999, v); else delete m.v[f]; prev(r);
+    });
+    r.querySelector('#qs-go').onclick = saveAll;
+    r.querySelector('#qs-clear')?.addEventListener('click', () => { solo.v = {}; solo.note = ''; saveAll(); });
     draw(r);
   });
 }
@@ -2290,7 +2310,9 @@ function vExercise() {
   if (isCardio(exOf(S.arg))) return vCardio(exOf(S.arg));
   /* with machines, the headline, trend, records and coach follow one machine: the one picked here, else the last */
   const ex = exOf(S.arg), k = exKey(ex), mc = mcOf(k), x = S.A.ex.get(k), all = S.A.all.get(ex.id), ms = machinesOf(ex);
-  const on = mc ? ` · ${mLetter(ex, mc)}` : ms.length ? ' · not set' : '', saved1 = ex.oneRm > 0 && !mc;
+  const on = mc ? ` · ${mLetter(ex, mc)}` : ms.length ? ' · not set' : '';
+  /* your 1RM: the higher of one set by hand and the best estimate, for the lift the page follows */
+  const so = savedOrm(k), est = x ? x.best : 0, orm = Math.max(so?.kg || 0, est), byHand = !!so && so.kg >= est - 1e-6;
   const hist = []; for (const s of sorted()) { for (const it of s.items) if (it.exId === ex.id) { const sets = it.sets.filter(st => +st.r > 0); if (sets.length) hist.push({ s, sets, mc: machineOf(ex, it.mc) ? it.mc : null }); } if (hist.length >= 12) break; }
   const bs = x?.bestSet;
   /* sets of it that look like typos, newest first, each opening its session ready to fix */
@@ -2302,9 +2324,9 @@ function vExercise() {
   <h1 class="h1 rv" style="margin:14px 0 4px">${esc(ex.name)}${ex.isDefault ? '' : ' <span class="badge acc">custom</span>'}</h1><p class="muted rv">${esc(ex.muscle)} · ${ex.kind === 'bw' ? 'Bodyweight (load = bodyweight + added)' : 'Weighted'}${ex.archived ? ' · removed from list' : ''}</p>
   <div class="rv ex-pnote">${setupLine(ex, null, true)}</div>
   <div class="dash" style="margin-top:18px">${susCard}${machinesCard(ex, k)}
-    <div class="card rv"><div class="card-h"><span class="lbl">${saved1 ? 'Your 1RM' : 'Estimated 1RM'}${on} · ${unit()}</span>${mc ? '' : `<button class="btn ghost sm" data-act="edit-orm" data-id="${ex.id}">${roll(saved1 ? 'Edit' : 'Set 1RM')}</button>`}</div>
-      <div class="bignum md">${big(saved1 ? fmtW(ex.oneRm) : x ? fmtW(roundW(x.best)) : '–')}<span class="dot"></span></div>
-      <p class="muted" style="margin-top:14px;font-size:13px">${saved1 ? `Saved ${fmtDate(ex.oneRmAt || Date.now())}${x ? ` · best estimate ${fmtW(roundW(x.best))} ${unit()}` : ''}` : bs ? `From ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set to see your estimate.'}</p>${exNext(ex)}</div>
+    <div class="card rv orm-card"><div class="card-h"><span class="lbl">1RM${on} · ${unit()}</span><button class="btn ghost sm" data-act="edit-orm" data-id="${esc(k)}">${roll(so ? 'Edit' : 'Set 1RM')}</button></div>
+      <div class="bignum md">${big(orm ? fmtW(roundW(orm)) : '–')}<span class="dot"></span></div>
+      <p class="muted" style="margin-top:14px;font-size:13px">${byHand ? `Set by you ${fmtDate(so.at || Date.now())}${est ? ` · best estimate ${fmtW(roundW(est))} ${unit()}` : ''}` : bs ? `Updates by itself · from ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set and it appears, then keeps itself up to date.'}</p>${exNext(ex)}</div>
     <div class="card rv"><div class="card-h"><span class="lbl">e1RM by session${on}</span><span class="lbl">${x ? x.pts.length : 0} logged</span></div>${trend(x)}</div>
     ${recordsCard(ex, k)}
     ${exGoalCard(ex)}
@@ -2612,7 +2634,7 @@ function vPrefs() {
 const HOW = `<div class="sh-h"><h3>How the numbers work</h3>${xBtn()}</div><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
-    <p><b>One-rep max.</b> Each exercise shows your saved one-rep max, or the best estimate from your sets. When a completed set beats it, Synergym asks whether to save the new one.</p>
+    <p><b>One-rep max.</b> Each lift (an exercise, or each of its machines) shows your 1RM: the higher of one you set by hand and the best estimate from your sets. A completed set that beats it raises it straight away, and fixing that set brings it back.</p>
     <p><b>Records (PRs).</b> A weight PR is heavier than anything you’ve lifted on that exercise. A rep PR is more reps than you’ve ever done at that weight or heavier. Heavier and more reps than your record set is both. Each set is judged as you type it, against everything before it, earlier sets that day included; an exercise’s first session sets the baseline. For bodyweight moves the weight is the added load.</p>
     <p><b>Next-set targets.</b> From your last two sessions of the exercise. With a rep range in your split (say 8–12), keep the weight and add reps until every set reaches the top, then add about 2.5% (at least 2.5 kg or 5 lb) and go back to the bottom; fall under the range twice and it drops 5%. Without a range: if your top set went at least as well as the time before, add weight and keep the reps; if it slipped, or your later sets fell short, hold the weight. Bodyweight moves add reps.</p>
     <p><b>Coach: today’s call.</b> <i>Rest</i> after more training days in a row than your split plans (2–4 without a split, by experience), or when your split has a rest day next. <i>Go easy</i> (about 10% lighter, a set fewer) when this week’s sets are 50% above your usual week, when two main lifts have come in 5% under their recent best two sessions running, when yesterday gave today’s muscles 6+ sets, or after two weeks away.</p>
@@ -3128,7 +3150,7 @@ function toggleDone(setId) {
   render(false);
   if (s.endedAt) return;
   if (nextName) { toast('Next in group: ' + nextName); S.rest = null; tick(); } else if (S.profile.restOn) startRest();
-  maybePromptOneRm(s, f.it, st);
+  oneRmNote(s, f.it, st);
 }
 let AC = null;
 function startRest() { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume && AC.resume(); } catch {} S.rest = { end: Date.now() + S.profile.rest * 1000, beeped: false }; tick(); }
@@ -3216,9 +3238,9 @@ function delSession(id) {
   if (here) back();
   else if (row && !reduced) { row.style.height = row.offsetHeight + 'px'; void row.offsetHeight; row.classList.add('gone'); row.style.height = '0px'; setTimeout(redraw, 420); }
   else redraw();
-  toast(s.endedAt ? 'Session deleted' : 'Session discarded');
-  /* a saved 1RM that came from it goes back to the best estimate, if you agree */
-  if (saved && saved.endedAt) { const ch = ormChanges(saved, { items: [] }); if (ch.length) setTimeout(() => offerOneRm(ch, saved, 'deleted'), here ? 450 : 0); }
+  /* a 1RM set by hand that came from it goes back to the best estimate (Undo takes that back) */
+  const orm = applyOneRm(saved && saved.endedAt ? ormChanges(saved, { items: [] }) : []);
+  toast((s.endedAt ? 'Session deleted' : 'Session discarded') + orm.note, orm.undone ? undefined : { label: 'Keep 1RM', fn: () => { orm.undo(); render(false); } });
 }
 
 /* ---------- editing a finished session ----------
@@ -3276,8 +3298,8 @@ function saveEdit(how) {
   if (how === 'update' || how === 'day') {
     if (how === 'update' && !e.dirty) { render(false); return toast('No changes to save'); }
     queue('s:' + s.id, 0); compute(); render(false); buzz(12);
-    const orm = offerOneRm(ormChanges(e.orig, s), s);
-    return toast(`${how === 'day' ? `Logged for ${fmtDate(s.startedAt)}` : 'Updated'}${recNote(S.A.sess.get(s.id))}`, { label: 'Undo', fn: () => {
+    const orm = applyOneRm(ormChanges(e.orig, s));
+    return toast(`${how === 'day' ? `Logged for ${fmtDate(s.startedAt)}` : 'Updated'}${recNote(S.A.sess.get(s.id))}${orm.note}`, { label: 'Undo', fn: () => {
       if (S.edit && S.edit.id === e.id) S.edit = null;
       orm.undo();
       if (e.orig) { S.sessions.set(e.id, clone(e.orig)); queue('s:' + e.id, 0); render(false); }
@@ -3294,8 +3316,8 @@ function saveEdit(how) {
   queue('s:' + copy.id, 0); compute(); buzz(12);
   if (S.lbCtx === e.id) S.lbCtx = copy.id;
   go('session', copy.id, { replace: true });
-  const orm = offerOneRm(ormChanges(null, copy), copy);
-  toast(`Saved as today’s session${recNote(S.A.sess.get(copy.id))}`, { label: 'Undo', fn: () => {
+  const orm = applyOneRm(ormChanges(null, copy));
+  toast(`Saved as today’s session${recNote(S.A.sess.get(copy.id))}${orm.note}`, { label: 'Undo', fn: () => {
     if (S.edit && S.edit.id === copy.id) S.edit = null;
     orm.undo();
     S.sessions.delete(copy.id); queue('s:' + copy.id, 0);
@@ -3303,43 +3325,27 @@ function saveEdit(how) {
   } });
 }
 
-/* ---------- a saved 1RM after an edit ----------
-   Everything else follows an edit by itself; a 1RM saved by hand only changes when you say so. So after a save:
-   a set that now beats it offers to raise it, and correcting the session it came from downward offers to drop it
-   back to your best estimate. */
+/* ---------- a 1RM set by hand, after an edit or a delete ----------
+   Your 1RM follows your sets by itself (the higher of the one you set and your best estimate). One set by hand only
+   changes when it came from the session that changed: then it goes back to your best estimate, and the session's
+   Undo takes that back too. A corrected set that beats it shows as a new 1RM. */
 function ormChanges(before, after) {
-  const top = (s, exId) => { let b = 0; if (s) { const ex = exOf(exId); for (const it of s.items) if (it.exId === exId && !it.mc) for (const st of it.sets) if (+st.r > 0 && !(st.id && suspects().has(st.id))) b = Math.max(b, e1rm(loadOf(st, ex), +st.r)); } return roundW(b); };
+  const top = (s, k) => { let b = 0; if (s) { const ex = exOf(k); for (const it of s.items) if (liftKey(it) === k) for (const st of it.sets) if (+st.r > 0 && !(st.id && suspects().has(st.id))) b = Math.max(b, e1rm(loadOf(st, ex), +st.r)); } return roundW(b); };
   const out = [];
-  for (const id of new Set([...(before ? before.items : []), ...after.items].map(it => it.exId))) {
-    const ex = exOf(id); if (!ex || !(ex.oneRm > 0)) continue;
-    const now = top(after, id), was = top(before, id);
-    if (now > ex.oneRm + 1e-6) out.push({ ex, up: true, to: now });
-    else if (was > 0 && Math.abs(was - ex.oneRm) < 0.01 && now < was) { const est = roundW(prevBestE1rm(id)); if (est < ex.oneRm) out.push({ ex, up: false, to: est }); }
+  for (const k of new Set([...(before ? before.items : []), ...after.items].map(liftKey))) {
+    const sv = savedOrm(k), now = top(after, k), was = top(before, k);
+    if (sv && was > 0 && Math.abs(was - sv.kg) < 0.01 && now < was) out.push({ k, up: false, to: roundW(prevBestE1rm(k)), prev: sv });
+    else if (now > Math.max(sv?.kg || 0, roundW(prevBestE1rm(k, after.id))) + 1e-6 && now > was + 1e-6) out.push({ k, up: true, to: now });
   }
   return out;
 }
-/* asks once for all of them; returns { undo } so the session's Undo takes the 1RM back with it */
-function offerOneRm(changes, s, how = 'corrected') {
-  const prev = changes.map(c => ({ ex: c.ex, oneRm: c.ex.oneRm, oneRmAt: c.ex.oneRmAt })); let done = false;
-  const h = { undo: () => { if (!done) return; done = false; for (const p of prev) { p.ex.oneRm = p.oneRm; p.ex.oneRmAt = p.oneRmAt; queue('x:' + p.ex.id, 0); } } };
-  if (!changes.length) return h;
-  const u = unit(), up = changes.every(c => c.up), down = changes.every(c => !c.up), val = c => c.to > 0 ? fmtW(c.to) : '–';
-  const why = c => c.up ? `From your corrected ${fmtDate(s.startedAt)} session. Your saved 1RM is ${fmtW(c.ex.oneRm)} ${u} (+${fmtW(c.to - c.ex.oneRm)} ${u}).`
-    : `Your saved ${fmtW(c.ex.oneRm)} ${u} came from the session you just ${how}. ${c.to > 0 ? 'Go back to your best estimate.' : 'Go back to estimating it from your sets.'}`;
-  /* one lift: the same sheet as a 1RM PR during a workout; several: a short list */
+/* applies them; returns { undo, note } where note goes on the end of the message that follows the save */
+function applyOneRm(changes) {
+  const downs = changes.filter(c => !c.up), u = unit();
+  for (const c of downs) setSavedOrm(c.k, 0);
   const one = changes.length === 1 && changes[0];
-  openSheet(`<div class="sh-h"><h3>${up ? 'New 1RM PR?' : down ? 'Lower your 1RM?' : 'Update your 1RM?'}</h3>${xBtn()}</div>
-  ${one ? `<div class="pr-hero orm-list"><span class="lbl">${esc(one.ex.name)}</span><div class="bignum md"><span class="n">${val(one)}</span><span class="pr-u">${u}</span></div><p class="muted">${why(one)}</p></div>`
-    : `<div class="list orm-list">${changes.map(c => `<div class="row"><span class="row-m"><span class="t">${esc(c.ex.name)}</span><span class="sub">${c.up ? 'up from' : 'down from'} ${fmtW(c.ex.oneRm)} ${u}</span></span><span class="row-r"><span class="d">${val(c)} ${u}</span></span></div>`).join('')}</div>`}
-  <div class="btns"><button class="btn ghost" data-act="close">Not now</button><button class="btn" id="orm-apply">${up ? 'Update my 1RM' : down ? 'Lower it' : 'Update'}</button></div>`, r => {
-    r.querySelector('#orm-apply').onclick = () => {
-      /* a raised 1RM dates from that session; a lowered one goes back to following your best estimate */
-      for (const c of changes) { if (c.up) { c.ex.oneRm = c.to; c.ex.oneRmAt = s.endedAt || Date.now(); } else { c.ex.oneRm = null; c.ex.oneRmAt = null; } queue('x:' + c.ex.id, 0); }
-      done = true; closeSheet(); render(false); buzz(12);
-      toast(changes.length > 1 ? '1RMs updated' : `${changes[0].ex.name} 1RM: ${changes[0].to > 0 ? fmtW(changes[0].to) + ' ' + u : 'estimated'}`, { label: 'Undo', fn: () => { h.undo(); render(false); } });
-    };
-  });
-  return h;
+  const note = !changes.length ? '' : one ? (one.up ? ` · new 1RM ${fmtW(one.to)} ${u} on ${liftName(one.k)}` : ` · ${liftName(one.k)} 1RM back to ${one.to > 0 ? `${fmtW(one.to)} ${u}` : 'its estimate'}`) : ' · 1RMs updated';
+  return { note, undone: !downs.length, undo() { for (const c of downs) setSavedOrm(c.k, c.prev.kg, c.prev.at); } };
 }
 
 /* ---------- the Logbook ----------

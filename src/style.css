@@ -2183,7 +2183,6 @@ html.ro-dragging,html.ro-dragging *{user-select:none;-webkit-user-select:none;cu
 .su-t b{color:var(--ink);font-weight:600}
 .su-c{flex:none;font-family:var(--font-mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 button.su:hover .su-c,button.su:hover{color:var(--ink)}
-.su-h{display:block;margin:var(--s-1) 0 4px}
 .su-list{display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .su-r{display:flex;gap:12px;align-items:center;width:100%;text-align:left;padding:10px 4px;border-bottom:1px solid var(--line);min-width:0}
 .su-r .su-l{width:2.1rem;height:2.1rem;background:var(--surface-2);color:var(--ink)}
@@ -2194,14 +2193,29 @@ button.su:hover .su-c,button.su:hover{color:var(--ink)}
 .su-rt small{color:var(--muted);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .su-dot{flex:none;width:1.25rem;height:1.25rem;border-radius:50%;border:2px solid var(--line);transition:border-color .2s var(--ease),border-width .2s var(--ease)}
 .su-r.on .su-dot{border:6px solid var(--ink)}
-.su-ed{display:flex;flex-direction:column;gap:6px;margin-top:var(--s0)}
-.su-ed .note-f{min-height:4rem}
-.su-more summary{cursor:pointer;font-size:.82rem;color:var(--muted);padding:4px 0}
-.su-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0}
-.su-2 label{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);min-width:0}
-.su-why{font-size:.8rem;margin:4px 0 0}
-.su-addm{display:block;margin:var(--s-1) 0 0 2px;font-size:.88rem;color:var(--ink-2)}
-.su-addm:hover{color:var(--ink)}
+/* the setup sheet: tap, don't type */
+.qs .mk-x{display:block;font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.qs-ms{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 10px}
+.qs-ms .chip b{font-weight:700;margin-right:2px}
+.qs-nm{display:flex;gap:8px;align-items:center;margin:0 0 var(--s0)}
+.qs-nm .field{flex:1;min-width:0}
+.qs-del{flex:none;font-size:.82rem;color:var(--bad);padding:8px 4px}
+.qf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr));gap:10px;margin:4px 0 var(--s0)}
+.qf{background:var(--surface-2);border-radius:var(--r-md);padding:10px 12px}
+.stp{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px}
+.stp button{flex:none;width:2.4rem;height:2.4rem;border-radius:50%;background:var(--surface);color:var(--ink);font-size:1.3rem;line-height:1;display:grid;place-items:center;padding:0;transition:transform .15s var(--ease)}
+.stp button:active{transform:scale(.9)}
+.stp input{width:100%;min-width:0;text-align:center;background:transparent;border:0;outline:0;color:var(--ink);font-family:var(--font-display);font-size:1.6rem;padding:0}
+.stp input::placeholder{color:var(--muted)}
+.qrow{margin:0 0 var(--s0)}
+.qrow .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.qs-addnote{display:block;color:var(--ink-2);font-size:.9rem;margin:2px 0 var(--s0)}
+.qs-addnote:hover{color:var(--ink)}
+.qs-note{min-height:0;margin:2px 0 var(--s0)}
+.qf-prev{border-top:1px solid var(--line);padding-top:12px;margin:4px 0 var(--s0)}
+.qf-prev b{display:block;margin-top:4px;font-weight:600;line-height:1.35}
+.qs-foot{display:flex;gap:8px;margin-top:var(--s0)}
+.qs-foot #qs-go{flex:1;justify-content:center}
 .mc-list{display:flex;flex-direction:column;border-top:1px solid var(--line);margin-top:6px}
 .mc-r{display:flex;gap:12px;align-items:center;width:100%;text-align:left;padding:10px 4px;border-bottom:1px solid var(--line);min-width:0}
 .mc-r .su-l{background:var(--surface-2);color:var(--ink)}

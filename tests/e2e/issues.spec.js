@@ -61,7 +61,7 @@ test('#3: a past typo is flagged, left out of the stats, and fixed from the sess
   await expect(card).toContainText('1 set looks like a typo');
   await expect(card).toContainText('80 kg × 106');
   await expect(card).toContainText('your usual 8 reps');
-  const orm = page.locator('#view .card', { hasText: 'Estimated 1RM' }).first();
+  const orm = page.locator('#view .orm-card');
   await expect(orm).not.toContainText('362');
   await expect(orm).toContainText('101');
   await expect(orm).not.toContainText('× 106');

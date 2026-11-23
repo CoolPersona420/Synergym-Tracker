@@ -10,6 +10,24 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.2.1-alpha · 23 November 2026
+
+**Setup you tap in, and a 1RM that keeps itself up to date**
+
+- **Setup, tapped in:** an exercise's setup is no longer a blank box to type in. The sheet shows the settings that
+  fit the exercise (a Smith machine's bar hook and safety pins, a cable's pulley height and attachment, a leg press's
+  seat and feet, a dumbbell bench's angle) as − / + numbers and chips, plus an optional note, and shows the line the
+  card will read: "Hook 12 · Pins 8 · Shoulder-width stance". Your older notes are kept as they are.
+- **A 1RM that updates itself:** your 1RM is the higher of a 1RM you set by hand and your best set's estimate. Tick a
+  set that beats it and a short message says "New 1RM"; there's no question to answer mid-set any more. Fix that set
+  and the 1RM follows it back.
+- **A 1RM per machine:** each machine keeps its own 1RM, shown on the exercise page for the machine you pick, with
+  **Set 1RM** to enter a tested max for that machine. Top lifts lists each machine on its own line.
+- **Edits and deletes adjust it for you:** if a 1RM you set by hand came from a session you correct or delete, it
+  goes back to your best estimate on its own, and **Undo** (or **Keep 1RM**) takes that back.
+
+---
+
 ## 0.2.0-alpha · 23 November 2026
 
 **Machines, a calmer Home, and a little motion**

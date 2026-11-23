@@ -40,7 +40,9 @@ export function cleanItem(o) {
 export function cleanMachines(m) {
   if (!Array.isArray(m)) return [];
   return m.filter(x => x && typeof x === 'object' && x.id).slice(0, 12).map(x => ({ id: String(x.id).replace(/[^\w-]/g, '').slice(0, 40), name: String(x.name || '').trim().slice(0, 24) || 'Machine',
-    what: String(x.what || '').trim().slice(0, 60), setup: String(x.setup || '').trim().slice(0, 200) })).filter(x => x.id);
+    what: String(x.what || '').trim().slice(0, 60), setup: String(x.setup || '').trim().slice(0, 200),
+    /* a 1RM set by hand on this machine, and when */
+    ...(+x.orm > 0 && +x.orm < 2000 ? { orm: Math.round(+x.orm * 100) / 100, ormAt: Number.isFinite(+x.ormAt) && +x.ormAt > 0 ? Math.round(+x.ormAt) : null } : {}) })).filter(x => x.id);
 }
 export function cleanSession(o) {
   if (!o || typeof o !== 'object') return null;
