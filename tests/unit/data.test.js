@@ -144,3 +144,16 @@ test('what’s new for the update popup comes from the release notes: the first 
   assert.deepEqual(highlights(notes, '9.9.9'), []);
   assert.deepEqual(highlights('', '0.2.0-alpha'), []);
 });
+
+test('machines: an exercise keeps up to 12, each with a clean id, name, what and setup; an item keeps the one it was on', async () => {
+  const { cleanMachines } = await import('../../src/lib/sanitize.js');
+  const ms = cleanMachines([{ id: 'a<b>1', name: '  Cable stack ', what: 'pulley', setup: 'seat 4' }, { id: 'b2', name: '' }, null, { name: 'no id' }, ...Array.from({ length: 20 }, (_, i) => ({ id: 'z' + i, name: 'M' }))]);
+  assert.equal(ms.length, 12);
+  assert.deepEqual(ms[0], { id: 'ab1', name: 'Cable stack', what: 'pulley', setup: 'seat 4' });
+  assert.equal(ms[1].name, 'Machine');
+  assert.deepEqual(cleanMachines('nope'), []);
+  const s = cleanSession({ id: 'a', items: [{ id: 'i', exId: 'x', mc: 'b2', sets: [{ id: 's', w: 20, r: 10 }] }, { id: 'j', exId: 'y', mc: '<>', sets: [] }, { id: 'k', exId: 'z', mc: 7, sets: [] }] });
+  assert.equal(s.items[0].mc, 'b2');
+  assert.ok(!('mc' in s.items[1]));
+  assert.ok(!('mc' in s.items[2]));
+});

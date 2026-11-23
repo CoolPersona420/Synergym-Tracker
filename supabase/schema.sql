@@ -78,6 +78,10 @@ alter table public.exercises drop constraint if exists exercises_kind_check;
 alter table public.exercises add constraint exercises_kind_check check (kind in ('w','bw','c'));
 -- A note that stays with the exercise (seat, grip, setup), added in 0.1.44.
 alter table public.exercises add column if not exists note text check (note is null or char_length(note) <= 200);
+-- The machines an exercise is done on, added in 0.2.0: [{ id, name, what, setup }], at most 12. A session item names
+-- the one it was done on (items[].mc), and each machine counts as its own lift.
+alter table public.exercises add column if not exists machines jsonb
+  check (machines is null or (jsonb_typeof(machines) = 'array' and jsonb_array_length(machines) <= 12 and pg_column_size(machines) <= 8192));
 
 create table if not exists public.sessions (
   id         uuid primary key,
@@ -349,9 +353,9 @@ begin
   delete from public.sessions where user_id = uid;
   delete from public.splits where user_id = uid;
   delete from public.exercises where user_id = uid;
-  insert into public.exercises (id, user_id, name, muscle, kind, archived, is_default, one_rm, one_rm_at)
-    select x.id, uid, x.name, x.muscle, x.kind, coalesce(x.archived, false), coalesce(x.is_default, false), x.one_rm, x.one_rm_at
-    from jsonb_to_recordset(p->'library') as x(id uuid, name text, muscle text, kind text, archived boolean, is_default boolean, one_rm numeric, one_rm_at timestamptz);
+  insert into public.exercises (id, user_id, name, muscle, kind, archived, is_default, one_rm, one_rm_at, note, machines)
+    select x.id, uid, x.name, x.muscle, x.kind, coalesce(x.archived, false), coalesce(x.is_default, false), x.one_rm, x.one_rm_at, x.note, x.machines
+    from jsonb_to_recordset(p->'library') as x(id uuid, name text, muscle text, kind text, archived boolean, is_default boolean, one_rm numeric, one_rm_at timestamptz, note text, machines jsonb);
   insert into public.sessions (id, user_id, name, started_at, ended_at, notes, items, split_id, split_day)
     select x.id, uid, x.name, x.started_at, x.ended_at, coalesce(x.notes, ''), coalesce(x.items, '[]'), x.split_id, x.split_day
     from jsonb_to_recordset(p->'sessions') as x(id uuid, name text, started_at timestamptz, ended_at timestamptz, notes text, items jsonb, split_id uuid, split_day int);

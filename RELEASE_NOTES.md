@@ -10,16 +10,32 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
-## 0.1.53-alpha · 23 November 2026
+## 0.2.0-alpha · 23 November 2026
 
-**A calmer Home**
+**Machines, a calmer Home, and a little motion**
 
+- **Track the machine you used:** an exercise can list the machines you do it on (Triceps Pushdown on the cable
+  stack, or on the plate-loaded one), each with a name, what it is and your setup on it. Pick one on the exercise's
+  card in a session and its own last numbers, targets, intensity, estimated max and records follow it, because
+  40 kg on one machine isn't 40 kg on another. Volume, sets and streaks still add up across all of them.
+- **One setup line:** the exercise note and machines are now one line on the card: **Add setup: machine, seat,
+  grip**. Without machines it's your note, as before; **Done on more than one machine? Add machines** turns it into
+  a machine list, and your note becomes the first machine's setup.
+- **A greeting after training that knows what you did:** a new PR is named ("a new PR on Bench Press"), finishing
+  your week's target says so, a streak every four weeks is counted, and otherwise you see what's next in your split.
+- **By machine, on the exercise page:** each machine's estimated max and sessions. Tap one and the page's
+  estimate, chart, records and the coach's next target follow it. Sessions from before you added machines show as
+  **Not set**, and **Tag all** puts them on one machine in one go, with **Undo**.
+- **Slight motion where there was none:** new sets and exercises fade in, a ticked set's check pops, an intensity
+  number rolls to its new value, the session total gives a small nudge when it changes, and deleting a set or an
+  exercise folds it away. Reduced motion and Lite mode switch it all off.
 - **No more quotes:** Home's greeting stands on its own, without the motivational quote under it. On a computer
   the greeting now runs across the full width instead of sharing it with the quote.
 - **Even spacing on phones:** the greeting, today's card, its buttons and your first widget now sit at an even
   distance from each other, so your widgets start higher on the screen.
 - **Today's numbers in their card:** once you've trained, the sets, volume and what's next show inside the
   "Completed today" card, under the session they describe.
+- **Fixed:** importing a backup no longer drops your exercise notes.
 
 ---
 
