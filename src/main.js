@@ -27,7 +27,6 @@ import { segDrag } from './ui/segdrag.js';
 import { reorderDrag } from './ui/reorder.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
 import { scanRecords, bestPerSession, repTable, PR_LABEL } from './lib/records.js';
-import { setupFields, parseSetup, formatSetup, setupHint } from './lib/setup.js';
 import { logBw, unlogBw, bwSeries, bwChange, weekSummary } from './lib/body.js';
 import { monthSummary, monthStart } from './lib/month.js';
 import { buildIcs, weekPlan, sessionMinutes, DEFAULT_DAYS } from './lib/ics.js';
@@ -282,22 +281,39 @@ let EDITS = 0;
 const same = (a, b) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
 const EXM = { k: null, m: new Map() };
 const exOf = id => { const k = [S.library, S.library.length]; if (!same(EXM.k, k)) { EXM.k = k; EXM.m = new Map(S.library.map(e => [e.id, e])); } return EXM.m.get(id) ?? (typeof id === 'string' && id.includes('@') ? EXM.m.get(baseId(id)) : undefined); };
-/* ---------- machines ----------
-   An exercise can list the machines it's done on (a name, what it is, your setup on it), and each session item can
-   name one (it.mc). Weights on different machines don't compare, so each machine is its own lift for hints, targets,
-   intensity, estimated max, records, typo checks, the coach and month/week progress; volume and sets still add up.
-   A lift's key is the exercise id, or "exerciseId@machineId" for an item on a machine. Nothing changes for an
-   exercise without machines: its key is its id. */
-const liftKey = it => it.mc ? it.exId + '@' + it.mc : it.exId;
+/* ---------- tags: machines and labels ----------
+   An exercise in a session can carry tags. A machine tag (one at a time, weighted exercises only) names the machine
+   it was done on (it.mc, from the exercise's own list); weights on different machines don't compare, so each machine
+   is its own lift for hints, targets, intensity, 1RM, records, typo checks, the coach and month/week progress.
+   Labels (it.tags: belt, paused, wide grip) are for finding sessions again and never split the numbers. Volume and
+   sets add up across all of them. A lift's key is the exercise id, or "exerciseId@machineId" for an item on one of
+   its machines. Nothing changes for an exercise without machines: its key is its id. */
+const liftKey = it => it.mc && machineOf(exOf(it.exId), it.mc) ? it.exId + '@' + it.mc : it.exId;
 const baseId = k => { const i = String(k).indexOf('@'); return i < 0 ? k : k.slice(0, i); };
 const mcOf = k => { const i = String(k).indexOf('@'); return i < 0 ? null : k.slice(i + 1); };
 /* a session with each item's exercise id swapped for its lift key (the same object when no item names a machine) */
 const keyed = s => s.items.some(it => it.mc) ? { ...s, items: s.items.map(it => it.mc ? { ...it, exId: liftKey(it) } : it) } : s;
-const machinesOf = ex => (ex && ex.machines) || [];
+/* machines are for weighted exercises: a bodyweight or cardio one is always "no machine" (its list is kept, unused) */
+const machinesOf = ex => (ex && ex.kind === 'w' && ex.machines) || [];
 const machineOf = (ex, mc) => mc ? machinesOf(ex).find(m => m.id === mc) || null : null;
-const mLetter = (ex, mc) => { const i = machinesOf(ex).findIndex(m => m.id === mc); return i < 0 ? '?' : String.fromCharCode(65 + i); };
-/* "Triceps Pushdown · B" */
-const liftName = k => { const ex = exOf(k), mc = mcOf(k); return ex ? ex.name + (mc && machineOf(ex, mc) ? ' · ' + mLetter(ex, mc) : '') : ''; };
+const mName = (ex, mc) => machineOf(ex, mc)?.name || '';
+/* "Triceps Pushdown · Hammer" */
+const liftName = k => { const ex = exOf(k), mc = mcOf(k); return ex ? ex.name + (mc && machineOf(ex, mc) ? ' · ' + mName(ex, mc) : '') : ''; };
+const itemTags = it => (Array.isArray(it.tags) ? it.tags : []);
+/* the labels an exercise had the last time it was done (they carry over, like its machine) */
+function lastTags(exId, excludeSid) { for (const s of sorted()) { if (s.id === excludeSid) continue; const it = [...s.items].reverse().find(i => i.exId === exId); if (it) return itemTags(it).slice(); } return []; }
+/* every label in use, most used first: n sessions overall, and on each exercise */
+const LBC = { k: null, v: null };
+function labelUse() {
+  const k = [S.sessions, S.sessions.size, EDITS]; if (LBC.v && same(LBC.k, k)) return LBC.v;
+  const all = new Map(), byEx = new Map();
+  for (const s of S.sessions.values()) for (const it of s.items) for (const t of itemTags(it)) {
+    const key = t.toLowerCase(); const a = all.get(key) || { name: t, n: 0 }; a.n++; all.set(key, a);
+    if (!byEx.has(it.exId)) byEx.set(it.exId, new Map()); const m = byEx.get(it.exId), b = m.get(key) || { name: t, n: 0 }; b.n++; m.set(key, b);
+  }
+  const sortN = m => [...m.values()].sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
+  LBC.k = k; LBC.v = { all: sortN(all), ex: id => sortN(byEx.get(id) || new Map()) }; return LBC.v;
+}
 /* the machine an exercise was last done on (null when the latest time named none, or it has no machines) */
 function lastMc(exId) {
   const ex = exOf(exId); if (!machinesOf(ex).length) return null;
@@ -424,7 +440,8 @@ function ormLine(s, it) {
    set's estimate): a short message says so, once per new value. Fix the set and the 1RM follows it back. */
 const ormSaid = new Map();
 function oneRmNote(s, it, st) {
-  const ex = exOf(it.exId), k = liftKey(it); if (!ex || isCardio(ex) || s.endedAt || suspects().has(st.id)) return;
+  /* asking whether it's another machine: no new 1RM until that's answered */
+  const ex = exOf(it.exId), k = liftKey(it); if (!ex || isCardio(ex) || s.endedAt || suspects().has(st.id) || S.mcAsk === st.id) return;
   const v = e1rm(loadOf(st, ex), +st.r || 0), base = oneRmOf(k, s.id);
   if (!(v > 0) || !(base > 0) || v <= base * 1.0001) return;
   const val = roundW(v), sk = s.id + ':' + k; if (val <= base || (ormSaid.get(sk) || 0) >= val) return;
@@ -1410,7 +1427,7 @@ function exNext(ex) {
   const nx = nextSplitDay(), sps = [...(nx ? [nx.sp] : []), ...S.splits.values()];
   let x = null; for (const sp of sps) { for (const d of sp.days) { x = d.exercises.find(y => y.exId === ex.id); if (x) break; } if (x) break; }
   const k = exKey(ex), g = planFor(k, { reps: x ? x.reps : null, sets: x ? x.sets : 3 }); if (!g) return '';
-  return `<p class="co-nx"><span class="lbl">Coach · next time${mcOf(k) ? ' on ' + mLetter(ex, mcOf(k)) : ''}</span><b>${tgtText(g, ex.kind === 'bw')}</b> · ${plural(g.sets, 'set')}<small>${WHY[g.why]}</small></p>`;
+  return `<p class="co-nx"><span class="lbl">Coach · next time${mcOf(k) ? ' on ' + esc(mName(ex, mcOf(k))) : ''}</span><b>${tgtText(g, ex.kind === 'bw')}</b> · ${plural(g.sets, 'set')}<small>${WHY[g.why]}</small></p>`;
 }
 /* in a live session: why today's targets are lighter, or that a lift follows a goal's block */
 function sessCoachBand(s) {
@@ -1868,22 +1885,45 @@ function wave(s) {
 }
 /* the handle to drag an exercise to a new place: a live session, or one being edited, outside linking */
 const gripFor = () => { const s = cur(); return s && !locked(s) && !S.link ? '<span class="grip" data-grip aria-hidden="true" title="Drag to reorder"></span>' : ''; };
-/* An exercise's setup line on its card, the note and machines merged. Without machines: your setup (seat, grip…)
-   as a note that stays with the exercise, or an offer to add one while the session can change. With machines: the
-   one this item is on, tap to change. */
-function setupLine(ex, it = null, page = false) {
+/* ---------- tags and the setup note, on an exercise's card ----------
+   The tags line shows the machine (filled, with KG) and the labels; tapping it opens the tags sheet. An exercise done
+   on two machines gets a one-tap switch to the other one on the line itself. With no tags yet the line offers them.
+   The setup note (seat, grip) is the exercise's own and shows under the line. A finished session shows its tags as
+   they were, without the offers. */
+const TAG_ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>';
+const KG = '<span class="kg" aria-hidden="true">KG</span>';
+const tagHint = ex => ex.kind === 'w' ? 'machine, belt, grip' : isCardio(ex) ? 'treadmill, outdoors' : 'grip, paused, rings';
+/* the machine an exercise was last done on other than this one (or the only other one): the card offers it */
+function otherMc(ex, mc) {
+  for (const s of sorted()) for (const i of s.items) if (i.exId === ex.id && i.mc && i.mc !== mc && machineOf(ex, i.mc)) return i.mc;
+  const o = machinesOf(ex).filter(m => m.id !== mc); return o.length === 1 ? o[0].id : null;
+}
+const tagChips = (ex, it) => { const m = machineOf(ex, it.mc); return `${m ? `<span class="tc m">${KG}${esc(m.name)}</span>` : ''}${itemTags(it).map(t => `<span class="tc">${esc(t)}</span>`).join('')}`; };
+function tagLine(ex, it) {
+  if (!ex || !ex.id || !it) return '';
+  const s = cur(), open = s && !locked(s), m = machineOf(ex, it.mc), ls = itemTags(it), note = !ex.note && open ? `<button class="tl-note" data-act="ex-note" data-id="${ex.id}">${ICON.pen}Note</button>` : '';
+  if (!open) return m || ls.length ? `<div class="tline ro">${tagChips(ex, it)}</div>` : '';
+  const go = `data-act="tags" data-id="${ex.id}" data-item="${it.id}"`;
+  if (!m && !ls.length) return `<div class="tline-w"><button class="tline empty" ${go}>${TAG_ICO}<span class="tl">Tag it: ${tagHint(ex)}</span></button>${note}</div>`;
+  const o = ex.kind === 'w' && otherMc(ex, it.mc);
+  return `<div class="tline-w"><div class="tline"><button class="tl-main" ${go} aria-label="Tags: ${esc([m?.name, ...ls].filter(Boolean).join(', '))}. Change">${tagChips(ex, it)}</button>${o ? `<button class="tl-sw" data-act="mc-switch" data-item="${it.id}" data-mc="${o}" aria-label="Switch to ${esc(mName(ex, o))}">⇄ ${esc(mName(ex, o))}</button>` : `<button class="tl-go" ${go} aria-hidden="true" tabindex="-1">Change</button>`}</div>${note}</div>`;
+}
+/* the setup note: it stays with the exercise and shows on its card in every session */
+function noteLine(ex, page = false) {
   if (!ex || !ex.id) return '';
-  const s = !page && cur(), open = page || (s && !locked(s)), ms = isCardio(ex) ? [] : machinesOf(ex);
-  if (ms.length) {
-    if (!it) return '';
-    const m = machineOf(ex, it.mc), tag = `<span class="su-l${m ? '' : ' q'}" aria-hidden="true">${m ? mLetter(ex, it.mc) : '?'}</span>`;
-    const txt = m ? `<span class="su-t"><b>${esc(m.name)}</b>${m.setup || m.what ? ` · ${esc(m.setup || m.what)}` : ''}</span>` : '<span class="su-t"><b>Which machine?</b> · not set</span>';
-    if (!open) return m ? `<div class="su ro">${tag}${txt}</div>` : '';
-    return `<button class="su" data-act="ex-setup" data-id="${ex.id}" data-item="${it.id}" aria-label="${m ? `On ${esc(m.name)}. Change the machine` : 'Pick the machine'} for ${esc(ex.name)}">${tag}${txt}<span class="su-c">${m ? 'Change' : 'Pick'}</span></button>`;
-  }
-  const di = it && !page ? ` data-item="${it.id}"` : '';
-  if (ex.note) return `<button class="ex-note" data-act="ex-setup" data-id="${ex.id}"${di} aria-label="Edit the setup for ${esc(ex.name)}">${ICON.pen}<span><b>Your setup</b> · ${esc(ex.note)}</span></button>`;
-  return open ? `<button class="ex-note-add" data-act="ex-setup" data-id="${ex.id}"${di}>${ICON.pen}Add setup: ${setupHint(setupFields(ex.name, ex.kind))}</button>` : '';
+  if (ex.note) return `<button class="ex-note" data-act="ex-note" data-id="${ex.id}" aria-label="Edit the setup note for ${esc(ex.name)}">${ICON.pen}<span><b>Your setup</b> · ${esc(ex.note)}</span></button>`;
+  return page ? `<button class="ex-note-add" data-act="ex-note" data-id="${ex.id}">${ICON.pen}Add a setup note: seat, grip</button>` : '';
+}
+function noteSheet(id) {
+  const ex = exOf(id); if (!ex) return;
+  openSheet(`<div class="sh-h"><h3>${esc(ex.name)} setup</h3>${xBtn()}</div>
+    <div class="nt-w"><textarea class="field note-f" id="nt-v" maxlength="200" rows="2" placeholder="Seat height, grip, anything to remember">${esc(ex.note || '')}</textarea>
+    <div class="nt-b">${ex.note ? `<button class="btn line sm" id="nt-del">${roll('Remove')}</button>` : ''}<button class="btn sm" id="nt-save">${roll('Save')}</button></div></div>`, r => {
+    const save = v => { ex.note = v.trim().slice(0, 200); queue('x:' + ex.id, 0); closeSheet(); render(false); toast(ex.note ? 'Setup note saved' : 'Setup note removed'); };
+    r.querySelector('#nt-save').onclick = () => save(r.querySelector('#nt-v').value);
+    r.querySelector('#nt-del')?.addEventListener('click', () => save(''));
+    const t = r.querySelector('#nt-v'); setTimeout(() => { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }, 60);
+  });
 }
 /* the item's sets not logged yet take the hints of the machine it's now on (typed numbers stay) */
 function rehint(s, it) {
@@ -1891,81 +1931,141 @@ function rehint(s, it) {
   const last = lastSetsFor(liftKey(it), s.id);
   it.sets.forEach((st, i) => { if (setLogged(st) || st.done) return; const l = last && last[Math.min(i, last.length - 1)]; st.pw = l ? l.w ?? null : null; if (l) st.pr = l.r ?? st.pr; });
 }
-const mcUsed = (exId, mc) => sorted().some(s => s.items.some(i => i.exId === exId && i.mc === mc && i.sets.some(setLogged)));
-/* The setup sheet: tap, don't type. The fields fit the exercise (lib/setup.js): numbers with − / + (or typed),
-   choices as chips, a note if you want one, and the line the card will show. Done on more than one machine? Each
-   machine keeps its own setup and name; from a session card, the one picked is the one this item is on. The first
-   machine takes the setup you had. Nothing is saved until Save / Use. */
-function setupSheet(exId, itemId = null, o = {}) {
+const mcUsed = (exId, mc) => sorted().filter(s => s.items.some(i => i.exId === exId && i.mc === mc && i.sets.some(setLogged))).length;
+/* put an item on a machine (or none): its hints follow, and it's saved */
+function setMachine(s, it, mc) {
+  if (mc) it.mc = mc; else delete it.mc;
+  rehint(s, it); queue('s:' + s.id, 0);
+}
+/* ---------- "Different machine today?" ----------
+   A ticked set far from what this lift usually takes (under 70% or over 140% of last time's heaviest, and at least
+   5 kg apart) is most likely another machine: one line under the set offers the exercise's machines, a new one, or
+   Not now. Asked once per exercise in a session; a suspected typo asks about the typo instead. */
+const mcAsked = new Set();
+function machineAsk(s, it, st) {
+  const ex = exOf(it.exId); if (!ex || ex.kind !== 'w' || s.endedAt || mcAsked.has(it.id) || suspects().has(st.id)) return false;
+  const last = lastSetsFor(liftKey(it), s.id), w0 = last ? Math.max(...last.map(x => +x.w || 0)) : 0, v = +st.w || 0;
+  if (!(w0 > 0) || !(v > 0) || Math.abs(v - w0) < 5 || (v >= w0 * 0.7 && v <= w0 * 1.4)) return false;
+  S.mcAsk = st.id; return true;
+}
+function mcAskLine(st, it) {
+  if (S.mcAsk !== st.id || locked(cur())) return '';
+  const ex = exOf(it.exId), ms = machinesOf(ex).filter(m => m.id !== it.mc).slice(0, 3);
+  return `<div class="mca" role="group" aria-label="Different machine today?"><span class="mca-q">Different machine today?</span><div class="mca-b">
+    ${ms.map(m => `<button class="chip" data-act="mca-pick" data-item="${it.id}" data-mc="${m.id}">${esc(m.name)}</button>`).join('')}
+    <button class="chip addc" data-act="tags" data-id="${ex.id}" data-item="${it.id}" data-add="w">${ms.length ? '+ New' : '+ Tag the machine'}</button><button class="mca-no" data-act="mca-no" data-item="${it.id}">Not now</button></div></div>`;
+}
+/* ---------- the tags sheet ----------
+   From a card: the machine as tiles, each with its 1RM and last set (a bodyweight or cardio exercise has none), and
+   the labels as chips, with labels from other exercises one tap away; the top shows Last → Try for what's picked.
+   Changes apply as you tap. Edit tags renames, moves a tag between Machine and Labels, or removes a machine never
+   used. From the exercise page it opens on Edit tags. */
+const MC_SUGGEST = [[/cable|pushdown|push-down|pulldown|pull-down|crossover|face pull|pull-through/i, ['Cable stack', 'Dual pulley', 'Functional trainer']],
+  [/smith/i, ['Smith machine', 'Angled Smith']], [/leg press|hack|pendulum/i, ['Plate-loaded', 'Selectorized', '45° sled']],
+  [/squat|lunge/i, ['Smith machine', 'Hack squat', 'Belt squat']], [/./, ['Plate-loaded', 'Selectorized', 'Hammer Strength']]];
+const LB_SUGGEST = { w: ['Belt', 'Paused', 'Wide grip', 'Close grip', 'Slow negatives', 'Straps'], bw: ['Wide grip', 'Chin-up grip', 'Paused', 'Rings', 'Weighted vest'], c: ['Treadmill', 'Outdoors', 'Intervals'] };
+const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+function lastSeen(key, excludeSid) {
+  const m = keyMatch(key, false);
+  for (const s of sorted()) { if (s.id === excludeSid) continue; const it = s.items.find(i => m(i) && i.sets.some(counted)); if (it) { const st = it.sets.filter(counted).reduce((a, b) => e1rm(+b.w || 0, +b.r) > e1rm(+a.w || 0, +a.r) ? b : a); return { st, t: s.startedAt }; } }
+  return null;
+}
+function tagsSheet(exId, itemId = null, o = {}) {
   const ex = exOf(exId); if (!ex) return;
-  const s = itemId && cur(), it = s && !locked(s) ? s.items.find(x => x.id === itemId) : null;
-  const F = setupFields(ex.name, ex.kind), cardio = isCardio(ex), L = i => String.fromCharCode(65 + i);
-  /* the draft: the exercise's own setup, or one per machine */
-  let list = machinesOf(ex).map(m => ({ ...m, ...parseSetup(m.setup, F) }));
-  const solo = { id: null, name: '', ...parseSetup(ex.note, F) };
-  let sel = list.length ? (it && machineOf(ex, it.mc) ? it.mc : lastMc(ex.id) || list[0].id) : null, noteOpen = false;
-  const mm = () => list.length > 0, cur_ = () => mm() ? list.find(m => m.id === sel) || list[0] : solo;
-  const addMachine = () => {
-    if (!mm()) { list = [{ ...solo, id: sid(), name: '', what: '', fresh: true }]; }
-    const m = { id: sid(), name: '', what: '', v: {}, note: '', fresh: true }; list.push(m); sel = m.id; noteOpen = false;
-  };
-  if (o.adding && !cardio) addMachine();
-  const lineOf = m => formatSetup(m.v, F, m.note);
-  const num = f => { const v = cur_().v[f.id]; return `<div class="qf" data-f="${f.id}"><span class="mk-x">${esc(f.label)}</span><div class="stp"><button data-step="-1" aria-label="${esc(f.label)} down">−</button><input inputmode="numeric" enterkeyhint="done" value="${v ?? ''}" placeholder="–" aria-label="${esc(f.label)}" autocomplete="off"><button data-step="1" aria-label="${esc(f.label)} up">+</button></div></div>`; };
-  const chips = f => { const v = cur_().v[f.id]; return `<div class="qrow" data-f="${f.id}"><span class="mk-x">${esc(f.label)}</span><div class="chips" role="radiogroup" aria-label="${esc(f.label)}">${f.opts.map(([c]) => `<button class="chip${v === c ? ' on' : ''}" role="radio" aria-checked="${v === c}" data-cv="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>`; };
+  const s = itemId && cur(), it = s && !locked(s) ? s.items.find(x => x.id === itemId) : null, w = ex.kind === 'w';
+  let edit = !it, add = o.add || null, more = false;
+  const u = unit(), kgs = v => fmtW(roundW(v));
   const draw = r => {
-    const m = cur_(), i = mm() ? list.indexOf(m) : -1, gone = mm() && !m.fresh && mcUsed(ex.id, m.id);
-    r.querySelector('#qs').innerHTML = `
-      ${mm() ? `<div class="qs-ms" role="radiogroup" aria-label="Machines">${list.map((x, k) => `<button class="chip${x === m ? ' on' : ''}" role="radio" aria-checked="${x === m}" data-mc="${x.id}"><b>${L(k)}</b> ${esc(x.name || `Machine ${L(k)}`)}</button>`).join('')}${list.length < 12 ? '<button class="chip" data-mc="+">+ Another</button>' : ''}</div>
-        <div class="qs-nm"><input class="field" id="qs-name" maxlength="24" autocomplete="off" placeholder="Name for machine ${L(i)}" value="${esc(m.name)}" aria-label="Name of machine ${L(i)}">${gone ? '' : `<button class="qs-del" id="qs-del">Remove ${L(i)}</button>`}</div>` : ''}
-      ${F.some(f => f.num) ? `<div class="qf-grid">${F.filter(f => f.num).map(num).join('')}</div>` : ''}
-      ${F.filter(f => !f.num).map(chips).join('')}
-      ${m.note || noteOpen ? `<textarea class="field note-f qs-note" id="qs-note" maxlength="160" rows="2" placeholder="Anything else: knees out, belt on" aria-label="Note">${esc(m.note)}</textarea>` : '<button class="qs-addnote" id="qs-addnote">+ Add a note</button>'}
-      <div class="qf-prev"><span class="mk-x">On the card</span><b id="qs-prev">${esc(lineOf(m)) || '<span class="muted">Nothing set yet</span>'}</b></div>
-      ${!mm() && !cardio ? '<div class="qrow"><span class="mk-x">Machine</span><div class="chips"><button class="chip on" aria-pressed="true" tabindex="-1">This one</button><button class="chip" id="qs-more">+ Another machine</button></div></div>' : ''}`;
-    r.querySelector('#qs-go').innerHTML = roll(it && mm() ? `Use ${L(i)}` : 'Save');
-    if (m.fresh && !m.name) setTimeout(() => r.querySelector('#qs-name')?.focus(), 60);
+    const ms = machinesOf(ex), cur_ = it ? (machineOf(ex, it.mc) ? it.mc : '') : null;
+    let h = `<div class="tg-top"><div><span class="lbl">${edit ? 'Edit tags' : 'Tags'}</span><h3>${esc(ex.name)}</h3></div>${xBtn()}</div>`;
+    if (it && w && !edit) { const g = suggestFor(s, it), m = machineOf(ex, it.mc);
+      h += `<div class="tg-prev" aria-live="polite"><span class="pt"><span>${m ? `On ${esc(m.name)}` : 'No machine'}${itemTags(it).map(t => ' · ' + esc(t)).join('')}</span>${g ? `<b>${fmtW(g.last.w)}×${g.last.r}<i>→ try</i>${fmtW(g.next.w)}×${g.next.r}</b>` : '<b class="first">First time on it: no last numbers yet</b>'}</span>${g ? '<span class="lbl">Last → Try</span>' : ''}</div>`; }
+    let body = '';
+    if (!edit) {
+      if (w) {
+        const recent = [...ms].sort((a, b) => (lastSeen(ex.id + '@' + b.id)?.t || 0) - (lastSeen(ex.id + '@' + a.id)?.t || 0)), shown = more ? recent : recent.slice(0, 4);
+        if (!more && cur_ && !shown.some(m => m.id === cur_)) shown[shown.length - 1] = ms.find(m => m.id === cur_);
+        const tile = (key, mc, name) => { const orm = oneRmOf(key, s.id), ls = lastSeen(key, s.id), on = cur_ === mc;
+          return `<button class="mtile${on ? ' on' : ''}${mc ? '' : ' none'}" role="radio" aria-checked="${on}" data-act="tg-mc" data-mc="${mc}"><b>${esc(name)}</b><span class="m1${orm || mc ? '' : ' txt'}">${orm ? kgs(orm) : mc ? '–' : 'Free weights'}</span><small>${orm ? `1RM ${u}` : mc ? 'new' : ''}${ls ? `${orm ? ' · ' : ''}last ${fmtW(+ls.st.w || 0)}×${ls.st.r} · ${fmtDate(ls.t)}` : ''}</small></button>`; };
+        body += `<div class="tg-sec"><span class="lbl">Machine</span><small>keeps its own numbers</small></div>
+          <div class="mtiles" role="radiogroup" aria-label="Machine">${shown.map(m => tile(ex.id + '@' + m.id, m.id, m.name)).join('')}${tile(ex.id, '', 'No machine')}
+          ${ms.length > 4 && !more ? `<button class="mtile add" data-act="tg-more">More (${ms.length - 4})</button>` : ''}${add === 'w' ? '' : '<button class="mtile add" data-act="tg-add" data-k="w">+ New machine</button>'}</div>${add === 'w' ? addRow('w') : ''}`;
+      }
+      const mine = labelUse().ex(ex.id).map(x => x.name), on = itemTags(it), list = [...new Set([...on, ...mine])].filter((x, i, a) => a.findIndex(y => sameName(x, y)) === i);
+      const all = labelUse().all.map(x => x.name), sug = [...all, ...(LB_SUGGEST[ex.kind] || LB_SUGGEST.w)].filter((x, i, a) => !list.some(y => sameName(x, y)) && a.findIndex(y => sameName(x, y)) === i).slice(0, 6);
+      body += `<div class="tg-sec"><span class="lbl">Labels</span><small>${w ? 'for finding sessions, numbers don’t change' : 'for finding sessions again'}</small></div>
+        <div class="chips">${list.map(t => { const y = on.some(x => sameName(x, t)); return `<button class="chip${y ? ' on' : ''}" aria-pressed="${y}" data-act="tg-lb" data-v="${esc(t)}">${esc(t)}</button>`; }).join('')}${add === 'l' ? '' : '<button class="chip addc" data-act="tg-add" data-k="l">+ New label</button>'}</div>
+        ${add === 'l' ? addRow('l') : ''}${sug.length ? `<p class="tg-sugl">${all.length ? 'From your other exercises' : 'Ideas'}</p><div class="chips">${sug.map(t => `<button class="chip sug" data-act="tg-lb" data-v="${esc(t)}">+ ${esc(t)}</button>`).join('')}</div>` : ''}`;
+    } else {
+      const row = (kind, id, name, n) => `<div class="tg-ed"><input class="field" data-ren="${kind}" data-id="${esc(id)}" value="${esc(name)}" maxlength="${kind === 'w' ? 24 : 20}" aria-label="Name of ${esc(name)}">
+        <div class="tg-eb">${kind === 'w' ? `<button class="chip" data-act="tg-move" data-k="w" data-id="${esc(id)}">Make it a label</button>` : w ? `<button class="chip" data-act="tg-move" data-k="l" data-id="${esc(name)}">Make it a machine</button>` : ''}${n ? `<span class="tg-n">${plural(n, 'session')}</span>` : kind === 'w' ? `<button class="tg-del" data-act="tg-del" data-id="${esc(id)}">Remove</button>` : ''}</div></div>`;
+      if (w) body += `<div class="tg-sec"><span class="lbl">Machines</span><small>keep their own numbers</small></div><div class="tg-list">${ms.map(m => row('w', m.id, m.name, mcUsed(ex.id, m.id))).join('') || '<p class="muted tg-empty">None yet.</p>'}</div>
+        ${add === 'w' ? addRow('w') : '<button class="chip addc tg-addm" data-act="tg-add" data-k="w">+ New machine</button>'}`;
+      const ls = labelUse().ex(ex.id);
+      body += `<div class="tg-sec"><span class="lbl">Labels</span><small>renaming one renames it everywhere</small></div><div class="tg-list">${ls.map(x => row('l', x.name, x.name, x.n)).join('') || '<p class="muted tg-empty">Labels are added on a session’s card.</p>'}</div>
+        <p class="muted tg-why">A machine you’ve used stays, so your history keeps its name. Moving a tag between Machine and Labels changes which numbers it keeps.</p>`;
+    }
+    const foot = edit ? `<button class="btn" data-act="tg-done">${it ? 'Done editing' : 'Done'}</button>` : `<button class="linkbtn" data-act="tg-edit">Edit tags</button><button class="btn" data-act="tg-close">Done</button>`;
+    r.innerHTML = `<div class="tgs">${h}<div class="tg-body">${body}</div><div class="tg-foot">${foot}</div></div>`;
+    const inp = r.querySelector('#tg-new'); if (inp) setTimeout(() => inp.focus(), 60);
   };
-  const prev = r => { const m = cur_(), t = lineOf(m), el = r.querySelector('#qs-prev'); if (el) el.innerHTML = esc(t) || '<span class="muted">Nothing set yet</span>'; };
-  /* the exercise keeps it; with no machines left, the last one's setup goes back to being the exercise's */
-  const saveAll = () => {
-    const had = machinesOf(ex).length;
-    if (!mm()) { ex.note = lineOf(solo); queue('x:' + ex.id, 0); closeSheet(); render(false); return toast(ex.note ? 'Setup saved' : 'Setup cleared'); }
-    const out = list.map((x, k) => ({ id: x.id, name: x.name.trim() || `Machine ${L(k)}`, what: x.what || '', setup: lineOf(x), ...(x.orm > 0 ? { orm: x.orm, ormAt: x.ormAt } : {}) }));
-    const goneAll = machinesOf(ex).filter(x => !out.some(y => y.id === x.id));
-    ex.machines = cleanMachines(out);
-    if (goneAll.length) for (const x of sorted()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && goneAll.some(g => g.id === i.mc)) { delete i.mc; ch = true; } if (ch) queue('s:' + x.id, 0); }
-    if (!had) ex.note = '';
-    queue('x:' + ex.id, 0);
-    if (it) { it.mc = sel; rehint(s, it); queue('s:' + s.id, 0); }
-    closeSheet(); render(false);
-    const m = out.find(x => x.id === sel);
-    toast(it && m ? `${ex.name} on ${mLetter(ex, sel)} · ${m.name}` : `${plural(out.length, 'machine')} saved`);
+  const addRow = k => `<div class="tg-addr"><div class="tg-addi"><input class="field" id="tg-new" maxlength="${k === 'w' ? 24 : 20}" autocomplete="off" placeholder="${k === 'w' ? 'Machine name' : 'Label'}" aria-label="${k === 'w' ? 'New machine' : 'New label'}"><button class="btn sm" data-act="tg-ok" data-k="${k}">${roll('Add')}</button></div>
+    ${k === 'w' ? `<div class="chips">${mcSuggest(ex).map(n => `<button class="chip sug" data-act="tg-ok" data-k="w" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : ''}</div>`;
+  const addMachine = (name, r) => {
+    name = name.replace(/\s+/g, ' ').trim().slice(0, 24); if (!name) return toast('Give the machine a name');
+    let m = machinesOf(ex).find(x => sameName(x.name, name));
+    if (!m) { if (machinesOf(ex).length >= 12) return toast('An exercise keeps up to 12 machines'); m = { id: sid(), name, what: '', setup: '' }; ex.machines = cleanMachines([...(ex.machines || []), m]); queue('x:' + ex.id, 0); }
+    add = null;
+    if (it) { setMachine(s, it, m.id); toast(`${name}: its own numbers start with today’s sets`); } else toast(`${name} added`);
+    draw(r); render(false);
   };
-  openSheet(`<div class="sh-h"><h3>${esc(ex.name)} setup</h3>${xBtn()}</div><div id="qs" class="qs"></div>
-  <div class="qs-foot">${!machinesOf(ex).length && ex.note && !o.adding ? `<button class="btn line" id="qs-clear">${roll('Clear')}</button>` : ''}<button class="btn" id="qs-go"></button></div>`, r => {
-    const q = r.querySelector('#qs');
-    q.addEventListener('click', e => {
-      const m = cur_(), b = e.target.closest('button'); if (!b) return;
-      if (b.dataset.step) { const f = b.closest('.qf').dataset.f, v = m.v[f]; m.v[f] = v == null ? (+b.dataset.step > 0 ? 1 : null) : Math.max(0, Math.min(999, Math.round(v) + +b.dataset.step)); if (m.v[f] == null) delete m.v[f]; b.parentElement.querySelector('input').value = m.v[f] ?? ''; buzz(6); return prev(r); }
-      if (b.dataset.cv != null) { const f = b.closest('.qrow').dataset.f, on = m.v[f] === b.dataset.cv; if (on) delete m.v[f]; else m.v[f] = b.dataset.cv;
-        for (const c of b.parentElement.children) { const y = !on && c === b; c.classList.toggle('on', y); c.setAttribute('aria-checked', y); } return prev(r); }
-      if (b.dataset.mc) { if (b.dataset.mc === '+') addMachine(); else sel = b.dataset.mc; noteOpen = false; return draw(r); }
-      if (b.id === 'qs-more') { addMachine(); return draw(r); }
-      if (b.id === 'qs-addnote') { noteOpen = true; draw(r); return r.querySelector('#qs-note')?.focus(); }
-      if (b.id === 'qs-del') { const i = list.indexOf(m); list.splice(i, 1); if (list.length) sel = list[Math.max(0, i - 1)].id; else { Object.assign(solo, { v: m.v, note: m.note }); sel = null; } return draw(r); }
+  const toggleLabel = (name, r) => {
+    if (!it) return; const ls = itemTags(it), had = ls.find(x => sameName(x, name));
+    if (had) it.tags = ls.filter(x => x !== had); else if (ls.length >= 8) return toast('Up to 8 labels on one exercise'); else it.tags = [...ls, name.trim().slice(0, 20)];
+    if (!it.tags.length) delete it.tags;
+    queue('s:' + s.id, 0); add = null; draw(r); render(false);
+  };
+  /* everywhere a label is used gets the new name; a machine is renamed on its exercise */
+  const rename = (kind, id, v) => {
+    v = v.replace(/\s+/g, ' ').trim(); if (!v) return;
+    if (kind === 'w') { const m = (ex.machines || []).find(x => x.id === id); if (!m || m.name === v) return; if (machinesOf(ex).some(x => x.id !== id && sameName(x.name, v))) return toast(`${v} is already a machine here`); m.name = v.slice(0, 24); queue('x:' + ex.id, 0); }
+    else { if (sameName(id, v) && id === v) return; for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (itemTags(i).some(t => sameName(t, id))) { i.tags = [...new Set(i.tags.map(t => sameName(t, id) ? v.slice(0, 20) : t))]; ch = true; } if (ch) queue('s:' + x.id, 0); } }
+    render(false); toast('Renamed');
+  };
+  const move = (k, id, r) => {
+    if (k === 'w') { const m = (ex.machines || []).find(x => x.id === id); if (!m) return;
+      for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && i.mc === id) { delete i.mc; if (!itemTags(i).some(t => sameName(t, m.name))) i.tags = [...itemTags(i), m.name.slice(0, 20)]; ch = true; } if (ch) queue('s:' + x.id, 0); }
+      ex.machines = cleanMachines((ex.machines || []).filter(x => x.id !== id)); queue('x:' + ex.id, 0); toast(`${m.name} is now a label`);
+    } else { if (!w) return; let m = machinesOf(ex).find(x => sameName(x.name, id)); if (!m) { m = { id: sid(), name: id.slice(0, 24), what: '', setup: '' }; ex.machines = cleanMachines([...(ex.machines || []), m]); queue('x:' + ex.id, 0); }
+      for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && itemTags(i).some(t => sameName(t, id))) { i.tags = itemTags(i).filter(t => !sameName(t, id)); if (!i.tags.length) delete i.tags; if (!machineOf(ex, i.mc)) i.mc = m.id; ch = true; } if (ch) queue('s:' + x.id, 0); }
+      toast(`${m.name} is now a machine`); }
+    draw(r); render(false);
+  };
+  openSheet('<div id="tg-root"></div>', root => {
+    const r = root.querySelector('#tg-root'); draw(r);
+    r.addEventListener('click', e => {
+      const b = e.target.closest('[data-act]'); if (!b || !r.contains(b)) return; const a = b.dataset.act;
+      e.stopPropagation();
+      if (a === 'close' || a === 'tg-close') { closeSheet(); return; }
+      if (a === 'tg-mc' && it) { e.stopPropagation(); setMachine(s, it, b.dataset.mc || null); draw(r); render(false); return; }
+      if (a === 'tg-lb') { e.stopPropagation(); return toggleLabel(b.dataset.v, r); }
+      if (a === 'tg-add') { e.stopPropagation(); add = b.dataset.k; return draw(r); }
+      if (a === 'tg-ok') { e.stopPropagation(); const v = b.dataset.v ?? r.querySelector('#tg-new')?.value ?? ''; return b.dataset.k === 'w' ? addMachine(v, r) : (v.trim() ? toggleLabel(v, r) : toast('Give the label a name')); }
+      if (a === 'tg-more') { e.stopPropagation(); more = true; return draw(r); }
+      if (a === 'tg-edit') { e.stopPropagation(); edit = true; add = null; return draw(r); }
+      if (a === 'tg-done') { e.stopPropagation(); if (!it) { closeSheet(); return; } edit = false; add = null; return draw(r); }
+      if (a === 'tg-move') { e.stopPropagation(); return move(b.dataset.k, b.dataset.id, r); }
+      if (a === 'tg-del') { e.stopPropagation(); const id = b.dataset.id; ex.machines = cleanMachines((ex.machines || []).filter(x => x.id !== id)); for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && i.mc === id) { delete i.mc; ch = true; } if (ch) queue('s:' + x.id, 0); } queue('x:' + ex.id, 0); draw(r); render(false); return; }
     });
-    q.addEventListener('input', e => {
-      const m = cur_(), t = e.target;
-      if (t.id === 'qs-name') { m.name = t.value; const c = q.querySelector(`[data-mc="${m.id}"]`); if (c) c.lastChild.textContent = ' ' + (t.value || `Machine ${L(list.indexOf(m))}`); return; }
-      if (t.id === 'qs-note') { m.note = t.value; return prev(r); }
-      const f = t.closest('.qf')?.dataset.f; if (!f) return;
-      const v = parseInt(t.value.replace(/\D/g, ''), 10); if (Number.isFinite(v)) m.v[f] = Math.min(999, v); else delete m.v[f]; prev(r);
-    });
-    r.querySelector('#qs-go').onclick = saveAll;
-    r.querySelector('#qs-clear')?.addEventListener('click', () => { solo.v = {}; solo.note = ''; saveAll(); });
-    draw(r);
+    r.addEventListener('change', e => { const t = e.target; if (t.dataset.ren) { rename(t.dataset.ren, t.dataset.id, t.value); draw(r); } });
+    r.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'tg-new') { e.preventDefault(); r.querySelector('[data-act="tg-ok"]:not([data-v])')?.click(); } if (e.key === 'Enter' && e.target.dataset.ren) e.target.blur(); });
   });
+}
+/* machine names worth offering: what this kind of exercise is usually done on, and machines named on others */
+function mcSuggest(ex) {
+  const own = (MC_SUGGEST.find(([re]) => re.test(ex.name)) || [null, []])[1], others = [];
+  for (const e of S.library) if (e.id !== ex.id) for (const m of machinesOf(e)) others.push(m.name);
+  return [...own, ...others].filter((n, i, a) => a.findIndex(x => sameName(x, n)) === i && !machinesOf(ex).some(m => sameName(m.name, n))).slice(0, 5);
 }
 const setInt = st => { const p = S.A.set.get(st.id); return p ? Math.round(p) : '·'; };
 function exCard(it, gmap) {
@@ -1973,7 +2073,7 @@ function exCard(it, gmap) {
   return `<article class="ex rv" data-item="${it.id}" data-ro="${it.id}">
   <div class="ex-h">${gripFor()}<button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub" data-orm="${it.id}">${ormLine(cur() || { id: null }, it)}</div></button>
   <button class="iconbtn" data-act="item-menu" data-item="${it.id}" aria-label="Exercise options">${ICON.dots}</button></div>
-  ${setupLine(ex, it)}${suggLine(it, bw)}
+  ${tagLine(ex, it)}${noteLine(ex)}${suggLine(it, bw)}
   <div class="set-head lbl"><span>Set</span><span>${bw ? '+' + unit() : unit()}</span><span>Reps</span><span>Int</span><span></span></div>
   ${it.wu ? '<p class="wu-note">Warm-ups first · not counted in records, intensity or volume</p>' : ''}<div class="sets">${(it.wu || []).map(wuRow).join('')}${it.sets.map((st, i) => setRow(st, i, gmap, it)).join('')}</div>
   <div class="ex-f">${!bw && !it.wu && !locked(cur()) && !it.sets.some(x => x.done) ? `<button class="btn ghost sm" data-act="add-wu" data-item="${it.id}">${roll('+ Warm-up')}</button>` : ''}<button class="btn ghost sm" data-act="add-set" data-item="${it.id}">${roll('+ Set')}</button>${it.sets.length ? `<button class="btn line sm" data-act="add-drop" data-set="${it.sets[it.sets.length - 1].id}">${roll('+ Drop')}</button>` : ''}${bw ? '' : `<button class="btn ghost sm ex-plates" data-act="plates" data-item="${it.id}">${roll('Plates')}</button>`}</div></article>`;
@@ -1988,7 +2088,7 @@ function cardioCard(it) {
   return `<article class="ex cx rv" data-item="${it.id}" data-ro="${it.id}">
   <div class="ex-h">${gripFor()}<button class="nm" data-act="open-ex" data-id="${esc(it.exId)}"><h3>${esc(ex.name)}</h3><div class="sub" data-crl="${it.id}">${cardioLine(it)}</div></button>
   <button class="iconbtn" data-act="item-menu" data-item="${it.id}" aria-label="Exercise options">${ICON.dots}</button></div>
-  ${setupLine(ex, it)}${chips}${it.sets.map(st => boutRow(it, st, ex, m, ro)).join('')}</article>`;
+  ${tagLine(ex, it)}${noteLine(ex)}${chips}${it.sets.map(st => boutRow(it, st, ex, m, ro)).join('')}</article>`;
 }
 function boutRow(it, st, ex, m, ro) {
   const { how, du } = cMeasure(ex), r = ro ? ' readonly' : '', p = pace(st.t ?? st.pt, st.d ?? st.pd, how, unit());
@@ -2041,7 +2141,7 @@ function suggLine(it, bw) {
   const g = suggestFor(s, it); if (!g) return '';
   const fmt = x => bw && !x.w ? `${x.r} reps` : `${fmtW(x.w)}×${x.r}`;
   const why = `${g.sets} ${g.sets === 1 ? 'set' : 'sets'} · ${WHY_SHORT[g.why] || ''}`;
-  return `<div class="sugg"><span class="sugg-t"><span class="lbl">Last${it.mc && machineOf(exOf(it.exId), it.mc) ? ' on ' + mLetter(exOf(it.exId), it.mc) : ''}</span> ${fmt(g.last)} <span class="arr" aria-hidden="true">→</span> <span class="lbl">Try</span> <b>${fmt(g.next)}</b><small>${why}</small></span><button class="btn ghost sm" data-act="sugg-use" data-item="${it.id}">${roll('Use')}</button></div>`;
+  return `<div class="sugg"><span class="sugg-t"><span class="lbl">Last${mcOf(liftKey(it)) ? ' on ' + esc(mName(exOf(it.exId), it.mc)) : ''}</span> ${fmt(g.last)} <span class="arr" aria-hidden="true">→</span> <span class="lbl">Try</span> <b>${fmt(g.next)}</b><small>${why}</small></span><button class="btn ghost sm" data-act="sugg-use" data-item="${it.id}">${roll('Use')}</button></div>`;
 }
 /* a warm-up set: W1, W2…, the same fields as a working set, lighter on the page */
 function wuRow(st, i) {
@@ -2062,7 +2162,7 @@ function setRow(st, i, gmap, it) {
   <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, set ${i + 1}" autocomplete="off"${ro}>
   <span class="int${p >= 99.5 ? ' top' : ''}" data-int="${st.id}">${setInt(st)}</span>
   <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark set not done' : 'Mark set done'}" aria-pressed="${!!st.done}">${ICON.check}</button>
-  ${prLine(st)}${susLine(st)}${rirAsk(st, i, it)}${rirTip(st, it)}</div>`;
+  ${prLine(st)}${susLine(st)}${mcAskLine(st, it)}${rirAsk(st, i, it)}${rirTip(st, it)}</div>`;
 }
 /* reps in reserve: after a working set is ticked, how many more reps were left in it (0 to 4+). Optional: the row
    under the set waits for a tap and goes when the next set is ticked. */
@@ -2310,10 +2410,11 @@ function vExercise() {
   if (isCardio(exOf(S.arg))) return vCardio(exOf(S.arg));
   /* with machines, the headline, trend, records and coach follow one machine: the one picked here, else the last */
   const ex = exOf(S.arg), k = exKey(ex), mc = mcOf(k), x = S.A.ex.get(k), all = S.A.all.get(ex.id), ms = machinesOf(ex);
-  const on = mc ? ` · ${mLetter(ex, mc)}` : ms.length ? ' · not set' : '';
+  const on = mc ? ` · ${esc(mName(ex, mc))}` : ms.length ? ' · no machine' : '';
   /* your 1RM: the higher of one set by hand and the best estimate, for the lift the page follows */
   const so = savedOrm(k), est = x ? x.best : 0, orm = Math.max(so?.kg || 0, est), byHand = !!so && so.kg >= est - 1e-6;
-  const hist = []; for (const s of sorted()) { for (const it of s.items) if (it.exId === ex.id) { const sets = it.sets.filter(st => +st.r > 0); if (sets.length) hist.push({ s, sets, mc: machineOf(ex, it.mc) ? it.mc : null }); } if (hist.length >= 12) break; }
+  const lf = S.exLabel && S.exLabel.id === ex.id ? S.exLabel.v : null;
+  const hist = []; for (const s of sorted()) { for (const it of s.items) if (it.exId === ex.id && (!lf || itemTags(it).some(t => sameName(t, lf)))) { const sets = it.sets.filter(st => +st.r > 0); if (sets.length) hist.push({ s, sets, it }); } if (hist.length >= 12) break; }
   const bs = x?.bestSet;
   /* sets of it that look like typos, newest first, each opening its session ready to fix */
   const sus = [...suspects().entries()].filter(([, v]) => baseId(v.exId) === ex.id).map(([id, v]) => ({ id, v, s: S.sessions.get(v.sid) })).filter(o => o.s).sort((a, b) => b.s.startedAt - a.s.startedAt);
@@ -2322,7 +2423,7 @@ function vExercise() {
     <p class="muted sus-why">Left out of your records, estimated max and the coach until you fix it, or keep it as it is.</p></section>` : '';
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Exercise</span><button class="btn ghost sm" data-act="edit-ex" data-id="${ex.id}">${roll('Edit')}</button></header>
   <h1 class="h1 rv" style="margin:14px 0 4px">${esc(ex.name)}${ex.isDefault ? '' : ' <span class="badge acc">custom</span>'}</h1><p class="muted rv">${esc(ex.muscle)} · ${ex.kind === 'bw' ? 'Bodyweight (load = bodyweight + added)' : 'Weighted'}${ex.archived ? ' · removed from list' : ''}</p>
-  <div class="rv ex-pnote">${setupLine(ex, null, true)}</div>
+  <div class="rv ex-pnote">${noteLine(ex, true)}</div>
   <div class="dash" style="margin-top:18px">${susCard}${machinesCard(ex, k)}
     <div class="card rv orm-card"><div class="card-h"><span class="lbl">1RM${on} · ${unit()}</span><button class="btn ghost sm" data-act="edit-orm" data-id="${esc(k)}">${roll(so ? 'Edit' : 'Set 1RM')}</button></div>
       <div class="bignum md">${big(orm ? fmtW(roundW(orm)) : '–')}<span class="dot"></span></div>
@@ -2331,8 +2432,8 @@ function vExercise() {
     ${recordsCard(ex, k)}
     ${exGoalCard(ex)}
     <div class="kv span rv"><div><span class="lbl">Sessions</span><div class="term">${all ? all.n : 0}</div></div><div><span class="lbl">Volume</span><div class="term">${fmtVol(all ? all.vol : 0)}</div></div><div><span class="lbl">PRs</span><div class="term">${S.A.rec.events.filter(e => baseId(e.exId) === ex.id).length}</div></div><div><span class="lbl">Last</span><div class="term">${all ? fmtDate(all.last) : '—'}</div></div></div>
-    <section class="card span rv"><div class="card-h"><span class="lbl">Recent sets</span></div>
-    ${hist.length ? hist.map(h => `<button class="hist-s" data-act="open" data-id="${h.s.id}" style="width:100%"><span class="term">${fmtDate(h.s.startedAt)}</span><span class="sl">${h.mc ? `<span class="mc-tag">${mLetter(ex, h.mc)}</span>` : ''}${h.sets.map(st => `${fmtW(+st.w || 0)}×${st.r}`).join(' · ')}</span></button>`).join('') : `<div class="empty">No sets logged for this exercise yet.</div>`}</section>
+    <section class="card span rv"><div class="card-h"><span class="lbl">Recent sets${lf ? ` · ${esc(lf)}` : ''}</span></div>${labelFilter(ex, lf)}
+    ${hist.length ? hist.map(h => `<button class="hist-s" data-act="open" data-id="${h.s.id}" style="width:100%"><span class="term">${fmtDate(h.s.startedAt)}</span><span class="sl">${machineOf(ex, h.it.mc) || itemTags(h.it).length ? `<span class="hs-t">${tagChips(ex, h.it)}</span>` : ''}${h.sets.map(st => `${fmtW(+st.w || 0)}×${st.r}`).join(' · ')}</span></button>`).join('') : `<div class="empty">No sets logged for this exercise yet.</div>`}</section>
   </div>`;
 }
 /* a cardio exercise: its records (longest, farthest, fastest), minutes per session, totals and recent bouts */
@@ -2358,14 +2459,19 @@ function vCardio(ex) {
 /* an exercise's machines on its page: each one's estimated max and sessions (tap one and the page follows it),
    older sessions that name none ("Not set", which can all be tagged at once), and adding or editing machines */
 function machinesCard(ex, k) {
-  const ms = isCardio(ex) ? [] : machinesOf(ex); if (!ms.length) return '';
-  const row = (key, letter, name, sub) => { const x = S.A.ex.get(key);
-    return `<button class="mc-r${key === k ? ' on' : ''}" data-act="ex-pick" data-id="${ex.id}" data-k="${esc(key)}" aria-pressed="${key === k}"><span class="su-l${letter === '?' ? ' q' : ''}" aria-hidden="true">${letter}</span><span class="mc-m"><b>${esc(name)}</b><small>${esc(sub)}</small></span><span class="mc-v"><b>${x ? fmtW(roundW(x.best)) : '–'}</b><small>${x ? plural(x.n, 'session') : 'not yet'}</small></span></button>`; };
-  const ns = untagged(ex.id);
-  return `<section class="card span rv mc-card"><div class="card-h"><span class="lbl">By machine · e1RM ${unit()}</span><span class="lbl">tap one to see it</span></div>
-    <div class="mc-list">${ms.map((m, i) => row(ex.id + '@' + m.id, String.fromCharCode(65 + i), m.name, [m.what, m.setup].filter(Boolean).join(' · ') || 'no setup yet')).join('')}
-    ${ns ? row(ex.id, '?', 'Not set', `${plural(ns, 'session')} before machines`) : ''}</div>
-    <div class="btns mc-acts">${ns ? `<button class="btn line sm" data-act="mc-tag" data-id="${ex.id}">${roll(`Tag ${ns === 1 ? 'it' : `all ${ns}`}`)}</button>` : ''}<button class="btn ghost sm" data-act="ex-setup" data-id="${ex.id}">${roll('Edit machines')}</button><button class="btn ghost sm" data-act="mc-add" data-id="${ex.id}">${ICON.plus}${roll('Add a machine')}</button></div></section>`;
+  if (ex.kind !== 'w') return '';
+  const ms = machinesOf(ex), ns = untagged(ex.id);
+  if (!ms.length) return `<div class="span rv mc-none"><button class="chip addc" data-act="mc-add" data-id="${ex.id}">${TAG_ICO}+ New machine</button><span class="muted">Done on more than one? Each keeps its own numbers.</span></div>`;
+  const tile = (key, name) => { const orm = oneRmOf(key), ls = lastSeen(key), on = key === k;
+    return `<button class="mtile${on ? ' on' : ''}${mcOf(key) ? '' : ' none'}" data-act="ex-pick" data-id="${ex.id}" data-k="${esc(key)}" aria-pressed="${on}"><b>${esc(name)}</b><span class="m1">${orm ? fmtW(roundW(orm)) : '–'}</span><small>${orm ? `1RM ${unit()}` : 'not used yet'}${ls ? ` · last ${fmtW(+ls.st.w || 0)}×${ls.st.r}` : ''}</small></button>`; };
+  return `<section class="card span rv mc-card"><div class="card-h"><span class="lbl">Machines</span><button class="btn ghost sm" data-act="tags" data-id="${ex.id}">${roll('Edit tags')}</button></div>
+    <div class="mtiles">${ms.map(m => tile(ex.id + '@' + m.id, m.name)).join('')}${S.A.ex.get(ex.id) ? tile(ex.id, 'No machine') : ''}<button class="mtile add" data-act="mc-add" data-id="${ex.id}">+ New machine</button></div>
+    ${ns ? `<div class="mc-ns"><span class="muted">${plural(ns, 'session')} from before you added machines</span><button class="btn line sm" data-act="mc-tag" data-id="${ex.id}">${roll(`Put ${ns === 1 ? 'it' : 'them'} on a machine`)}</button></div>` : ''}</section>`;
+}
+/* the labels this exercise has been tagged with: tap one and Recent sets shows only those sessions */
+function labelFilter(ex, lf) {
+  const ls = labelUse().ex(ex.id); if (!ls.length) return '';
+  return `<div class="chips lb-f">${ls.slice(0, 8).map(x => { const on = lf && sameName(lf, x.name); return `<button class="chip${on ? ' on' : ''}" aria-pressed="${!!on}" data-act="ex-lb" data-id="${ex.id}" data-v="${esc(x.name)}">${esc(x.name)} <small>${x.n}</small></button>`; }).join('')}</div>`;
 }
 /* finished sessions where the exercise has logged sets but names no machine */
 const untaggedSessions = exId => sorted().filter(s => s.endedAt && s.items.some(i => i.exId === exId && !i.mc && i.sets.some(setLogged)));
@@ -2375,24 +2481,24 @@ function tagSheet(exId) {
   const ex = exOf(exId), ms = machinesOf(ex), list = untaggedSessions(exId); if (!ex || !ms.length || !list.length) return;
   let sel = lastMc(exId) || ms[0].id;
   openSheet(`<div class="sh-h"><h3>Which machine were they on?</h3>${xBtn()}</div>
-  <p class="muted sh-note">${plural(list.length, 'session')} of ${esc(ex.name)} from before you added machines, ${fmtDate(list[list.length - 1].startedAt)} to ${fmtDate(list[0].startedAt)}. To tag them one by one, open a session and edit it.</p>
+  <p class="muted sh-note">${plural(list.length, 'session')} of ${esc(ex.name)} from before you added machines, ${fmtDate(list[list.length - 1].startedAt)} to ${fmtDate(list[0].startedAt)}. To do them one by one, open a session, tap Edit, then its tags.</p>
   <div class="su-list" id="tg-list" role="radiogroup" aria-label="Machines"></div>
   <div class="btns"><button class="btn ghost" data-act="close">Cancel</button><button class="btn" id="tg-go"></button></div>`, r => {
-    const draw = () => { r.querySelector('#tg-list').innerHTML = ms.map((m, i) => `<button class="su-r${m.id === sel ? ' on' : ''}" role="radio" aria-checked="${m.id === sel}" data-mc="${m.id}"><span class="su-l" aria-hidden="true">${String.fromCharCode(65 + i)}</span><span class="su-rt"><b>${esc(m.name)}</b><small>${esc(m.setup || m.what || '')}</small></span><span class="su-dot" aria-hidden="true"></span></button>`).join('');
-      r.querySelector('#tg-go').innerHTML = roll(`Tag ${plural(list.length, 'session')} as ${mLetter(ex, sel)}`); };
+    const draw = () => { r.querySelector('#tg-list').innerHTML = ms.map((m, i) => `<button class="su-r${m.id === sel ? ' on' : ''}" role="radio" aria-checked="${m.id === sel}" data-mc="${m.id}"><span class="su-rt"><b>${esc(m.name)}</b><small>${esc(m.setup || m.what || '')}</small></span><span class="su-dot" aria-hidden="true"></span></button>`).join('');
+      r.querySelector('#tg-go').innerHTML = roll(`Put ${plural(list.length, 'session')} on ${esc(mName(ex, sel))}`); };
     r.querySelector('#tg-list').addEventListener('click', e => { const b = e.target.closest('[data-mc]'); if (b) { sel = b.dataset.mc; draw(); } });
     r.querySelector('#tg-go').onclick = () => {
       const was = []; for (const s of list) for (const i of s.items) if (i.exId === exId && !i.mc) { i.mc = sel; was.push(i); }
       for (const s of list) queue('s:' + s.id, 0);
       closeSheet(); render(false);
-      toast(`${plural(list.length, 'session')} tagged as ${mLetter(ex, sel)}`, { label: 'Undo', fn: () => { for (const i of was) delete i.mc; for (const s of list) queue('s:' + s.id, 0); render(false); } });
+      toast(`${plural(list.length, 'session')} on ${mName(ex, sel)}`, { label: 'Undo', fn: () => { for (const i of was) delete i.mc; for (const s of list) queue('s:' + s.id, 0); render(false); } });
     };
     draw();
   });
 }
 /* the exercise's records: heaviest set, most reps, and best reps at each of the heaviest weights */
 function recordsCard(ex, k = ex.id) {
-  const rc = S.A.rec.ex.get(k), bw = ex.kind === 'bw', w = v => bw ? (v ? `+${fmtW(v)}` : 'body') : fmtW(v), on = mcOf(k) ? ` · ${mLetter(ex, mcOf(k))}` : machinesOf(ex).length ? ' · not set' : '';
+  const rc = S.A.rec.ex.get(k), bw = ex.kind === 'bw', w = v => bw ? (v ? `+${fmtW(v)}` : 'body') : fmtW(v), on = mcOf(k) ? ` · ${esc(mName(ex, mcOf(k)))}` : machinesOf(ex).length ? ' · no machine' : '';
   if (!rc) return `<section class="card span rv"><div class="card-h"><span class="lbl">Records${on}</span></div><div class="empty">${on ? 'Nothing logged on it yet.' : 'Log a set to start your records.'}</div></section>`;
   const last = S.A.rec.events.filter(e => e.exId === k).pop();
   return `<section class="card span rv recs"><div class="card-h"><span class="lbl">Records${on} · ${bw ? 'added ' : ''}${unit()}</span>${last ? `<span class="lbl">last PR ${fmtDate(last.t)}</span>` : ''}</div>
@@ -3046,7 +3152,8 @@ function splitItems(d, withCoach) {
     /* on the machine it was last done on */
     const mc = lastMc(e.id), k = mc ? e.id + '@' + mc : e.id;
     const last = lastSetsFor(k), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g), plan = withCoach ? planFor(k, { reps: x.reps, sets: x.sets }) : null;
-    return { id: sid(), exId: e.id, ...(mc ? { mc } : {}), sets: Array.from({ length: plan ? plan.sets : x.sets }, (_, i) => {
+    const tg = lastTags(e.id);
+    return { id: sid(), exId: e.id, ...(mc ? { mc } : {}), ...(tg.length ? { tags: tg } : {}), sets: Array.from({ length: plan ? plan.sets : x.sets }, (_, i) => {
       const l = plan ? { w: plan.next.w, r: plan.next.r } : last && last[Math.min(i, last.length - 1)];
       /* superset / giant set: set i of each linked exercise forms round i; a single linked exercise links all its sets */
       let g = null; if (gr) { const key = gr.js.length > 1 ? x.g + ':' + i : x.g; if (!gid.has(key)) gid.set(key, sid()); g = gid.get(key); }
@@ -3064,7 +3171,7 @@ function repeatSession(id, force = false) {
   newSession({ name: src.name, splitId: src.splitId, splitDay: src.splitDay,
     items: src.items.map(it => isCardio(exOf(it.exId))
       ? { id: sid(), exId: it.exId, m: itemMetrics(it).slice(), sets: it.sets.map(st => ({ id: sid(), w: null, r: null, pw: null, pr: null, t: null, pt: st.t ?? st.pt ?? null, d: null, pd: st.d ?? st.pd ?? null, done: false, g: null })) }
-      : { id: sid(), exId: it.exId, ...(machineOf(exOf(it.exId), it.mc) ? { mc: it.mc } : {}), sets: it.sets.map(st => { let g = null; if (st.g) { if (!gm.has(st.g)) gm.set(st.g, sid()); g = gm.get(st.g); } return { id: sid(), w: null, r: null, pw: st.w ?? st.pw ?? null, pr: st.r ?? st.pr ?? null, done: false, g }; }) }) });
+      : { id: sid(), exId: it.exId, ...(machineOf(exOf(it.exId), it.mc) ? { mc: it.mc } : {}), ...(itemTags(it).length ? { tags: itemTags(it).slice() } : {}), sets: it.sets.map(st => { let g = null; if (st.g) { if (!gm.has(st.g)) gm.set(st.g, sid()); g = gm.get(st.g); } return { id: sid(), w: null, r: null, pw: st.w ?? st.pw ?? null, pr: st.r ?? st.pr ?? null, done: false, g }; }) }) });
   toast('Last time’s numbers are filled in as hints');
 }
 function addExercise(exId) {
@@ -3082,7 +3189,7 @@ function addExercise(exId) {
   }
   const mc = lastMc(exId), last = lastSetsFor(mc ? exId + '@' + mc : exId, s.id);
   const sets = last ? last.slice(0, 8).map(st => ({ id: sid(), w: null, r: null, pw: st.w ?? null, pr: st.r ?? null, done: false, g: null })) : [{ id: sid(), w: null, r: null, pw: null, pr: null, done: false, g: null }];
-  const it = { id: sid(), exId, ...(mc ? { mc } : {}), sets }; s.items.push(it); queue('s:' + s.id, 0); render(false);
+  const tg = lastTags(exId, s.id), it = { id: sid(), exId, ...(mc ? { mc } : {}), ...(tg.length ? { tags: tg } : {}), sets }; s.items.push(it); queue('s:' + s.id, 0); render(false);
   requestAnimationFrame(() => { const el = $(`[data-item="${it.id}"]`); if (el) el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); });
 }
 /* an exercise dragged to a new place: in the session's list, or in a split day's */
@@ -3124,7 +3231,7 @@ function addDrop(setId) {
 }
 function toggleDone(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
-  if (st.done) { st.done = false; if (S.rirAsk === st.id) S.rirAsk = null; if (S.rirTip === st.id) S.rirTip = null; queue('s:' + s.id, 300); render(false); return; }
+  if (st.done) { st.done = false; if (S.rirAsk === st.id) S.rirAsk = null; if (S.rirTip === st.id) S.rirTip = null; if (S.mcAsk === st.id) S.mcAsk = null; queue('s:' + s.id, 300); render(false); return; }
   const ex = exOf(f.it.exId);
   if (f.wu) {
     if (st.w == null && st.pw != null) st.w = st.pw;
@@ -3145,6 +3252,9 @@ function toggleDone(setId) {
   if (st.r == null && st.pr != null) st.r = st.pr;
   if (!(+st.r > 0)) { render(false); return toast('Add reps first'); }
   st.done = true; S.justDone = st.id; S.rirAsk = st.id; S.rirTip = null; queue('s:' + s.id, 300); buzz(12);
+  /* far from this lift's usual weight: ask about the machine first, the reps left can wait */
+  if (S.mcAsk && S.mcAsk !== st.id) S.mcAsk = null;
+  if (machineAsk(s, f.it, st)) S.rirAsk = null;
   let nextName = null;
   if (st.g && !s.endedAt) { const g = groupsOf(s).find(x => x.g === st.g); if (g) { const idx = g.m.findIndex(x => x.st.id === st.id); const nxt = g.m.slice(idx + 1).find(x => !x.st.done); if (nxt) nextName = exOf(nxt.it.exId)?.name; } }
   render(false);
@@ -3201,7 +3311,7 @@ function finishSheet(s, undo) {
   openSheet(`<div class="sh-h"><div><span class="lbl">${DAYS[new Date(s.startedAt).getDay()].slice(0, 3)} · ${fmtDate(s.startedAt)} · ${plural(min, 'min')}</span><h3>${esc(sessName(s))}, done</h3></div>${xBtn()}</div>
     <div class="ts-kv${a.sets ? '' : ' three'}">${stats}</div>${vs}
     ${prs.length ? `<span class="lbl fs-sub">${prs.length === 1 ? 'Record' : 'Records'}</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(liftName(p.exId) || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}
-    ${best ? `<span class="lbl fs-sub">Best set</span><p class="fs-best">${esc(best.ex.name)}${best.mc ? ` · ${mLetter(best.ex, best.mc)}` : ''} <b>${best.ex.kind === 'bw' && !best.st.w ? `${best.st.r} reps` : `${best.ex.kind === 'bw' ? '+' : ''}${fmtW(+best.st.w || 0)} ${unit()} × ${best.st.r}`}</b>${best.ex.kind === 'bw' ? '' : ` <span class="muted">· est. 1RM ${fmtW(best.v)} ${unit()}</span>`}</p>` : ''}
+    ${best ? `<span class="lbl fs-sub">Best set</span><p class="fs-best">${esc(best.ex.name)}${best.mc ? ` · ${esc(mName(best.ex, best.mc))}` : ''} <b>${best.ex.kind === 'bw' && !best.st.w ? `${best.st.r} reps` : `${best.ex.kind === 'bw' ? '+' : ''}${fmtW(+best.st.w || 0)} ${unit()} × ${best.st.r}`}</b>${best.ex.kind === 'bw' ? '' : ` <span class="muted">· est. 1RM ${fmtW(best.v)} ${unit()}</span>`}</p>` : ''}
     <div class="btns"><button class="btn line" id="fs-undo">${roll('Undo finish')}</button><button class="btn" data-act="close">${roll('Done')}</button></div>`, r => {
     r.querySelector('#fs-undo').onclick = () => { closeSheet(); undo(); };
   });
@@ -3622,8 +3732,9 @@ function swapItem(s, it, ex, split) {
     for (const st of move) if (st.g && keep.some(k => k.g === st.g) && !s.items.some(o => o !== it && o.sets.some(k => k.g === st.g))) st.g = null;
     it.sets = keep; to = { id: sid(), exId: ex.id, sets: move };
     if (lastMc(ex.id)) to.mc = lastMc(ex.id);
+    if (lastTags(ex.id, s.id).length) to.tags = lastTags(ex.id, s.id);
     s.items.splice(s.items.indexOf(it) + 1, 0, to);
-  } else { to.exId = ex.id; if (lastMc(ex.id)) to.mc = lastMc(ex.id); else delete to.mc; if (!to.sets.some(setLogged)) delete to.wu; }
+  } else { to.exId = ex.id; if (lastMc(ex.id)) to.mc = lastMc(ex.id); else delete to.mc; const tg = lastTags(ex.id, s.id); if (tg.length) to.tags = tg; else delete to.tags; if (!to.sets.some(setLogged)) delete to.wu; }
   /* cardio tracks what was tracked last time; sets that moved with their numbers keep what shows them */
   if (c && !to.sets.some(setLogged)) to.m = lastMetrics(ex.id, s.id) || defaultMetrics(ex.name);
   /* sets not logged yet take the new exercise's hints; a weight typed for the old one goes */
@@ -3782,12 +3893,12 @@ function exportData(fmt) {
   if (fmt === 'csv') {
     /* cardio bouts share the sheet: their time, distance (km, or mi with lb), heart rate, calories and effort */
     const du = unit() === 'lb' ? 'mi' : 'km', dist = m => m > 0 ? fmtDist(m, du) : '';
-    const rows = [['date', 'session', 'exercise', 'muscle', 'set', 'weight_' + unit(), 'reps', 'e1rm_' + unit(), 'intensity', 'group', 'time_min', 'distance_' + du, 'avg_hr', 'kcal', 'effort', 'machine']];
+    const rows = [['date', 'session', 'exercise', 'muscle', 'set', 'weight_' + unit(), 'reps', 'e1rm_' + unit(), 'intensity', 'group', 'time_min', 'distance_' + du, 'avg_hr', 'kcal', 'effort', 'machine', 'labels']];
     for (const s of [...sorted()].reverse()) { const gm = new Map(); for (const g of groupsOf(s)) for (const x of g.m) gm.set(x.st.id, g.type);
       const when = `${local(s.startedAt)} ${fmtTime(s.startedAt).replace('.', ':')}`;
       for (const it of s.items) { const ex = exOf(it.exId); it.sets.forEach((st, i) => {
-        if (isCardio(ex)) { if (+st.t > 0) rows.push([when, sessName(s), ex.name, 'Cardio', i + 1, '', '', '', st.e ? effortInt(st.e) : '', '', Math.round(st.t / 6) / 10, dist(st.d), st.hr ?? '', st.kc ?? '', st.e ?? '', '']); return; }
-        if (!(+st.r > 0)) return; rows.push([when, sessName(s), ex?.name || '', ex?.muscle || '', i + 1, fmtW(+st.w || 0), st.r, fmtW(e1rm(loadOf(st, ex), st.r)), Math.round(S.A.set.get(st.id) || 0), gm.get(st.id) || '', '', '', '', '', '', machineOf(ex, it.mc)?.name || '']); }); } }
+        if (isCardio(ex)) { if (+st.t > 0) rows.push([when, sessName(s), ex.name, 'Cardio', i + 1, '', '', '', st.e ? effortInt(st.e) : '', '', Math.round(st.t / 6) / 10, dist(st.d), st.hr ?? '', st.kc ?? '', st.e ?? '', '', itemTags(it).join('; ')]); return; }
+        if (!(+st.r > 0)) return; rows.push([when, sessName(s), ex?.name || '', ex?.muscle || '', i + 1, fmtW(+st.w || 0), st.r, fmtW(e1rm(loadOf(st, ex), st.r)), Math.round(S.A.set.get(st.id) || 0), gm.get(st.id) || '', '', '', '', '', '', machineOf(ex, it.mc)?.name || '', itemTags(it).join('; ')]); }); } }
     const csv = rows.map(r => r.map(c => { c = String(c); if (/^[=+\-@]/.test(c)) c = "'" + c; return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(',')).join('\n');
     return download(`synergym-${stamp}.csv`, csv, 'text/csv');
   }
@@ -3948,8 +4059,13 @@ const ACT = {
   rir: el => { const s = cur(), f = s && findSet(s, el.dataset.set); if (!f || f.wu || locked(s)) return; const v = +el.dataset.v;
     f.st.rir = f.st.rir === v ? null : v; if (f.st.rir == null) delete f.st.rir; S.rirAsk = null; S.rirTip = f.st.rir != null ? f.st.id : null; queue('s:' + s.id, 300); buzz(8); render(false); },
   'rir-skip': () => { S.rirAsk = null; render(false); },
-  'ex-setup': el => setupSheet(el.dataset.id, el.dataset.item || null),
-  'mc-add': el => setupSheet(el.dataset.id, null, { adding: true }),
+  'tags': el => tagsSheet(el.dataset.id, el.dataset.item || null, { add: el.dataset.add || null }),
+  'ex-note': el => noteSheet(el.dataset.id),
+  'mc-add': el => tagsSheet(el.dataset.id, null, { add: 'w' }),
+  'mc-switch': el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); if (!it || locked(s)) return; setMachine(s, it, el.dataset.mc); render(false); buzz(8); toast(`On ${mName(exOf(it.exId), it.mc)}: Last → Try follows it`); },
+  'mca-pick': el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); if (!it) return; mcAsked.add(it.id); S.mcAsk = null; setMachine(s, it, el.dataset.mc); render(false); toast(`On ${mName(exOf(it.exId), it.mc)}: its numbers are its own`); },
+  'mca-no': el => { mcAsked.add(el.dataset.item); S.mcAsk = null; render(false); },
+  'ex-lb': el => { const v = el.dataset.v; S.exLabel = S.exLabel && S.exLabel.id === el.dataset.id && sameName(S.exLabel.v, v) ? null : { id: el.dataset.id, v }; render(false); },
   'mc-tag': el => tagSheet(el.dataset.id),
   'ex-pick': el => { S.exPick = { id: el.dataset.id, k: el.dataset.k }; render(false); },
   'sugg-use': el => useSuggestion(el.dataset.item),

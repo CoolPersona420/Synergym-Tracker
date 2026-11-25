@@ -34,6 +34,10 @@ export function cleanItem(o) {
   /* which of the exercise's machines it was done on (an id from the exercise's own list) */
   if (typeof o.mc === 'string' && o.mc) it.mc = o.mc.replace(/[^\w-]/g, '').slice(0, 40) || undefined;
   if (!it.mc) delete it.mc;
+  /* its labels (belt, paused, wide grip): short words, each once */
+  if (Array.isArray(o.tags)) { const seen = new Set(), t = [];
+    for (const x of o.tags) { const v = String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, 20), k = v.toLowerCase(); if (v && !seen.has(k) && t.length < 8) { seen.add(k); t.push(v); } }
+    if (t.length) it.tags = t; }
   return it;
 }
 /* an exercise's machines: a short name, what it is and your setup on it */

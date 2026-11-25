@@ -85,20 +85,19 @@ test('drag an exercise within a split day', async ({ page }) => {
   await expect.poll(() => fake.splits.find(x => x.id === sp.id).days[0].exercises.map(e => e.name)).toEqual(['Overhead Press', 'Incline Dumbbell Press', 'Bench Press']);
 });
 
-test('a setup stays with the exercise: tapped in from its card, shown in every session and on its page', async ({ page }) => {
+test('a setup note stays with the exercise: added from its card, shown in every session and on its page', async ({ page }) => {
   const { fake, ex } = await setup(page);
-  await page.locator('[data-item="L2"] .ex-note-add').click();
-  await page.locator('.qrow[data-f="grip"] [data-cv="Shoulder-width"]').click();
-  await page.locator('#qs-addnote').click();
-  await page.fill('#qs-note', 'Elbows under the bar');
-  await page.click('#qs-go');
-  await expect(page.locator('[data-item="L2"] .ex-note')).toContainText('Shoulder-width grip · Elbows under the bar');
-  await expect.poll(() => fake.exercises.find(e => e.id === ex.ohp.id).note).toBe('Shoulder-width grip · Elbows under the bar');
+  await page.locator('article[data-item="L2"] .tl-note').click();
+  await expect(page.locator('#sheet h3')).toHaveText('Overhead Press setup');
+  await page.fill('#nt-v', 'Seat 4, elbows under the bar');
+  await page.click('#nt-save');
+  await expect(page.locator('article[data-item="L2"] .ex-note')).toContainText('Seat 4, elbows under the bar');
+  await expect(page.locator('article[data-item="L2"] .tl-note')).toHaveCount(0);
+  await expect.poll(() => fake.exercises.find(e => e.id === ex.ohp.id).note).toBe('Seat 4, elbows under the bar');
   await page.goto('/exercises/' + ex.ohp.id);
-  await expect(page.locator('.ex-pnote .ex-note')).toContainText('Elbows under the bar');
-  /* clearing it */
+  await expect(page.locator('.ex-pnote .ex-note')).toContainText('Seat 4');
   await page.locator('.ex-pnote .ex-note').click();
-  await page.click('#qs-clear');
+  await page.click('#nt-del');
   await expect(page.locator('.ex-pnote .ex-note-add')).toBeVisible();
   await expect.poll(() => fake.exercises.find(e => e.id === ex.ohp.id).note).toBeNull();
 });

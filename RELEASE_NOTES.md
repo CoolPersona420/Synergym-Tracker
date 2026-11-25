@@ -10,21 +10,30 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
-## 0.2.1-alpha · 23 November 2026
+## 0.2.1-alpha · 25 November 2026
 
-**Setup you tap in, and a 1RM that keeps itself up to date**
+**Tags: machines and labels**
 
-- **Setup, tapped in:** an exercise's setup is no longer a blank box to type in. The sheet shows the settings that
-  fit the exercise (a Smith machine's bar hook and safety pins, a cable's pulley height and attachment, a leg press's
-  seat and feet, a dumbbell bench's angle) as − / + numbers and chips, plus an optional note, and shows the line the
-  card will read: "Hook 12 · Pins 8 · Shoulder-width stance". Your older notes are kept as they are.
-- **A 1RM that updates itself:** your 1RM is the higher of a 1RM you set by hand and your best set's estimate. Tick a
-  set that beats it and a short message says "New 1RM"; there's no question to answer mid-set any more. Fix that set
-  and the 1RM follows it back.
-- **A 1RM per machine:** each machine keeps its own 1RM, shown on the exercise page for the machine you pick, with
-  **Set 1RM** to enter a tested max for that machine. Top lifts lists each machine on its own line.
-- **Edits and deletes adjust it for you:** if a 1RM you set by hand came from a session you correct or delete, it
-  goes back to your best estimate on its own, and **Undo** (or **Keep 1RM**) takes that back.
+- **Machines and labels:** tap the tags line on an exercise's card. A **machine** (the cable stack, the Hammer
+  Strength one) keeps its own numbers: Last → Try, the faded hints, intensity, 1RM and records. **Labels** (Belt,
+  Paused, Wide grip) are for finding sessions again and never change your numbers. One machine at a time, as many
+  labels as you like. The sheet shows each machine's 1RM and last set, and Last → Try for what you pick.
+- **"Different machine today?":** tick a set far from what that lift usually takes and one line under it offers your
+  other machines, a new one, or Not now. One tap and your numbers stay right.
+- **A 1RM that updates itself:** your 1RM is the higher of one you set by hand and your best set's estimate, for each
+  machine. Tick a set that beats it and a short message says so; there's no question to answer mid-set any more.
+- **Tags stay on:** an exercise starts with last time's machine and labels, so if nothing changed you tap nothing.
+  Done on two machines? The tags line switches to the other one in one tap.
+- **Suggestions instead of typing:** machine names that fit the exercise (Cable stack, Plate-loaded, Smith machine),
+  and labels from your other exercises.
+- **Bodyweight exercises** have labels only: their numbers are always yours, no machine.
+- **The exercise page** shows a tile per machine to follow, labels that filter Recent sets, **Edit tags** (rename,
+  move a tag between Machine and Labels, remove a machine never used), and puts sessions from before you added
+  machines on one in one go.
+- **Your setup note** is a plain note again, with a smaller sheet; **Note** sits beside the tags line.
+- **Edits and deletes adjust a 1RM you set by hand:** if it came from a session you correct or delete, it goes back
+  to your best estimate on its own, and **Undo** (or **Keep 1RM**) takes that back.
+- Machines are named everywhere instead of lettered A and B, and the CSV export has a labels column.
 
 ---
 

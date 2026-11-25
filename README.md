@@ -16,11 +16,12 @@ The version lives in `package.json` (`0.2.1-alpha`) and shows in Settings › Ab
   muscle's listed first), keeping its sets; with sets already logged it asks whether to keep them and swap the
   rest, or move them all. **+ Warm-up** adds warm-ups that build to the working weight (W1, W2…; never counted
   toward records, intensity or volume); drag an exercise by its grip to reorder it (sessions and split days); an
-  exercise has one setup line on its card, tapped in rather than typed: the settings that fit the exercise (a Smith
-  machine's hook and pins, a cable's pulley and attachment, a seat, a grip, a bench angle) as − / + numbers and chips,
-  plus a note; for an exercise done on more than one machine, the machine it's on today, each with its own setup. Each machine is its own lift for hints,
-  targets, intensity, estimated max, records, typo checks and the coach; volume and sets add up across them. The
-  exercise page shows each machine (tap one and the page follows it) and tags older sessions in one go. **Finish** shows a summary:
+  exercise in a session can carry tags: a **machine** (one at a time, weighted exercises only) that keeps its own
+  numbers, a separate lift for hints, targets, intensity, 1RM, records, typo checks and the coach, and **labels**
+  (belt, paused, wide grip) for finding sessions again. Tags carry over to the next session, the card switches between
+  two machines in one tap, and a ticked set far from the usual asks "Different machine today?". Volume and sets add
+  up across tags. The exercise page has a tile per machine, labels that filter its recent sets, Edit tags, and puts
+  older sessions on a machine in one go. Each exercise also keeps a free-text setup note (seat, grip). **Finish** shows a summary:
   intensity, volume, sets, time, the change on last time, records and the best set, with **Undo finish**.
   After a set is ticked, an optional **How many more could you do?** (0–4+, reps in reserve) is answered on one bar
   from all out to easy, with last time's answer marked and **Skip**; it's saved with the set, shown as dots under its

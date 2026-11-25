@@ -157,3 +157,9 @@ test('machines: an exercise keeps up to 12, each with a clean id, name, what and
   assert.ok(!('mc' in s.items[1]));
   assert.ok(!('mc' in s.items[2]));
 });
+
+test('an item keeps up to 8 labels, each once, trimmed to 20 characters', () => {
+  const s = cleanSession({ id: 'a', items: [{ id: 'i', exId: 'x', tags: ['Belt', ' belt ', 'Paused', '', null, 'x'.repeat(30), ...Array.from({ length: 10 }, (_, k) => 'T' + k)], sets: [] }, { id: 'j', exId: 'y', tags: 'nope', sets: [] }] });
+  assert.deepEqual(s.items[0].tags, ['Belt', 'Paused', 'x'.repeat(20), 'T0', 'T1', 'T2', 'T3', 'T4']);
+  assert.ok(!('tags' in s.items[1]));
+});
