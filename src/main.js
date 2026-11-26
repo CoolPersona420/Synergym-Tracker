@@ -2149,7 +2149,7 @@ function hfDateText(f) {
 function vHistory() {
   const f = S.hf;
   return pageTop('Logbook', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `${lbHead('history', 'rv')}
-  <div class="hsearch rv"><input class="search" data-f="q" data-act="hf-open" placeholder="Search by session, exercise, tag or note" value="${esc(S.q)}" autocomplete="off" aria-label="Search history">
+  <div class="hsearch rv"><input class="search" data-f="q" data-act="hf-open" placeholder="Search exercise, tag or note" value="${esc(S.q)}" autocomplete="off" aria-label="Search history">
   <button class="iconbtn hf-tog${f.open || hfOn(f) ? ' on' : ''}" data-act="hf-toggle" aria-label="Filters" aria-expanded="${f.open || hfOn(f)}" aria-controls="hfil">${FILTER_ICON}</button></div>
   <div id="hfil">${hfHTML()}</div>
   <div id="hlist" class="rv">${historyList()}</div>`;
