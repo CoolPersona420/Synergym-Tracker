@@ -10,6 +10,18 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.2.3-alpha · 26 November 2026
+
+**Find sessions by tag**
+
+- **A Tag filter in the Logbook:** next to Exercise and Muscle, pick a tag to see every session that had it, across
+  all exercises. It combines with the other filters.
+- **Search finds tags:** typing "belt" or "hammer" in the Logbook's search finds the sessions tagged with it.
+- **How a tag went:** on an exercise's page, tap a tag to see "With Hammer · 3 sessions · best set 25×12 · last
+  20.11". The best set is for your information: records and PRs stay per exercise.
+
+---
+
 ## 0.2.2-alpha · 26 November 2026
 
 **Tags, simpler**

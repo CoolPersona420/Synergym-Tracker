@@ -99,3 +99,28 @@ test('the exercise page filters recent sets by tag; Edit tags renames one everyw
   await expect.poll(() => fake.sessions.flatMap(s => s.items).filter(i => i.id === 'b1' || i.id === 'b2').map(i => i.tags)).toEqual([['Hammer ISO'], ['Hammer ISO']]);
   await expect(page.locator('#toast')).toContainText('Rope removed from Triceps Pushdown');
 });
+
+test('the Logbook finds sessions by tag: a Tag filter, and the search matches tags', async ({ page }) => {
+  await setup(page);
+  await page.goto('/history');
+  await page.locator('.search[data-f="q"]').click();
+  await page.locator('[data-act="hf-pick"][data-k="tag"]').click();
+  await expect(page.locator('#sheet h3')).toHaveText('Filter by tag');
+  await expect(page.locator('#sheet-body .hf-o', { hasText: 'Hammer' })).toContainText('2 sessions');
+  await page.locator('#sheet-body .hf-o', { hasText: 'Cable stack' }).click();
+  await expect(page.locator('.hf-n')).toHaveText('2 sessions found');
+  await expect(page.locator('[data-k="tag"]')).toContainText('Cable stack');
+  await page.locator('[data-act="hf-clear"]').click();
+  await page.fill('.search[data-f="q"]', 'rope');
+  await expect(page.locator('.hf-n')).toHaveText('2 sessions found');
+});
+
+test('tapping a tag on the exercise page sums it up: sessions, best set with it, last time', async ({ page }) => {
+  const { tri } = await setup(page);
+  await page.goto('/exercises/' + tri.id);
+  await expect(page.locator('.tg-sum')).toHaveCount(0);
+  await page.locator('.lb-f [data-act="ex-lb"]', { hasText: 'Hammer' }).click();
+  await expect(page.locator('.tg-sum')).toContainText(/^With Hammer · 2 sessions · best set 25×12 · last /);
+  await page.locator('.lb-f [data-act="ex-lb"]', { hasText: 'Cable stack' }).click();
+  await expect(page.locator('.tg-sum')).toContainText('With Cable stack · 2 sessions · best set 40×10');
+});

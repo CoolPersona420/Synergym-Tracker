@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.2.2, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.2.3, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.2.2-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.2.3-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -17,8 +17,9 @@ The version lives in `package.json` (`0.2.2-alpha`) and shows in Settings › Ab
   rest, or move them all. **+ Warm-up** adds warm-ups that build to the working weight (W1, W2…; never counted
   toward records, intensity or volume); drag an exercise by its grip to reorder it (sessions and split days); an
   exercise in a session can carry **tags** (the machine, the grip, a belt, paused) for finding sessions again; they
-  never change the numbers, carry over to the next session, filter an exercise's recent sets on its page, and can be
-  renamed everywhere or removed from an exercise in **Edit tags**. Each exercise also keeps a free-text setup note
+  never change the numbers, carry over to the next session, filter an exercise's recent sets on its page (with that
+  tag's sessions, best set and last time), filter and search the Logbook, and can be renamed everywhere or removed
+  from an exercise in **Edit tags**. Each exercise also keeps a free-text setup note
   (seat, grip). **Finish** shows a summary:
   intensity, volume, sets, time, the change on last time, records and the best set, with **Undo finish**.
   After a set is ticked, an optional **How many more could you do?** (0–4+, reps in reserve) is answered on one bar
@@ -33,7 +34,7 @@ The version lives in `package.json` (`0.2.2-alpha`) and shows in Settings › Ab
   reps than ever at that weight or heavier, and beating both is marked as both. Sets are judged live as you
   type them, and each exercise page shows its heaviest set, most reps and best reps by weight.
 - **Logbook filters:** in the List, filter by date (presets or any range), split (deleted ones too), exercise, muscle
-  group and PR kind, combined with search.
+  group, tag and PR kind, combined with search (which matches tags too).
 - **Today's plan / summary:** swipe Home down on a phone (or tap the date) and a panel comes down from the
   top, following the finger; swipe it up to close. It's today's plan until the day's training is done, then
   today's summary: sessions, sets, volume and PRs, the week so far, and the split's next day with what to

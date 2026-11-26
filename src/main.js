@@ -63,7 +63,7 @@ const KG_LB = 2.2046226;
 
 /* ================= state ================= */
 /* History's filters, empty */
-const HF0 = () => ({ open: false, split: null, ex: null, muscle: null, pr: null, from: null, to: null, range: null });
+const HF0 = () => ({ open: false, split: null, ex: null, muscle: null, tag: null, pr: null, from: null, to: null, range: null });
 const S = {
   authReady: false, user: null, loaded: false, loadError: null,
   profile: { ...DEFAULT_PROFILE }, library: [], sessions: new Map(), splits: new Map(), shared: [], recipients: new Map(),
@@ -2133,8 +2133,8 @@ function liveRefresh() {
 }
 
 /* ---------- History ---------- */
-/* filters: split (deleted ones too), exercise, muscle group, PR kind and a date range; they combine with the search */
-const hfOn = f => !!(f.split || f.ex || f.muscle || f.pr || f.from || f.to);
+/* filters: split (deleted ones too), exercise, muscle group, tag, PR kind and a date range; they combine with the search */
+const hfOn = f => !!(f.split || f.ex || f.muscle || f.tag || f.pr || f.from || f.to);
 const PR_FILTER = { any: 'Any PR', w: 'Weight PRs', r: 'Rep PRs', wr: 'Weight + rep PRs' };
 const FILTER_ICON = '<svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>';
 const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
@@ -2149,7 +2149,7 @@ function hfDateText(f) {
 function vHistory() {
   const f = S.hf;
   return pageTop('Logbook', `<span class="lbl">${plural(S.sessions.size, 'session')}</span>`) + `${lbHead('history', 'rv')}
-  <div class="hsearch rv"><input class="search" data-f="q" data-act="hf-open" placeholder="Search by session, exercise or note" value="${esc(S.q)}" autocomplete="off" aria-label="Search history">
+  <div class="hsearch rv"><input class="search" data-f="q" data-act="hf-open" placeholder="Search by session, exercise, tag or note" value="${esc(S.q)}" autocomplete="off" aria-label="Search history">
   <button class="iconbtn hf-tog${f.open || hfOn(f) ? ' on' : ''}" data-act="hf-toggle" aria-label="Filters" aria-expanded="${f.open || hfOn(f)}" aria-controls="hfil">${FILTER_ICON}</button></div>
   <div id="hfil">${hfHTML()}</div>
   <div id="hlist" class="rv">${historyList()}</div>`;
@@ -2158,13 +2158,14 @@ function hfHTML() {
   const f = S.hf; if (!f.open && !hfOn(f)) return '';
   const sp = f.split && splitOf(f.split);
   const chip = (k, label, val) => `<button class="chip hf-c${val ? ' on' : ''}" data-act="hf-pick" data-k="${k}" aria-haspopup="dialog"><span>${val ? esc(val) : label}</span>${ICON.down}</button>`;
-  return `<div class="hf"><div class="hf-row">${chip('date', 'Date', hfDateText(f))}${chip('split', 'Split', sp && sp.name)}${chip('ex', 'Exercise', f.ex && (exOf(f.ex)?.name || 'Exercise'))}${chip('muscle', 'Muscle', f.muscle)}${chip('pr', 'PR', f.pr && PR_FILTER[f.pr])}</div>
+  return `<div class="hf"><div class="hf-row">${chip('date', 'Date', hfDateText(f))}${chip('split', 'Split', sp && sp.name)}${chip('ex', 'Exercise', f.ex && (exOf(f.ex)?.name || 'Exercise'))}${chip('muscle', 'Muscle', f.muscle)}${labelUse().all.length || f.tag ? chip('tag', 'Tag', f.tag) : ''}${chip('pr', 'PR', f.pr && PR_FILTER[f.pr])}</div>
   ${hfOn(f) ? `<button class="hf-clear lbl" data-act="hf-clear">${roll('Clear filters')}</button>` : ''}</div>`;
 }
 function hfMatch(s, f) {
   if (f.split && s.splitId !== f.split) return false;
   if (f.ex && !s.items.some(it => it.exId === f.ex)) return false;
   if (f.muscle && !s.items.some(it => exOf(it.exId)?.muscle === f.muscle)) return false;
+  if (f.tag && !s.items.some(it => itemTags(it).some(t => sameName(t, f.tag)))) return false;
   if (f.pr && !(f.pr === 'any' ? S.A.sess.get(s.id)?.prs.length : S.A.rec.events.some(e => e.sid === s.id && e.kind === f.pr))) return false;
   if (f.from && s.startedAt < f.from) return false;
   if (f.to && s.startedAt >= f.to) return false;
@@ -2177,7 +2178,7 @@ let hShown = H_PAGE, hKey = '';
 function historyList() {
   const q = S.q.trim().toLowerCase(), f = S.hf, on = hfOn(f); let list = sorted();
   const key = q + '|' + JSON.stringify(f); if (key !== hKey) { hKey = key; hShown = H_PAGE; }
-  if (q) list = list.filter(s => sessName(s).toLowerCase().includes(q) || s.items.some(it => (exOf(it.exId)?.name || '').toLowerCase().includes(q)) || (s.notes || '').toLowerCase().includes(q));
+  if (q) list = list.filter(s => sessName(s).toLowerCase().includes(q) || s.items.some(it => (exOf(it.exId)?.name || '').toLowerCase().includes(q) || itemTags(it).some(t => t.toLowerCase().includes(q))) || (s.notes || '').toLowerCase().includes(q));
   if (on) list = list.filter(s => hfMatch(s, f));
   if (!list.length) return `<div class="empty"><b>${q || on ? 'No sessions match.' : 'Nothing logged yet.'}</b>${on ? 'Try fewer filters, or a wider date range.' : q ? 'Try an exercise name, like “squat”.' : 'Your sessions will collect here, grouped by month.'}</div>`;
   /* months are totalled over everything that matched, so a month split across pages still shows its whole count */
@@ -2229,6 +2230,9 @@ function hfSheet(k) {
   if (k === 'muscle') {
     const n = new Map(); for (const s of all) for (const m of new Set(s.items.map(it => exOf(it.exId)?.muscle).filter(Boolean))) n.set(m, (n.get(m) || 0) + 1);
     return pick('Filter by muscle group', [...n].sort((a, b) => b[1] - a[1]).map(([m, c]) => ({ v: m, label: m, sub: plural(c, 'session') })), f.muscle, v => { f.muscle = v; });
+  }
+  if (k === 'tag') {
+    return pick('Filter by tag', labelUse().all.map(x => ({ v: x.name, label: x.name, sub: plural(count(s => hfMatch(s, { tag: x.name })), 'session') })), f.tag, v => { f.tag = v; }, true);
   }
   if (k === 'pr') {
     return pick('Filter by PR', Object.entries(PR_FILTER).map(([v, label]) => ({ v, label, sub: plural(count(s => hfMatch(s, { pr: v })), 'session') })), f.pr, v => { f.pr = v; });
@@ -2336,10 +2340,21 @@ function vCardio(ex) {
     ${bouts.length ? bouts.map(b => `<button class="hist-s" data-act="open" data-id="${b.s.id}" style="width:100%"><span class="term">${fmtDate(b.s.startedAt)}</span><span class="sl">${boutText(b.st)}</span></button>`).join('') : `<div class="empty">Nothing logged for ${esc(ex.name)} yet.</div>`}</section>
   </div>`;
 }
-/* the labels this exercise has been tagged with: tap one and Recent sets shows only those sessions */
+/* the tags this exercise has had: tap one and Recent sets shows only those sessions, under a line on how it went
+   with that tag (sessions, best set, last time). The tag's best set is information only: records stay per exercise. */
 function labelFilter(ex, lf) {
   const ls = labelUse().ex(ex.id); if (!ls.length) return '';
-  return `<div class="chips lb-f">${ls.slice(0, 8).map(x => { const on = lf && sameName(lf, x.name); return `<button class="chip${on ? ' on' : ''}" aria-pressed="${!!on}" data-act="ex-lb" data-id="${ex.id}" data-v="${esc(x.name)}">${esc(x.name)} <small>${x.n}</small></button>`; }).join('')}</div>`;
+  return `<div class="chips lb-f">${ls.slice(0, 8).map(x => { const on = lf && sameName(lf, x.name); return `<button class="chip${on ? ' on' : ''}" aria-pressed="${!!on}" data-act="ex-lb" data-id="${ex.id}" data-v="${esc(x.name)}">${esc(x.name)} <small>${x.n}</small></button>`; }).join('')}</div>${lf ? tagSummary(ex, lf) : ''}`;
+}
+function tagSummary(ex, tag) {
+  let n = 0, last = 0, best = null, bv = 0;
+  for (const s of S.sessions.values()) { let hit = false;
+    for (const it of s.items) if (it.exId === ex.id && itemTags(it).some(t => sameName(t, tag))) { hit = true;
+      for (const st of it.sets) { if (!counted(st)) continue; const v = e1rm(loadOf(st, ex), +st.r); if (v > bv) { bv = v; best = st; } } }
+    if (hit) { n++; last = Math.max(last, s.startedAt); } }
+  if (!n) return '';
+  const bs = best ? ex.kind === 'bw' && !+best.w ? `${best.r} reps` : `${ex.kind === 'bw' ? '+' : ''}${fmtW(+best.w || 0)}×${best.r}` : null;
+  return `<p class="tg-sum"><b>With ${esc(tag)}</b> · ${plural(n, 'session')}${bs ? ` · best set ${bs}` : ''} · last ${fmtDate(last)}</p>`;
 }
 /* the exercise's records: heaviest set, most reps, and best reps at each of the heaviest weights */
 function recordsCard(ex, k = ex.id) {

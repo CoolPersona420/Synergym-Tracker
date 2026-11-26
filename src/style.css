@@ -2213,6 +2213,8 @@ html.ro-dragging,html.ro-dragging *{user-select:none;-webkit-user-select:none;cu
 .nt-b{display:flex;justify-content:flex-end;gap:8px}
 .lb-f{margin:4px 0 var(--s-1)}
 .lb-f .chip small{opacity:.6;margin-left:2px}
+.tg-sum{margin:0 0 var(--s-1);font-size:.86rem;color:var(--ink-2)}
+.tg-sum b{color:var(--ink);font-weight:600}
 .hs-t{display:inline-flex;flex-wrap:wrap;gap:4px;margin-right:8px;vertical-align:1px}
 .hs-t .tc{padding:1px 7px;font-size:.7rem}
 
