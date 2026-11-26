@@ -10,7 +10,7 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
-## 0.2.1-alpha · 25 November 2026
+## 0.2.1-alpha · 26 November 2026
 
 **Tags: machines and labels**
 
