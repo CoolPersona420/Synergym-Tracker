@@ -31,22 +31,11 @@ export function cleanItem(o) {
   if (Array.isArray(o.m)) it.m = cleanMetrics(o.m);
   /* warm-up sets: kept apart from the working sets, so records, intensity and volume never count them */
   if (Array.isArray(o.wu) && o.wu.length) { const wu = o.wu.slice(0, 10).map(cleanSet).filter(Boolean).map(x => ({ ...x, g: null })); if (wu.length) it.wu = wu; }
-  /* which of the exercise's machines it was done on (an id from the exercise's own list) */
-  if (typeof o.mc === 'string' && o.mc) it.mc = o.mc.replace(/[^\w-]/g, '').slice(0, 40) || undefined;
-  if (!it.mc) delete it.mc;
-  /* its labels (belt, paused, wide grip): short words, each once */
+  /* its tags (the machine, a belt, paused, wide grip): short words, each once */
   if (Array.isArray(o.tags)) { const seen = new Set(), t = [];
     for (const x of o.tags) { const v = String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, 20), k = v.toLowerCase(); if (v && !seen.has(k) && t.length < 8) { seen.add(k); t.push(v); } }
     if (t.length) it.tags = t; }
   return it;
-}
-/* an exercise's machines: a short name, what it is and your setup on it */
-export function cleanMachines(m) {
-  if (!Array.isArray(m)) return [];
-  return m.filter(x => x && typeof x === 'object' && x.id).slice(0, 12).map(x => ({ id: String(x.id).replace(/[^\w-]/g, '').slice(0, 40), name: String(x.name || '').trim().slice(0, 24) || 'Machine',
-    what: String(x.what || '').trim().slice(0, 60), setup: String(x.setup || '').trim().slice(0, 200),
-    /* a 1RM set by hand on this machine, and when */
-    ...(+x.orm > 0 && +x.orm < 2000 ? { orm: Math.round(+x.orm * 100) / 100, ormAt: Number.isFinite(+x.ormAt) && +x.ormAt > 0 ? Math.round(+x.ormAt) : null } : {}) })).filter(x => x.id);
 }
 export function cleanSession(o) {
   if (!o || typeof o !== 'object') return null;

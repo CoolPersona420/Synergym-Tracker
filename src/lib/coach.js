@@ -393,7 +393,6 @@ export function analyse(log, ctx) {
   const series = seriesByLift(log), deload = deloadCheck(log, series, ctx);
   const ready = withBreak(readiness(log, series, ctx), deload);
   const split = splitCheck(log, series, { ...ctx, deload });
-  /* g.key: the lift the goal follows (the exercise on a machine), else its exercise */
-  const goals = (ctx.goals || []).map(g => goalPlan(g, series.get(g.key || g.exId), { ...ctx, saved: ctx.savedOf ? ctx.savedOf(g.key || g.exId) : null }));
+  const goals = (ctx.goals || []).map(g => goalPlan(g, series.get(g.exId), { ...ctx, saved: ctx.savedOf ? ctx.savedOf(g.exId) : null }));
   return { series, ready, deload, split, goals };
 }

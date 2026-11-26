@@ -9,7 +9,7 @@ import { planSync } from './lib/sync.js';
 import { DEFAULT_EXERCISES } from './data/exercises.js';
 import { reduced, LITE, isIOS } from './lib/env.js';
 import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, roll, toast } from './lib/util.js';
-import { num, cleanSession, cleanDays, cleanKind, cleanMachines } from './lib/sanitize.js';
+import { num, cleanSession, cleanDays, cleanKind } from './lib/sanitize.js';
 import { CARDIO, METRICS, howOf, defaultMetrics, parseTime, fmtDur, fmtMin, distUnit, fmtDist, parseDist, pace, fmtPace, effortInt, effortWord, scanCardio, CARDIO_LABEL } from './lib/cardio.js';
 import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
 import { parseImport, SPLIT_MAX } from './lib/importer.js';
@@ -95,8 +95,8 @@ function flipTheme() {
 /* ================= sanitising ================= */
 
 /* ================= db mapping ================= */
-const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: cleanKind(r.kind), archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null, note: typeof r.note === 'string' ? r.note : '', machines: cleanMachines(r.machines) });
-const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null, note: (e.note || '').trim().slice(0, 200) || null, machines: e.machines && e.machines.length ? cleanMachines(e.machines) : null });
+const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: cleanKind(r.kind), archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null, note: typeof r.note === 'string' ? r.note : '' });
+const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null, note: (e.note || '').trim().slice(0, 200) || null });
 const sessFromDb = r => cleanSession({ id: r.id, name: r.name, startedAt: Date.parse(r.started_at), endedAt: r.ended_at ? Date.parse(r.ended_at) : null, notes: r.notes, items: r.items, splitId: r.split_id, splitDay: r.split_day });
 const sessToDb = s => ({ id: s.id, user_id: S.user.id, name: s.name, started_at: new Date(s.startedAt).toISOString(), ended_at: s.endedAt ? new Date(s.endedAt).toISOString() : null, notes: s.notes || '', items: s.items, split_id: s.splitId || null, split_day: s.splitDay ?? null, updated_at: new Date().toISOString() });
 const splitFromDb = r => ({ id: r.id, name: r.name, description: r.description || '', days: cleanDays(r.days), shareToken: r.share_token || null, copiedFrom: r.copied_from || null, updatedAt: Date.parse(r.updated_at) || 0 });
@@ -128,7 +128,7 @@ function restoreOutbox() {
   for (const [key, val] of Object.entries(o)) {
     const [t, id] = splitKey(key);
     if (t === 's') { if (val) { const s = cleanSession(val); if (s) S.sessions.set(id, s); } else S.sessions.delete(id); }
-    else if (t === 'x') { S.library = S.library.filter(e => e.id !== id); if (val && val.name) S.library.push({ id, name: String(val.name).slice(0, 60), muscle: val.muscle || 'Full body', kind: cleanKind(val.kind), archived: !!val.archived, isDefault: !!val.isDefault, oneRm: num(val.oneRm), oneRmAt: num(val.oneRmAt), note: typeof val.note === 'string' ? val.note.slice(0, 200) : '', machines: cleanMachines(val.machines) }); }
+    else if (t === 'x') { S.library = S.library.filter(e => e.id !== id); if (val && val.name) S.library.push({ id, name: String(val.name).slice(0, 60), muscle: val.muscle || 'Full body', kind: cleanKind(val.kind), archived: !!val.archived, isDefault: !!val.isDefault, oneRm: num(val.oneRm), oneRmAt: num(val.oneRmAt), note: typeof val.note === 'string' ? val.note.slice(0, 200) : '' }); }
     else if (t === 'sp') { if (val) S.splits.set(id, { ...val, days: cleanDays(val.days) }); else S.splits.delete(id); }
     else if (t === 'p' && val) S.profile = { ...S.profile, ...val, username: S.profile.username, onboarded: S.profile.onboarded };
     else continue;
@@ -280,29 +280,15 @@ async function reloadLibrary() { if (S.local) return render(false); try { const 
 let EDITS = 0;
 const same = (a, b) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
 const EXM = { k: null, m: new Map() };
-const exOf = id => { const k = [S.library, S.library.length]; if (!same(EXM.k, k)) { EXM.k = k; EXM.m = new Map(S.library.map(e => [e.id, e])); } return EXM.m.get(id) ?? (typeof id === 'string' && id.includes('@') ? EXM.m.get(baseId(id)) : undefined); };
-/* ---------- tags: machines and labels ----------
-   An exercise in a session can carry tags. A machine tag (one at a time, weighted exercises only) names the machine
-   it was done on (it.mc, from the exercise's own list); weights on different machines don't compare, so each machine
-   is its own lift for hints, targets, intensity, 1RM, records, typo checks, the coach and month/week progress.
-   Labels (it.tags: belt, paused, wide grip) are for finding sessions again and never split the numbers. Volume and
-   sets add up across all of them. A lift's key is the exercise id, or "exerciseId@machineId" for an item on one of
-   its machines. Nothing changes for an exercise without machines: its key is its id. */
-const liftKey = it => it.mc && machineOf(exOf(it.exId), it.mc) ? it.exId + '@' + it.mc : it.exId;
-const baseId = k => { const i = String(k).indexOf('@'); return i < 0 ? k : k.slice(0, i); };
-const mcOf = k => { const i = String(k).indexOf('@'); return i < 0 ? null : k.slice(i + 1); };
-/* a session with each item's exercise id swapped for its lift key (the same object when no item names a machine) */
-const keyed = s => s.items.some(it => it.mc) ? { ...s, items: s.items.map(it => it.mc ? { ...it, exId: liftKey(it) } : it) } : s;
-/* machines are for weighted exercises: a bodyweight or cardio one is always "no machine" (its list is kept, unused) */
-const machinesOf = ex => (ex && ex.kind === 'w' && ex.machines) || [];
-const machineOf = (ex, mc) => mc ? machinesOf(ex).find(m => m.id === mc) || null : null;
-const mName = (ex, mc) => machineOf(ex, mc)?.name || '';
-/* "Triceps Pushdown · Hammer" */
-const liftName = k => { const ex = exOf(k), mc = mcOf(k); return ex ? ex.name + (mc && machineOf(ex, mc) ? ' · ' + mName(ex, mc) : '') : ''; };
+const exOf = id => { const k = [S.library, S.library.length]; if (!same(EXM.k, k)) { EXM.k = k; EXM.m = new Map(S.library.map(e => [e.id, e])); } return EXM.m.get(id); };
+const exName = id => exOf(id)?.name || '';
+/* ---------- tags ----------
+   An exercise in a session can carry tags (it.tags: Hammer, Rope, Belt, Paused, Wide grip): short labels for finding
+   sessions again. They never change the numbers, which stay one per exercise. Tags carry over to the next session. */
 const itemTags = it => (Array.isArray(it.tags) ? it.tags : []);
-/* the labels an exercise had the last time it was done (they carry over, like its machine) */
+/* the tags an exercise had the last time it was done */
 function lastTags(exId, excludeSid) { for (const s of sorted()) { if (s.id === excludeSid) continue; const it = [...s.items].reverse().find(i => i.exId === exId); if (it) return itemTags(it).slice(); } return []; }
-/* every label in use, most used first: n sessions overall, and on each exercise */
+/* every tag in use, most used first: n uses overall, and on each exercise */
 const LBC = { k: null, v: null };
 function labelUse() {
   const k = [S.sessions, S.sessions.size, EDITS]; if (LBC.v && same(LBC.k, k)) return LBC.v;
@@ -314,28 +300,13 @@ function labelUse() {
   const sortN = m => [...m.values()].sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
   LBC.k = k; LBC.v = { all: sortN(all), ex: id => sortN(byEx.get(id) || new Map()) }; return LBC.v;
 }
-/* the machine an exercise was last done on (null when the latest time named none, or it has no machines) */
-function lastMc(exId) {
-  const ex = exOf(exId); if (!machinesOf(ex).length) return null;
-  for (const s of sorted()) { const it = [...s.items].reverse().find(i => i.exId === exId); if (it) return machineOf(ex, it.mc) ? it.mc : null; }
-  return null;
+/* a 1RM set by hand for an exercise. Your 1RM is the higher of it and your best set's estimate, so it keeps itself up
+   to date: a set that beats it raises it, and fixing that set brings it back. */
+function savedOrm(exId) { const ex = exOf(exId); return ex && ex.oneRm > 0 ? { kg: ex.oneRm, at: ex.oneRmAt || null } : null; }
+function setSavedOrm(exId, kg, at = Date.now()) {
+  const ex = exOf(exId); if (!ex) return;
+  ex.oneRm = kg > 0 ? kg : null; ex.oneRmAt = kg > 0 ? at : null; queue('x:' + ex.id, 0);
 }
-const lastKey = exId => { const mc = lastMc(exId); return mc ? exId + '@' + mc : exId; };
-/* a 1RM set by hand for a lift: the exercise's, or a machine's own. Your 1RM is the higher of it and your best set's
-   estimate, so it keeps itself up to date: a set that beats it raises it, and fixing that set brings it back. */
-function savedOrm(key) {
-  const ex = exOf(key), mc = mcOf(key); if (!ex) return null;
-  if (mc) { const m = machineOf(ex, mc); return m && m.orm > 0 ? { kg: m.orm, at: m.ormAt || null } : null; }
-  return ex.oneRm > 0 ? { kg: ex.oneRm, at: ex.oneRmAt || null } : null;
-}
-function setSavedOrm(key, kg, at = Date.now()) {
-  const ex = exOf(key), mc = mcOf(key); if (!ex) return;
-  if (mc) { const m = machineOf(ex, mc); if (!m) return; if (kg > 0) { m.orm = kg; m.ormAt = at; } else { delete m.orm; delete m.ormAt; } }
-  else { ex.oneRm = kg > 0 ? kg : null; ex.oneRmAt = kg > 0 ? at : null; }
-  queue('x:' + ex.id, 0);
-}
-/* the lift an exercise page shows: the machine picked on the page, else the one last used */
-const exKey = ex => { const p = S.exPick && S.exPick.id === ex.id ? S.exPick.k : null; return p && (p === ex.id || machineOf(ex, mcOf(p))) ? p : lastKey(ex.id); };
 const loadOf = (st, ex) => { const w = +st.w || 0; return ex?.kind === 'bw' ? (+S.profile.bw || 75) + w : w; };
 const e1rm = (l, r) => (!(l > 0) || !(r > 0)) ? 0 : r === 1 ? l : l * (1 + r / 30);
 /* a set is logged once it has reps; a cardio bout once it has time */
@@ -360,7 +331,7 @@ function suspects() {
   const k = [S.sessions, S.sessions.size, S.library, S.library.length, EDITS];
   if (SUSC.k && same(SUSC.k, k)) return SUSC.info;
   const kind = new Map(S.library.map(e => [e.id, e.kind]));
-  SUSC.k = k; SUSC.info = findTypos([...S.sessions.values()].map(keyed), id => kind.get(baseId(id))); return SUSC.info;
+  SUSC.k = k; SUSC.info = findTypos(S.sessions.values(), id => kind.get(id)); return SUSC.info;
 }
 /* a set that counts toward the numbers: logged, and not a suspected typo */
 const counted = st => +st.r > 0 && !suspects().has(st.id);
@@ -374,25 +345,25 @@ function compute() {
   if (S.A && same(CMP.k, ck)) return S.A;
   CMP.k = ck;
   const exMap = new Map(S.library.map(e => [e.id, e]));
-  const sus = suspects(), list = [...S.sessions.values()].map(s => keyed(cleanOf(s, sus))).sort((a, b) => a.startedAt - b.startedAt);
-  const best = new Map(), seen = new Map(), A = { sess: new Map(), set: new Map(), ex: new Map(), sus, all: new Map() };
+  const sus = suspects(), list = [...S.sessions.values()].map(s => cleanOf(s, sus)).sort((a, b) => a.startedAt - b.startedAt);
+  const best = new Map(), seen = new Map(), A = { sess: new Map(), set: new Map(), ex: new Map(), sus };
   /* weight and rep PRs; a live session's faded weights count, as they do when a set is ticked */
-  const rec = scanRecords(list, { weightOf: (st, s, it) => { const w = +(s.endedAt ? st.w : st.w ?? st.pw) || 0; return exMap.get(baseId(it.exId))?.kind === 'bw' || w > 0 ? w : null; } }), prBy = new Map();
+  const rec = scanRecords(list, { weightOf: (st, s, it) => { const w = +(s.endedAt ? st.w : st.w ?? st.pw) || 0; return exMap.get(it.exId)?.kind === 'bw' || w > 0 ? w : null; } }), prBy = new Map();
   for (const e of rec.events) { if (!prBy.has(e.sid)) prBy.set(e.sid, new Set()); prBy.get(e.sid).add(e.exId); }
   A.rec = rec; A.splitUse = new Map();
   /* cardio: records (longest, farthest, fastest) and each session's time, distance and effort */
-  A.cr = scanCardio(list, id => { const e = exMap.get(baseId(id)); return e && e.kind === 'c' ? howOf(e.name) : null; });
+  A.cr = scanCardio(list, id => { const e = exMap.get(id); return e && e.kind === 'c' ? howOf(e.name) : null; });
   for (const e of A.cr.events) { if (!prBy.has(e.sid)) prBy.set(e.sid, new Set()); prBy.get(e.sid).add(e.exId); }
   for (const s of list) if (s.splitId) A.splitUse.set(s.splitId, (A.splitUse.get(s.splitId) || 0) + 1);
   for (const s of list) {
     const sb_ = new Map(), sbSet = new Map(), exVol = new Map();
-    for (const it of s.items) { const ex = exMap.get(baseId(it.exId)); for (const st of it.sets) { const sc = e1rm(loadOf(st, ex), +st.r || 0); if (sc > (sb_.get(it.exId) || 0)) { sb_.set(it.exId, sc); sbSet.set(it.exId, st); } } }
+    for (const it of s.items) { const ex = exMap.get(it.exId); for (const st of it.sets) { const sc = e1rm(loadOf(st, ex), +st.r || 0); if (sc > (sb_.get(it.exId) || 0)) { sb_.set(it.exId, sc); sbSet.set(it.exId, st); } } }
     const prs = [...(prBy.get(s.id) || [])]; let calib = false;
     for (const [ex, sc] of sb_) { const prev = best.get(ex) || 0; if (sc > prev) best.set(ex, sc); if ((seen.get(ex) || 0) < 2) calib = true; }
     let vol = 0, wsum = 0, isum = 0, sets = 0;
     for (const it of s.items) {
-      /* a 1RM set by hand (the exercise's, or the machine's) counts from when it was set */
-      const ex = exMap.get(baseId(it.exId)), so = savedOrm(it.exId), orm = so && so.at && so.at <= (s.endedAt || Date.now()) ? so.kg : 0, ref = Math.max(best.get(it.exId) || 0, orm);
+      /* a 1RM set by hand counts from when it was set */
+      const ex = exMap.get(it.exId), so = savedOrm(it.exId), orm = so && so.at && so.at <= (s.endedAt || Date.now()) ? so.kg : 0, ref = Math.max(best.get(it.exId) || 0, orm);
       for (const st of it.sets) {
         const r = +st.r || 0; if (r <= 0) continue; sets++;
         const v = (+st.w || 0) * r; vol += v; exVol.set(it.exId, (exVol.get(it.exId) || 0) + v);
@@ -409,8 +380,6 @@ function compute() {
       if (top > e.best) { e.best = top; e.bestSet = sbSet.get(ex); e.bestT = s.startedAt; }
       e.last = s.startedAt; e.n++; e.vol += exVol.get(ex) || 0;
     }
-    /* each exercise over all its machines: sessions, volume, last time, and which lift keys it has */
-    const bs = new Set(); for (const k of sb_.keys()) { const b = baseId(k); let t = A.all.get(b); if (!t) A.all.set(b, t = { n: 0, vol: 0, last: 0, keys: new Set() }); t.keys.add(k); t.vol += exVol.get(k) || 0; t.last = s.startedAt; if (!bs.has(b)) { bs.add(b); t.n++; } }
     /* a session of cardio alone takes its intensity from the effort logged */
     const c = A.cr.bySess.get(s.id);
     A.sess.set(s.id, { vol, sets, int: wsum ? isum / wsum : c && c.e ? effortInt(c.e) : 0, prs, calib: calib && sets > 0, ex: s.items.length, ct: c ? c.t : 0, cd: c ? c.d : 0, ce: c ? c.e : 0 });
@@ -428,9 +397,9 @@ const roundW = kg => { const st = unit() === 'lb' ? 1 : 0.5; return fromU(Math.r
 function liveTop(s, it) { const ex = exOf(it.exId), sus = suspects(); let b = 0, bs = null; for (const st of it.sets) { if (sus.has(st.id)) continue; const v = e1rm(loadOf(st, ex), +st.r || 0); if (v > b) { b = v; bs = st; } } return { v: b, st: bs }; }
 function ormLine(s, it) {
   const ex = exOf(it.exId); if (!ex) return '';
-  const base = oneRmOf(liftKey(it), s.id), top = liveTop(s, it).v, saved = (savedOrm(liftKey(it))?.kg || 0) >= base - 1e-6 && base > 0;
+  const base = oneRmOf(it.exId, s.id), top = liveTop(s, it).v, saved = (savedOrm(it.exId)?.kg || 0) >= base - 1e-6 && base > 0;
   if (!base && !top) return `${esc(ex.muscle)} · first log`;
-  const b = S.A.rec?.before.get(s.id + ':' + liftKey(it));
+  const b = S.A.rec?.before.get(s.id + ':' + it.exId);
   let t = `${esc(ex.muscle)}${b && b.w >= 0 ? ` · PR ${prSet({ w: b.w, r: b.wr }, ex)}` : ''} · ${saved ? '1RM' : 'est. 1RM'} ${base ? fmtW(roundW(base)) + ' ' + unit() : '—'}`;
   if (top > base * 1.0001 && base > 0) t += ` · <em class="pr">today ${fmtW(roundW(top))} ↑</em>`;
   else if (top > 0 && !base) t += ` · today ${fmtW(roundW(top))}`;
@@ -440,20 +409,19 @@ function ormLine(s, it) {
    set's estimate): a short message says so, once per new value. Fix the set and the 1RM follows it back. */
 const ormSaid = new Map();
 function oneRmNote(s, it, st) {
-  /* asking whether it's another machine: no new 1RM until that's answered */
-  const ex = exOf(it.exId), k = liftKey(it); if (!ex || isCardio(ex) || s.endedAt || suspects().has(st.id) || S.mcAsk === st.id) return;
+  const ex = exOf(it.exId), k = it.exId; if (!ex || isCardio(ex) || s.endedAt || suspects().has(st.id)) return;
   const v = e1rm(loadOf(st, ex), +st.r || 0), base = oneRmOf(k, s.id);
   if (!(v > 0) || !(base > 0) || v <= base * 1.0001) return;
   const val = roundW(v), sk = s.id + ':' + k; if (val <= base || (ormSaid.get(sk) || 0) >= val) return;
   ormSaid.set(sk, val);
-  toast(`New 1RM: ${fmtW(val)} ${unit()} on ${liftName(k)}`);
+  toast(`New 1RM: ${fmtW(val)} ${unit()} on ${exName(k)}`);
 }
-/* set a 1RM by hand (a tested max) for a lift: the exercise, or one of its machines */
+/* set a 1RM by hand (a tested max) for an exercise */
 function editOneRm(key) {
-  const ex = exOf(key); if (!ex) return; const est = prevBestE1rm(key), u = unit(), sv = savedOrm(key), mc = mcOf(key);
-  openSheet(`<div class="sh-h"><h3>${esc(liftName(key))} 1RM</h3>${xBtn()}</div><div class="form">
+  const ex = exOf(key); if (!ex) return; const est = prevBestE1rm(key), u = unit(), sv = savedOrm(key);
+  openSheet(`<div class="sh-h"><h3>${esc(exName(key))} 1RM</h3>${xBtn()}</div><div class="form">
   <label>One-rep max (${u})<input class="field" id="orm-v" inputmode="decimal" value="${sv ? fmtW(sv.kg) : ''}" placeholder="${est ? fmtW(roundW(est)) : '0'}"></label>
-  <p class="muted" style="font-size:13px">${est ? `Your best estimate from logged sets${mc ? ' on this machine' : ''} is ${fmtW(roundW(est))} ${u}.` : 'Log a few sets and Synergym will estimate it for you.'} Your 1RM is the higher of this and your best set, so a set that beats it raises it by itself.</p></div>
+  <p class="muted" style="font-size:13px">${est ? `Your best estimate from logged sets is ${fmtW(roundW(est))} ${u}.` : 'Log a few sets and Synergym will estimate it for you.'} Your 1RM is the higher of this and your best set, so a set that beats it raises it by itself.</p></div>
   <div class="btns">${sv ? '<button class="btn line" id="orm-clear" style="margin-right:auto">Use estimate instead</button>' : ''}<button class="btn" id="orm-save">Save</button></div>`, r => {
     const save = v => { if (!(v > 0 && v < 2000)) return toast('Enter a weight above 0'); setSavedOrm(key, v); closeSheet(); render(false); toast(`1RM saved: ${fmtW(v)} ${u}`); };
     r.querySelector('#orm-save').onclick = () => save(fromU(parseFloat(r.querySelector('#orm-v').value.replace(',', '.'))));
@@ -533,18 +501,14 @@ function consistency() {
   return { score, thisWeek, target, streak };
 }
 function dayIntensity() { const m = new Map(); for (const s of S.sessions.values()) { if (!s.items.length) continue; const k = dayKey(s.startedAt), v = S.A.sess.get(s.id)?.int || 0; m.set(k, Math.max(m.get(k) ?? 0, v)); } return m; }
-/* history by lift key: an exercise id matches only items on no machine, "id@machine" only that machine's; any:
-   true matches the exercise on any machine */
-const keyMatch = (key, any) => any ? (i => i.exId === baseId(key)) : (i => liftKey(i) === key);
-function lastSetsFor(key, excludeId, any = false) {
-  const m = keyMatch(key, any);
-  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => m(i) && i.sets.some(counted)); if (it) return it.sets.filter(counted); }
+function lastSetsFor(exId, excludeId) {
+  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => i.exId === exId && i.sets.some(counted)); if (it) return it.sets.filter(counted); }
   return null;
 }
-/* the last n sessions' logged sets for a lift, newest first */
-function historyFor(key, excludeId, n = 2) {
-  const out = [], m = keyMatch(key, false);
-  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => m(i) && i.sets.some(counted)); if (it) { out.push(it.sets.filter(counted)); if (out.length >= n) break; } }
+/* the last n sessions' logged sets for an exercise, newest first */
+function historyFor(exId, excludeId, n = 2) {
+  const out = [];
+  for (const s of sorted()) { if (s.id === excludeId) continue; const it = s.items.find(i => i.exId === exId && i.sets.some(counted)); if (it) { out.push(it.sets.filter(counted)); if (out.length >= n) break; } }
   return out;
 }
 /* weights snap to what you can load: 2.5 kg or 5 lb steps */
@@ -552,7 +516,7 @@ const loadStep = () => unit() === 'lb' ? 5 : 2.5;
 const snapW = kg => fromU(Math.round(toU(kg) / loadStep()) * loadStep());
 /* what the split planned for an exercise in a session started from a split day */
 const dayPlan = (s, exId) => { const sp = s.splitId && S.splits.get(s.splitId), d = sp && sp.days[s.splitDay]; return d ? d.exercises.find(x => x.exId === exId) || null : null; };
-const suggestFor = (s, it) => { const x = dayPlan(s, it.exId); return planFor(liftKey(it), { reps: x ? x.reps : null, sets: x ? x.sets : it.sets.length || 3, excludeSid: s.id }); };
+const suggestFor = (s, it) => { const x = dayPlan(s, it.exId); return planFor(it.exId, { reps: x ? x.reps : null, sets: x ? x.sets : it.sets.length || 3, excludeSid: s.id }); };
 
 /* the one close button: every sheet, the today panel, the Coach and full-screen widgets show this ✕, top right */
 const xBtn = (act = 'close', label = 'Close', cls = '') => `<button class="xbtn${cls}" data-act="${act}" aria-label="${label}">${ICON.x}</button>`;
@@ -571,14 +535,13 @@ function coach() {
   if (CO.a && CO.k === k && CO.s === S.sessions && CO.l === S.library && CO.p === S.splits) return CO.a;
   const exMap = new Map(S.library.map(e => [e.id, e]));
   const log = [...S.sessions.values()].filter(s => s.endedAt).sort((a, b) => a.startedAt - b.startedAt).map(s => ({ id: s.id, t: s.startedAt, splitId: s.splitId, splitDay: s.splitDay,
-    items: s.items.filter(it => exMap.get(it.exId)?.kind !== 'c').map(it => { const ex = exMap.get(it.exId); return { exId: liftKey(it), sets: it.sets.filter(counted).map(st => ({ w: +st.w || 0, r: +st.r, load: loadOf(st, ex) })) }; }) }))
+    items: s.items.filter(it => exMap.get(it.exId)?.kind !== 'c').map(it => { const ex = exMap.get(it.exId); return { exId: it.exId, sets: it.sets.filter(counted).map(st => ({ w: +st.w || 0, r: +st.r, load: loadOf(st, ex) })) }; }) }))
     /* the coach reads lifting: a session of cardio alone isn't training load for it */
     .filter(s => s.items.some(it => it.sets.length));
   const nx = nextSplitDay(), last = log[log.length - 1], sp = nx ? nx.sp : (last && last.splitId && S.splits.get(last.splitId)) || null, day = nx && nx.sp.days[nx.i];
   const ctx = { now, exp: p.exp, target: p.target, round: snapW, split: sp && { id: sp.id, name: sp.name, days: sp.days }, lastSplitDay: last && sp && last.splitId === sp.id ? last.splitDay : null,
-    nextMuscles: day ? [...new Set(day.exercises.filter(x => x.kind !== 'c').map(x => x.muscle))] : [], muscleOf: id => exMap.get(baseId(id))?.muscle,
-    /* a goal follows the machine the lift was last done on */
-    goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)).map(g => ({ ...g, key: lastKey(g.exId) })), savedOf: id => savedOrm(id) };
+    nextMuscles: day ? [...new Set(day.exercises.filter(x => x.kind !== 'c').map(x => x.muscle))] : [], muscleOf: id => exMap.get(id)?.muscle,
+    goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)), savedOf: id => savedOrm(id) };
   const a = analyse(log, ctx);
   /* trained today: the call is for tomorrow morning */
   if (doneToday().length) { const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(8, 0, 0, 0); a.next = { ...withBreak(readiness(log, a.series, { ...ctx, now: t.getTime() }), a.deload), when: 'tomorrow' }; }
@@ -592,7 +555,7 @@ function coach() {
 function planFor(key, { reps = null, sets = 3, excludeSid = null } = {}) {
   const ex = exOf(key); if (!ex || isCardio(ex)) return null;
   if (!coachOn()) { const p = suggestNext(historyFor(key, excludeSid), { bw: ex.kind === 'bw', step: fromU(loadStep()), round: snapW }); return p && { ...p, sets }; }
-  const a = coach(), g = a.goals.find(x => (x.goal.key || x.goal.exId) === key && x.plan && x.status !== 'ready' && x.status !== 'no-data');
+  const a = coach(), g = a.goals.find(x => x.goal.exId === key && x.plan && x.status !== 'ready' && x.status !== 'no-data');
   return prescribe(historyFor(key, excludeSid), { range: parseRange(reps), sets, bw: ex.kind === 'bw', step: fromU(loadStep()), round: snapW,
     call: a.ready.call === 'train' ? 'train' : 'easy', deload: a.deload.status === 'now', goalWeek: g ? g.plan.week : null, e1: g ? g.cur : 0 });
 }
@@ -1177,7 +1140,7 @@ const NUMW = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'ei
 function doneLines(done, nx, hi) {
   const good = pick([`Good work, ${hi},`, `Nice work, ${hi},`, `Well done, ${hi},`], 9);
   const prs = [...new Set(done.flatMap(x => S.A.sess.get(x.id)?.prs || []))].filter(id => exOf(id));
-  if (prs.length === 1) return [good, 'a new PR on', `<em>${esc(liftName(prs[0]))}</em>.`];
+  if (prs.length === 1) return [good, 'a new PR on', `<em>${esc(exName(prs[0]))}</em>.`];
   if (prs.length > 1) return [good, `${NUMW[prs.length] || prs.length} PRs`, '<em>today</em>.'];
   const tgt = S.profile.target || 3, wk = weekCount();
   if (wk >= tgt && wk - done.length < tgt) {
@@ -1263,7 +1226,7 @@ function todayContent() {
   else today = '';
   if (done.length) today += `<div class="ts-kv"><div><b>${plural(done.length, 'session')}</b><span class="lbl">done</span></div><div><b>${tot.sets}</b><span class="lbl">sets</span></div><div><b>${fmtVol(tot.vol)}</b><span class="lbl">volume</span></div><div><b>${tot.min}</b><span class="lbl">minutes</span></div></div>
     <div class="list">${done.map(sessRowToday).join('')}</div>
-    ${prs.length ? `<span class="lbl ts-sub">PRs today</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(liftName(p.exId) || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}`;
+    ${prs.length ? `<span class="lbl ts-sub">PRs today</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(exName(p.exId) || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}`;
   else if (!a) today += isRestToday() ? `<p class="ts-note">${ICON.moon}Rest day. Recovery counts.</p>` : `<p class="ts-note">Nothing logged yet today.</p>`;
   const wkBar = `<div class="ts-week"><span class="lbl">This week</span><b>${wk} of ${tgt}</b><span class="ts-bar"><i style="width:${Math.min(100, wk / tgt * 100).toFixed(0)}%"></i></span></div>`;
   const co = coachOn() && coach().next, cc = co && callOf(co);
@@ -1281,7 +1244,7 @@ function nextBlock(nx, done, a) {
   const fmt = (x, bw) => bw && !x.w ? `${x.r} reps` : `${fmtW(x.w)}×${x.r}`;
   const rows = d.exercises.map(x => {
     const e = (x.exId && exOf(x.exId)) || S.library.find(y => y.name.toLowerCase() === String(x.name).toLowerCase());
-    const g = e && planFor(lastKey(e.id), { reps: x.reps, sets: x.sets });
+    const g = e && planFor(e.id, { reps: x.reps, sets: x.sets });
     return `<div class="ts-ex"><span><b>${esc(e ? e.name : x.name)}</b><small>${planText(x)}</small></span><span class="ts-t">${g ? `<span class="lbl">try</span> ${fmt(g.next, e.kind === 'bw')}` : x.kind === 'c' ? '<span class="lbl">cardio</span>' : '<span class="lbl">first time</span>'}</span></div>`;
   }).join('');
   const rest = isRestToday(), canStart = !a && !full && !rest && (!done.length || nx.second);
@@ -1330,7 +1293,7 @@ const tgtText = (g, bw) => bw && !g.next.w ? `${g.next.r} reps` : `${fmtW(g.next
 function dayTargets(d) {
   return d.exercises.map(x => {
     const e = (x.exId && exOf(x.exId)) || S.library.find(y => y.name.toLowerCase() === String(x.name).toLowerCase());
-    return { x, e, g: e ? planFor(lastKey(e.id), { reps: x.reps, sets: x.sets }) : null };
+    return { x, e, g: e ? planFor(e.id, { reps: x.reps, sets: x.sets }) : null };
   });
 }
 /* what's lightening today's targets, if anything: a deload week, then an easy or rest call */
@@ -1426,15 +1389,15 @@ function exNext(ex) {
   if (!coachOn()) return '';
   const nx = nextSplitDay(), sps = [...(nx ? [nx.sp] : []), ...S.splits.values()];
   let x = null; for (const sp of sps) { for (const d of sp.days) { x = d.exercises.find(y => y.exId === ex.id); if (x) break; } if (x) break; }
-  const k = exKey(ex), g = planFor(k, { reps: x ? x.reps : null, sets: x ? x.sets : 3 }); if (!g) return '';
-  return `<p class="co-nx"><span class="lbl">Coach · next time${mcOf(k) ? ' on ' + esc(mName(ex, mcOf(k))) : ''}</span><b>${tgtText(g, ex.kind === 'bw')}</b> · ${plural(g.sets, 'set')}<small>${WHY[g.why]}</small></p>`;
+  const k = ex.id, g = planFor(k, { reps: x ? x.reps : null, sets: x ? x.sets : 3 }); if (!g) return '';
+  return `<p class="co-nx"><span class="lbl">Coach · next time</span><b>${tgtText(g, ex.kind === 'bw')}</b> · ${plural(g.sets, 'set')}<small>${WHY[g.why]}</small></p>`;
 }
 /* in a live session: why today's targets are lighter, or that a lift follows a goal's block */
 function sessCoachBand(s) {
   if (s.endedAt || !coachOn()) return '';
-  const a = coach(), mood = coachMood(a), goal = a.goals.find(g => g.plan && g.status !== 'ready' && g.status !== 'no-data' && s.items.some(it => liftKey(it) === (g.goal.key || g.goal.exId)));
+  const a = coach(), mood = coachMood(a), goal = a.goals.find(g => g.plan && g.status !== 'ready' && g.status !== 'no-data' && s.items.some(it => it.exId === g.goal.exId));
   if (mood) return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill warn">${mood.t}</span><span>${mood.b}</span>${ICON.coach}</button>`;
-  if (goal) { const ex = exOf(goal.goal.exId); return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill good">Goal</span><span>${esc(ex ? liftName(goal.goal.key || ex.id) : 'This lift')} follows your ${fmtW(goal.goal.kg)} ${unit()} plan: ${esc(goal.plan.name)}, week ${goal.plan.weekNo} of 4.</span>${ICON.coach}</button>`; }
+  if (goal) { const ex = exOf(goal.goal.exId); return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill good">Goal</span><span>${esc(ex ? ex.name : 'This lift')} follows your ${fmtW(goal.goal.kg)} ${unit()} plan: ${esc(goal.plan.name)}, week ${goal.plan.weekNo} of 4.</span>${ICON.coach}</button>`; }
   return '';
 }
 /* the lift's goal on its exercise page */
@@ -1449,7 +1412,7 @@ function exGoalCard(ex) {
 const isoDay = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 /* set or change a goal: the lift, a target one-rep max and an optional deadline, with a live, realistic preview */
 function goalSheet(exId = null) {
-  const a = coach(), use = new Map(); for (const [id, p] of a.series) use.set(baseId(id), (use.get(baseId(id)) || 0) + p.length);
+  const a = coach(), use = new Map(); for (const [id, p] of a.series) use.set(id, (use.get(id) || 0) + p.length);
   const lifts = S.library.filter(e => e.kind === 'w' && (!e.archived || e.id === exId)).sort((x, y) => (use.get(y.id) || 0) - (use.get(x.id) || 0) || x.name.localeCompare(y.name));
   if (!lifts.length) return toast('Add a weighted exercise first');
   const goals = S.profile.liftGoals || [], g0 = exId && goals.find(g => g.exId === exId), u = unit(), first = exId || (lifts.find(e => !goals.some(g => g.exId === e.id)) || lifts[0]).id;
@@ -1463,8 +1426,8 @@ function goalSheet(exId = null) {
     const read = () => { const id = exEl.value, v = fromU(parseFloat(String(kgEl.value).replace(',', '.'))), d = byEl.value ? new Date(byEl.value + 'T12:00').getTime() : null;
       const old = goals.find(g => g.exId === id); return { id, kg: v, by: d, at: old ? old.at : Date.now(), from: old ? old.from : null }; };
     const show = () => {
-      const x = read(), saved = savedOrm(lastKey(x.id));
-      const p = goalPlan({ exId: x.id, kg: x.kg > 0 ? x.kg : 1, by: x.by, at: x.at, from: x.from }, a.series.get(lastKey(x.id)), { ...a.ctx, saved });
+      const x = read(), saved = savedOrm(x.id);
+      const p = goalPlan({ exId: x.id, kg: x.kg > 0 ? x.kg : 1, by: x.by, at: x.at, from: x.from }, a.series.get(x.id), { ...a.ctx, saved });
       if (!kgEl.value) kgEl.placeholder = p.cur > 0 ? `e.g. ${fmtW(Math.ceil(p.cur * 1.1 / fromU(loadStep())) * fromU(loadStep()))}` : 'e.g. 100';
       if (!(p.cur > 0)) { pre.innerHTML = `<p class="muted">No sets of this lift yet. Save the goal and the plan appears after your first session with it.</p>`; return; }
       if (!(x.kg > 0)) { pre.innerHTML = `<p class="muted">Your estimated max now: <b>${fmtW(roundW(p.cur))} ${u}</b>.</p>`; return; }
@@ -1477,7 +1440,7 @@ function goalSheet(exId = null) {
     r.querySelector('#gl-save').onclick = () => {
       const x = read(), ex = exOf(x.id);
       if (!(x.kg > 0 && x.kg < 2000)) return toast('Enter a target weight');
-      const p = goalPlan({ exId: x.id, kg: x.kg, at: Date.now() }, a.series.get(lastKey(x.id)), { ...a.ctx, saved: savedOrm(lastKey(x.id)) });
+      const p = goalPlan({ exId: x.id, kg: x.kg, at: Date.now() }, a.series.get(x.id), { ...a.ctx, saved: savedOrm(x.id) });
       const keep = goals.filter(g => g.exId !== x.id && g.exId !== exId);
       S.profile.liftGoals = [...keep, { id: uuid(), exId: x.id, kg: x.kg, by: x.by, at: x.at, from: x.from || (p.cur > 0 ? Math.round(p.cur * 100) / 100 : null) }];
       queue('p', 0); closeSheet(); render(false); toast(`Goal saved: ${ex ? ex.name : 'lift'} ${fmtW(x.kg)} ${u}`);
@@ -1488,7 +1451,7 @@ function goalMenu(exId) {
   const g = (S.profile.liftGoals || []).find(x => x.exId === exId), ex = exOf(exId); if (!g) return;
   const drop = () => { S.profile.liftGoals = (S.profile.liftGoals || []).filter(x => x.exId !== exId); queue('p', 0); render(false); };
   menuSheet(`${ex ? ex.name : 'Lift'} · ${fmtW(g.kg)} ${unit()}`, [
-    { label: 'I lifted it', hint: 'Saves it as your one-rep max and closes the goal', fn: () => { if (ex) setSavedOrm(lastKey(ex.id), g.kg); drop(); toast(`Goal reached: ${fmtW(g.kg)} ${unit()}. Set the next one.`); } },
+    { label: 'I lifted it', hint: 'Saves it as your one-rep max and closes the goal', fn: () => { if (ex) setSavedOrm(ex.id, g.kg); drop(); toast(`Goal reached: ${fmtW(g.kg)} ${unit()}. Set the next one.`); } },
     { label: 'Edit goal', fn: () => goalSheet(exId) },
     { label: 'Delete goal', warn: true, fn: () => confirmSheet('Delete this goal?', 'Your sessions and records stay; only the goal and its plan go.', 'Delete', () => { drop(); toast('Goal deleted'); }) }
   ]);
@@ -1614,7 +1577,7 @@ function prEvents(days) { const t = days ? Date.now() - days * 864e5 : 0; return
 /* a set as a record shows it: 100×5, or 12 reps for bodyweight with no added load */
 const prSet = (p, ex = exOf(p.exId)) => ex?.kind === 'bw' && !p.w ? `${p.r} reps` : `${ex?.kind === 'bw' ? '+' : ''}${fmtW(p.w)}×${p.r}`;
 const PR_CHIP = { w: 'weight', r: 'reps', wr: 'both' };
-const prRow = p => `<button class="row" data-act="open" data-id="${p.sid}"><span class="tri"></span><span class="row-m"><span class="t">${esc(liftName(p.exId) || 'Exercise')}</span><span class="sub">${fmtDate(p.t)} · ${PR_LABEL[p.kind]}</span></span><span class="row-r"><span class="d">${prSet(p)}</span><span class="ichip hot">${PR_CHIP[p.kind]}</span></span></button>`;
+const prRow = p => `<button class="row" data-act="open" data-id="${p.sid}"><span class="tri"></span><span class="row-m"><span class="t">${esc(exName(p.exId) || 'Exercise')}</span><span class="sub">${fmtDate(p.t)} · ${PR_LABEL[p.kind]}</span></span><span class="row-r"><span class="d">${prSet(p)}</span><span class="ichip hot">${PR_CHIP[p.kind]}</span></span></button>`;
 /* what a set beat, under the set while logging */
 function prText(ev) {
   const ex = exOf(ev.exId), bw = ex?.kind === 'bw', u = bw ? '' : ' ' + unit(), was = ev.prevW >= 0 ? (bw && !ev.prevW ? `${ev.prevWr} reps` : `${bw ? '+' : ''}${fmtW(ev.prevW)}${u} × ${ev.prevWr}`) : '';
@@ -1622,20 +1585,20 @@ function prText(ev) {
     : ev.kind === 'wr' ? `heavier, and more reps · was ${was}` : `heaviest yet · was ${was}`;
   return `<b>${PR_LABEL[ev.kind]}</b><span>${why}</span>`;
 }
-/* each lift (an exercise, or one of its machines) with its 1RM: the higher of the one set by hand and the best estimate */
+/* each exercise with its 1RM: the higher of the one set by hand and the best estimate */
 const topLifts = () => [...S.A.ex].map(([k, e]) => ({ k, ex: exOf(k), e, orm: Math.max(savedOrm(k)?.kg || 0, e.best) })).filter(x => x.ex && !x.ex.archived).sort((a, b) => b.e.n - a.e.n || b.orm - a.orm);
-const liftRow = ({ k, ex, e, orm }) => `<button class="row" data-act="open-ex" data-id="${ex.id}"><span class="tri"></span><span class="row-m"><span class="t">${esc(liftName(k))}</span><span class="sub">${plural(e.n, 'session')} · 1RM</span></span><span class="row-r"><span class="d">${fmtW(roundW(orm))}</span><span class="ichip">${unit()}</span></span></button>`;
+const liftRow = ({ k, ex, e, orm }) => `<button class="row" data-act="open-ex" data-id="${ex.id}"><span class="tri"></span><span class="row-m"><span class="t">${esc(exName(k))}</span><span class="sub">${plural(e.n, 'session')} · 1RM</span></span><span class="row-r"><span class="d">${fmtW(roundW(orm))}</span><span class="ichip">${unit()}</span></span></button>`;
 const planDays = (nx, full) => { const dn = new Set(doneToday().filter(s => s.splitId === nx.sp.id).map(s => s.splitDay));
   return `<div class="plan${full ? ' full' : ''}">${nx.sp.days.map((d, i) => `<div class="pd${i === nx.i ? ' next' : ''}${isRestDay(d) ? ' rest' : ''}${dn.has(i) ? ' done' : ''}${isSecond(nx.sp.days, i) ? ' second' : ''}"><span class="lbl">${dayLabel(nx.sp.days, i)}${i === nx.i ? ' · next' : dn.has(i) ? ' · done' : ''}</span><b>${esc(isRestDay(d) ? 'Rest' : d.type || 'Training')}</b>${full && !isRestDay(d) ? `<span class="sub">${d.exercises.map(x => esc(x.name)).join(' · ') || 'No exercises yet'}</span>` : ''}</div>`).join('')}</div>`; };
 
 const wTile = (label, value, caption, open) => `<div class="card-h"><span class="lbl">${label}</span>${open ? `<span class="w-ex" aria-hidden="true">${ICON.expand}</span>` : ''}</div><div class="tile"><span class="tile-n">${value}</span><span class="tile-c">${caption}</span></div>`;
 const mkv = pairs => `<div class="mkv">${pairs.map(([k, v]) => `<div><b>${v}</b><span class="lbl">${k}</span></div>`).join('')}</div>`;
-const thisWeek = () => weekSummary(sorted().map(s => keyed(cleanOf(s))), weekStart(Date.now()));
+const thisWeek = () => weekSummary(sorted().map(s => cleanOf(s)), weekStart(Date.now()));
 /* a month against the one before: this month so far, or ('last') the month just finished. In a month's first five
    days the Home card looks back at the month just gone, since the new one has too little to say. */
 function monthAt(which = new Date().getDate() <= 5 ? 'last' : 'this') {
   const now = Date.now(), cur = monthStart(now), from = which === 'last' ? monthStart(now, -1) : cur, to = which === 'last' ? cur - 1 : now;
-  const M = monthSummary(sorted().map(s => keyed(cleanOf(s))), from, to, { loadOf: (st, id) => loadOf(st, exOf(id)), isLift: id => { const e = exOf(id); return !!e && !isCardio(e); } });
+  const M = monthSummary(sorted().map(s => cleanOf(s)), from, to, { loadOf: (st, id) => loadOf(st, exOf(id)), isLift: id => { const e = exOf(id); return !!e && !isCardio(e); } });
   M.prs = bestPerSession(S.A.rec.events).filter(p => p.t >= from && p.t <= to).length; M.done = which === 'last';
   return M;
 }
@@ -1649,11 +1612,11 @@ function monthLine(M) {
   return M.count ? `<b>${plural(M.count, 'session')}</b> in ${monName(M.from)}` : `Your first session in ${monName(M.from)} starts the count`;
 }
 const monthTitle = M => M.done ? `${monName(M.from)} in review` : `${monName(M.from)} so far`;
-const liftLine = l => `<div class="wk-g"><span>${esc(liftName(l.exId) || 'Exercise')}</span><span class="muted">${fmtW(roundW(l.from))} → ${fmtW(roundW(l.to))}</span><b${l.pct < 0 ? ' class="dn"' : ''}>${pctTxt(l.pct)}</b></div>`;
+const liftLine = l => `<div class="wk-g"><span>${esc(exName(l.exId) || 'Exercise')}</span><span class="muted">${fmtW(roundW(l.from))} → ${fmtW(roundW(l.to))}</span><b${l.pct < 0 ? ' class="dn"' : ''}>${pctTxt(l.pct)}</b></div>`;
 /* sessions this week, the one count everywhere (Home's This week, the Coach, today's plan): from the start of the
    week you chose in Settings, each with a set logged, as the Week widget counts them */
 const weekCount = () => { const from = weekStart(Date.now()); return sorted().filter(s => s.startedAt >= from && logged(s)).length; };
-const gainText = g => `+${fmtW(g.by)} ${unit()} on ${esc(liftName(g.exId) || 'a lift')}`;
+const gainText = g => `+${fmtW(g.by)} ${unit()} on ${esc(exName(g.exId) || 'a lift')}`;
 const volDelta = W => W.lastVol ? `${W.vol >= W.lastVol ? '+' : '−'}${Math.round(Math.abs(W.vol - W.lastVol) / W.lastVol * 100)}%` : '–';
 const bwDelta = ch => ch == null ? '–' : `${ch > 0 ? '+' : ch < 0 ? '−' : '±'}${fmtW(Math.abs(ch))} ${unit()}`;
 /* a line through the logged weights; the y-axis fits the range with a little headroom */
@@ -1758,7 +1721,7 @@ const WIDGETS = {
   lifts: {
     title: 'Top lifts', desc: 'Your 1RM on the lifts you train most',
     card: (open, z) => { const t = topLifts();
-      if (z === 's') { const x = t[0]; return wTile('Top lift', x ? `${fmtW(roundW(x.orm))}<small>${unit()}</small>` : '–', x ? esc(liftName(x.k)) : 'Nothing logged yet', open); }
+      if (z === 's') { const x = t[0]; return wTile('Top lift', x ? `${fmtW(roundW(x.orm))}<small>${unit()}</small>` : '–', x ? esc(exName(x.k)) : 'Nothing logged yet', open); }
       return wHead('Top lifts', `1RM · ${unit()}`, open) + (t.length ? `<div class="list">${t.slice(0, z === 'l' ? 7 : 4).map(liftRow).join('')}</div>` : nothing('Your best lifts show up after your first session.')); },
     full: () => { const t = topLifts(); return wSect('Every exercise you’ve logged', t.length ? `<div class="list">${t.map(liftRow).join('')}</div>` : nothing('Nothing logged yet.')); }
   },
@@ -1766,13 +1729,13 @@ const WIDGETS = {
     title: 'This week', desc: 'Sessions so far and the lifts that went up',
     card: (open, z) => { const W = thisWeek(), g = W.gains[0], tgt = S.profile.target || 3;
       if (z === 's') return wTile('This week', `${W.count}<small>/${tgt}</small>`, g ? gainText(g) : W.count ? plural(W.count, 'session') : 'Nothing logged yet', open);
-      const lines = W.gains.slice(0, z === 'l' ? 5 : 2).map(x => `<div class="wk-g"><span>${esc(liftName(x.exId) || 'Exercise')}</span><b>+${fmtW(x.by)} ${unit()}</b></div>`).join('');
+      const lines = W.gains.slice(0, z === 'l' ? 5 : 2).map(x => `<div class="wk-g"><span>${esc(exName(x.exId) || 'Exercise')}</span><b>+${fmtW(x.by)} ${unit()}</b></div>`).join('');
       return wHead('This week', `${W.count}/${tgt} sessions`, open) + `<div class="wk-h"><b>${plural(W.count, 'session')}</b>${g ? ` · ${gainText(g)}` : ''}</div>`
         + (lines ? `<div class="wk-gs">${lines}</div>` : `<p class="muted wk-none">${W.count ? 'Beat a recent top weight and it shows up here.' : 'Your first session this week starts the count.'}</p>`)
         + (z === 'l' ? mkv([['volume', W.vol ? fmtVol(W.vol) : '–'], ['vs last week', volDelta(W)], ['lifts up', W.gains.length]]) : ''); },
     full: () => { const W = thisWeek(), from = weekStart(Date.now()), list = sorted().filter(s => s.items.length && s.startedAt >= from);
       return kvs([['Sessions', `${W.count}/${S.profile.target || 3}`], ['Volume', W.vol ? fmtVol(W.vol) : '–'], ['vs last week', volDelta(W)], ['Lifts up', W.gains.length]])
-        + wSect('Lifts that went up', W.gains.length ? `<div class="wk-gs">${W.gains.map(x => `<div class="wk-g"><span>${esc(liftName(x.exId) || 'Exercise')}</span><span class="muted">${fmtW(x.from)} → ${fmtW(x.to)}</span><b>+${fmtW(x.by)} ${unit()}</b></div>`).join('')}</div>` : nothing('Compared with your best in the four weeks before. Nothing has gone up yet this week.'))
+        + wSect('Lifts that went up', W.gains.length ? `<div class="wk-gs">${W.gains.map(x => `<div class="wk-g"><span>${esc(exName(x.exId) || 'Exercise')}</span><span class="muted">${fmtW(x.from)} → ${fmtW(x.to)}</span><b>+${fmtW(x.by)} ${unit()}</b></div>`).join('')}</div>` : nothing('Compared with your best in the four weeks before. Nothing has gone up yet this week.'))
         + wSect('Sessions this week', list.length ? `<div class="list">${list.map(rowSession).join('')}</div>` : nothing('Nothing logged yet this week.')); }
   },
   month: {
@@ -1886,27 +1849,20 @@ function wave(s) {
 /* the handle to drag an exercise to a new place: a live session, or one being edited, outside linking */
 const gripFor = () => { const s = cur(); return s && !locked(s) && !S.link ? '<span class="grip" data-grip aria-hidden="true" title="Drag to reorder"></span>' : ''; };
 /* ---------- tags and the setup note, on an exercise's card ----------
-   The tags line shows the machine (filled, with KG) and the labels; tapping it opens the tags sheet. An exercise done
-   on two machines gets a one-tap switch to the other one on the line itself. With no tags yet the line offers them.
-   The setup note (seat, grip) is the exercise's own and shows under the line. A finished session shows its tags as
-   they were, without the offers. */
+   The tags line shows the exercise's tags in this session; tapping it opens the tags sheet. With none yet it offers
+   them. Tags are labels (the machine, the grip, a belt): they help you find sessions again and never change the
+   numbers. The setup note (seat, grip) is the exercise's own and shows under the line. A finished session shows its
+   tags as they were, without the offers. */
 const TAG_ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>';
-const KG = '<span class="kg" aria-hidden="true">KG</span>';
 const tagHint = ex => ex.kind === 'w' ? 'machine, belt, grip' : isCardio(ex) ? 'treadmill, outdoors' : 'grip, paused, rings';
-/* the machine an exercise was last done on other than this one (or the only other one): the card offers it */
-function otherMc(ex, mc) {
-  for (const s of sorted()) for (const i of s.items) if (i.exId === ex.id && i.mc && i.mc !== mc && machineOf(ex, i.mc)) return i.mc;
-  const o = machinesOf(ex).filter(m => m.id !== mc); return o.length === 1 ? o[0].id : null;
-}
-const tagChips = (ex, it) => { const m = machineOf(ex, it.mc); return `${m ? `<span class="tc m">${KG}${esc(m.name)}</span>` : ''}${itemTags(it).map(t => `<span class="tc">${esc(t)}</span>`).join('')}`; };
+const tagChips = it => itemTags(it).map(t => `<span class="tc">${esc(t)}</span>`).join('');
 function tagLine(ex, it) {
   if (!ex || !ex.id || !it) return '';
-  const s = cur(), open = s && !locked(s), m = machineOf(ex, it.mc), ls = itemTags(it), note = !ex.note && open ? `<button class="tl-note" data-act="ex-note" data-id="${ex.id}">${ICON.pen}Note</button>` : '';
-  if (!open) return m || ls.length ? `<div class="tline ro">${tagChips(ex, it)}</div>` : '';
+  const s = cur(), open = s && !locked(s), ls = itemTags(it), note = !ex.note && open ? `<button class="tl-note" data-act="ex-note" data-id="${ex.id}">${ICON.pen}Note</button>` : '';
+  if (!open) return ls.length ? `<div class="tline ro">${tagChips(it)}</div>` : '';
   const go = `data-act="tags" data-id="${ex.id}" data-item="${it.id}"`;
-  if (!m && !ls.length) return `<div class="tline-w"><button class="tline empty" ${go}>${TAG_ICO}<span class="tl">Tag it: ${tagHint(ex)}</span></button>${note}</div>`;
-  const o = ex.kind === 'w' && otherMc(ex, it.mc);
-  return `<div class="tline-w"><div class="tline"><button class="tl-main" ${go} aria-label="Tags: ${esc([m?.name, ...ls].filter(Boolean).join(', '))}. Change">${tagChips(ex, it)}</button>${o ? `<button class="tl-sw" data-act="mc-switch" data-item="${it.id}" data-mc="${o}" aria-label="Switch to ${esc(mName(ex, o))}">⇄ ${esc(mName(ex, o))}</button>` : `<button class="tl-go" ${go} aria-hidden="true" tabindex="-1">Change</button>`}</div>${note}</div>`;
+  if (!ls.length) return `<div class="tline-w"><button class="tline empty" ${go}>${TAG_ICO}<span class="tl">Tag it: ${tagHint(ex)}</span></button>${note}</div>`;
+  return `<div class="tline-w"><div class="tline"><button class="tl-main" ${go} aria-label="Tags: ${esc(ls.join(', '))}. Change">${tagChips(it)}</button><button class="tl-go" ${go} aria-hidden="true" tabindex="-1">Change</button></div>${note}</div>`;
 }
 /* the setup note: it stays with the exercise and shows on its card in every session */
 function noteLine(ex, page = false) {
@@ -1925,147 +1881,73 @@ function noteSheet(id) {
     const t = r.querySelector('#nt-v'); setTimeout(() => { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }, 60);
   });
 }
-/* the item's sets not logged yet take the hints of the machine it's now on (typed numbers stay) */
-function rehint(s, it) {
-  if (isCardio(exOf(it.exId))) return;
-  const last = lastSetsFor(liftKey(it), s.id);
-  it.sets.forEach((st, i) => { if (setLogged(st) || st.done) return; const l = last && last[Math.min(i, last.length - 1)]; st.pw = l ? l.w ?? null : null; if (l) st.pr = l.r ?? st.pr; });
-}
-const mcUsed = (exId, mc) => sorted().filter(s => s.items.some(i => i.exId === exId && i.mc === mc && i.sets.some(setLogged))).length;
-/* put an item on a machine (or none): its hints follow, and it's saved */
-function setMachine(s, it, mc) {
-  if (mc) it.mc = mc; else delete it.mc;
-  rehint(s, it); queue('s:' + s.id, 0);
-}
-/* ---------- "Different machine today?" ----------
-   A ticked set far from what this lift usually takes (under 70% or over 140% of last time's heaviest, and at least
-   5 kg apart) is most likely another machine: one line under the set offers the exercise's machines, a new one, or
-   Not now. Asked once per exercise in a session; a suspected typo asks about the typo instead. */
-const mcAsked = new Set();
-function machineAsk(s, it, st) {
-  const ex = exOf(it.exId); if (!ex || ex.kind !== 'w' || s.endedAt || mcAsked.has(it.id) || suspects().has(st.id)) return false;
-  const last = lastSetsFor(liftKey(it), s.id), w0 = last ? Math.max(...last.map(x => +x.w || 0)) : 0, v = +st.w || 0;
-  if (!(w0 > 0) || !(v > 0) || Math.abs(v - w0) < 5 || (v >= w0 * 0.7 && v <= w0 * 1.4)) return false;
-  S.mcAsk = st.id; return true;
-}
-function mcAskLine(st, it) {
-  if (S.mcAsk !== st.id || locked(cur())) return '';
-  const ex = exOf(it.exId), ms = machinesOf(ex).filter(m => m.id !== it.mc).slice(0, 3);
-  return `<div class="mca" role="group" aria-label="Different machine today?"><span class="mca-q">Different machine today?</span><div class="mca-b">
-    ${ms.map(m => `<button class="chip" data-act="mca-pick" data-item="${it.id}" data-mc="${m.id}">${esc(m.name)}</button>`).join('')}
-    <button class="chip addc" data-act="tags" data-id="${ex.id}" data-item="${it.id}" data-add="w">${ms.length ? '+ New' : '+ Tag the machine'}</button><button class="mca-no" data-act="mca-no" data-item="${it.id}">Not now</button></div></div>`;
-}
 /* ---------- the tags sheet ----------
-   From a card: the machine as tiles, each with its 1RM and last set (a bodyweight or cardio exercise has none), and
-   the labels as chips, with labels from other exercises one tap away; the top shows Last → Try for what's picked.
-   Changes apply as you tap. Edit tags renames, moves a tag between Machine and Labels, or removes a machine never
-   used. From the exercise page it opens on Edit tags. */
-const MC_SUGGEST = [[/cable|pushdown|push-down|pulldown|pull-down|crossover|face pull|pull-through/i, ['Cable stack', 'Dual pulley', 'Functional trainer']],
-  [/smith/i, ['Smith machine', 'Angled Smith']], [/leg press|hack|pendulum/i, ['Plate-loaded', 'Selectorized', '45° sled']],
-  [/squat|lunge/i, ['Smith machine', 'Hack squat', 'Belt squat']], [/./, ['Plate-loaded', 'Selectorized', 'Hammer Strength']]];
-const LB_SUGGEST = { w: ['Belt', 'Paused', 'Wide grip', 'Close grip', 'Slow negatives', 'Straps'], bw: ['Wide grip', 'Chin-up grip', 'Paused', 'Rings', 'Weighted vest'], c: ['Treadmill', 'Outdoors', 'Intervals'] };
+   From a card: this exercise's tags as chips to tap on or off, a new one, and ideas (tags from your other exercises,
+   then a few that fit the exercise). Changes apply as you tap. Edit tags renames a tag everywhere, or takes it off
+   this exercise's sessions. From the exercise page it opens on Edit tags. */
+const TAG_IDEAS = [[/cable|pushdown|push-down|pulldown|pull-down|crossover|face pull|pull-through/i, ['Cable stack', 'Rope', 'Straight bar', 'V-bar']],
+  [/smith/i, ['Smith machine', 'Belt']], [/leg press|hack|pendulum/i, ['Plate-loaded', 'Selectorized', 'Feet high']],
+  [/squat|deadlift|lunge/i, ['Belt', 'Paused', 'Straps', 'Smith machine']], [/press|row|fly|curl|extension|raise|pec|deck/i, ['Plate-loaded', 'Selectorized', 'Hammer Strength', 'Paused']]];
+const IDEAS_BY_KIND = { w: ['Belt', 'Paused', 'Wide grip', 'Close grip', 'Slow negatives'], bw: ['Wide grip', 'Chin-up grip', 'Paused', 'Rings', 'Weighted vest'], c: ['Treadmill', 'Outdoors', 'Intervals'] };
 const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
-function lastSeen(key, excludeSid) {
-  const m = keyMatch(key, false);
-  for (const s of sorted()) { if (s.id === excludeSid) continue; const it = s.items.find(i => m(i) && i.sets.some(counted)); if (it) { const st = it.sets.filter(counted).reduce((a, b) => e1rm(+b.w || 0, +b.r) > e1rm(+a.w || 0, +a.r) ? b : a); return { st, t: s.startedAt }; } }
-  return null;
-}
 function tagsSheet(exId, itemId = null, o = {}) {
   const ex = exOf(exId); if (!ex) return;
-  const s = itemId && cur(), it = s && !locked(s) ? s.items.find(x => x.id === itemId) : null, w = ex.kind === 'w';
-  let edit = !it, add = o.add || null, more = false;
-  const u = unit(), kgs = v => fmtW(roundW(v));
+  const s = itemId && cur(), it = s && !locked(s) ? s.items.find(x => x.id === itemId) : null;
+  let edit = !it, adding = !!o.add, sure = null;
   const draw = r => {
-    const ms = machinesOf(ex), cur_ = it ? (machineOf(ex, it.mc) ? it.mc : '') : null;
-    let h = `<div class="tg-top"><div><span class="lbl">${edit ? 'Edit tags' : 'Tags'}</span><h3>${esc(ex.name)}</h3></div>${xBtn()}</div>`;
-    if (it && w && !edit) { const g = suggestFor(s, it), m = machineOf(ex, it.mc);
-      h += `<div class="tg-prev" aria-live="polite"><span class="pt"><span>${m ? `On ${esc(m.name)}` : 'No machine'}${itemTags(it).map(t => ' · ' + esc(t)).join('')}</span>${g ? `<b>${fmtW(g.last.w)}×${g.last.r}<i>→ try</i>${fmtW(g.next.w)}×${g.next.r}</b>` : '<b class="first">First time on it: no last numbers yet</b>'}</span>${g ? '<span class="lbl">Last → Try</span>' : ''}</div>`; }
-    let body = '';
+    let h = `<div class="tg-top"><div><span class="lbl">${edit ? 'Edit tags' : 'Tags'}</span><h3>${esc(ex.name)}</h3></div>${xBtn()}</div>`, body = '';
+    const mine = labelUse().ex(ex.id);
     if (!edit) {
-      if (w) {
-        const recent = [...ms].sort((a, b) => (lastSeen(ex.id + '@' + b.id)?.t || 0) - (lastSeen(ex.id + '@' + a.id)?.t || 0)), shown = more ? recent : recent.slice(0, 4);
-        if (!more && cur_ && !shown.some(m => m.id === cur_)) shown[shown.length - 1] = ms.find(m => m.id === cur_);
-        const tile = (key, mc, name) => { const orm = oneRmOf(key, s.id), ls = lastSeen(key, s.id), on = cur_ === mc;
-          return `<button class="mtile${on ? ' on' : ''}${mc ? '' : ' none'}" role="radio" aria-checked="${on}" data-act="tg-mc" data-mc="${mc}"><b>${esc(name)}</b><span class="m1${orm || mc ? '' : ' txt'}">${orm ? kgs(orm) : mc ? '–' : 'Free weights'}</span><small>${orm ? `1RM ${u}` : mc ? 'new' : ''}${ls ? `${orm ? ' · ' : ''}last ${fmtW(+ls.st.w || 0)}×${ls.st.r} · ${fmtDate(ls.t)}` : ''}</small></button>`; };
-        body += `<div class="tg-sec"><span class="lbl">Machine</span><small>keeps its own numbers</small></div>
-          <div class="mtiles" role="radiogroup" aria-label="Machine">${shown.map(m => tile(ex.id + '@' + m.id, m.id, m.name)).join('')}${tile(ex.id, '', 'No machine')}
-          ${ms.length > 4 && !more ? `<button class="mtile add" data-act="tg-more">More (${ms.length - 4})</button>` : ''}${add === 'w' ? '' : '<button class="mtile add" data-act="tg-add" data-k="w">+ New machine</button>'}</div>${add === 'w' ? addRow('w') : ''}`;
-      }
-      const mine = labelUse().ex(ex.id).map(x => x.name), on = itemTags(it), list = [...new Set([...on, ...mine])].filter((x, i, a) => a.findIndex(y => sameName(x, y)) === i);
-      const all = labelUse().all.map(x => x.name), sug = [...all, ...(LB_SUGGEST[ex.kind] || LB_SUGGEST.w)].filter((x, i, a) => !list.some(y => sameName(x, y)) && a.findIndex(y => sameName(x, y)) === i).slice(0, 6);
-      body += `<div class="tg-sec"><span class="lbl">Labels</span><small>${w ? 'for finding sessions, numbers don’t change' : 'for finding sessions again'}</small></div>
-        <div class="chips">${list.map(t => { const y = on.some(x => sameName(x, t)); return `<button class="chip${y ? ' on' : ''}" aria-pressed="${y}" data-act="tg-lb" data-v="${esc(t)}">${esc(t)}</button>`; }).join('')}${add === 'l' ? '' : '<button class="chip addc" data-act="tg-add" data-k="l">+ New label</button>'}</div>
-        ${add === 'l' ? addRow('l') : ''}${sug.length ? `<p class="tg-sugl">${all.length ? 'From your other exercises' : 'Ideas'}</p><div class="chips">${sug.map(t => `<button class="chip sug" data-act="tg-lb" data-v="${esc(t)}">+ ${esc(t)}</button>`).join('')}</div>` : ''}`;
+      const on = itemTags(it), list = [...on, ...mine.map(x => x.name)].filter((x, i, a) => a.findIndex(y => sameName(x, y)) === i);
+      const own = (TAG_IDEAS.find(([re]) => re.test(ex.name)) || [null, []])[1];
+      const sug = [...labelUse().all.map(x => x.name), ...own, ...(IDEAS_BY_KIND[ex.kind] || IDEAS_BY_KIND.w)].filter((x, i, a) => !list.some(y => sameName(x, y)) && a.findIndex(y => sameName(x, y)) === i).slice(0, 8);
+      body += `<p class="tg-lead muted">Tag what you want to find again: the machine, the grip, a belt. Tags don’t change your numbers.</p>
+        <div class="chips tg-chips">${list.map(t => { const y = on.some(x => sameName(x, t)); return `<button class="chip${y ? ' on' : ''}" aria-pressed="${y}" data-act="tg-lb" data-v="${esc(t)}">${esc(t)}</button>`; }).join('')}${adding ? '' : '<button class="chip addc" data-act="tg-add">+ New tag</button>'}</div>
+        ${adding ? `<div class="tg-addr"><div class="tg-addi"><input class="field" id="tg-new" maxlength="20" autocomplete="off" placeholder="Hammer Strength, Belt, Paused…" aria-label="New tag"><button class="btn sm" data-act="tg-ok">${roll('Add')}</button></div></div>` : ''}
+        ${sug.length ? `<p class="tg-sugl">${labelUse().all.length ? 'From your other exercises, and ideas' : 'Ideas'}</p><div class="chips">${sug.map(t => `<button class="chip sug" data-act="tg-lb" data-v="${esc(t)}">+ ${esc(t)}</button>`).join('')}</div>` : ''}`;
     } else {
-      const row = (kind, id, name, n) => `<div class="tg-ed"><input class="field" data-ren="${kind}" data-id="${esc(id)}" value="${esc(name)}" maxlength="${kind === 'w' ? 24 : 20}" aria-label="Name of ${esc(name)}">
-        <div class="tg-eb">${kind === 'w' ? `<button class="chip" data-act="tg-move" data-k="w" data-id="${esc(id)}">Make it a label</button>` : w ? `<button class="chip" data-act="tg-move" data-k="l" data-id="${esc(name)}">Make it a machine</button>` : ''}${n ? `<span class="tg-n">${plural(n, 'session')}</span>` : kind === 'w' ? `<button class="tg-del" data-act="tg-del" data-id="${esc(id)}">Remove</button>` : ''}</div></div>`;
-      if (w) body += `<div class="tg-sec"><span class="lbl">Machines</span><small>keep their own numbers</small></div><div class="tg-list">${ms.map(m => row('w', m.id, m.name, mcUsed(ex.id, m.id))).join('') || '<p class="muted tg-empty">None yet.</p>'}</div>
-        ${add === 'w' ? addRow('w') : '<button class="chip addc tg-addm" data-act="tg-add" data-k="w">+ New machine</button>'}`;
-      const ls = labelUse().ex(ex.id);
-      body += `<div class="tg-sec"><span class="lbl">Labels</span><small>renaming one renames it everywhere</small></div><div class="tg-list">${ls.map(x => row('l', x.name, x.name, x.n)).join('') || '<p class="muted tg-empty">Labels are added on a session’s card.</p>'}</div>
-        <p class="muted tg-why">A machine you’ve used stays, so your history keeps its name. Moving a tag between Machine and Labels changes which numbers it keeps.</p>`;
+      body += `<p class="tg-lead muted">Renaming a tag renames it everywhere you’ve used it.</p><div class="tg-list">${mine.map(x => `<div class="tg-ed"><input class="field" data-ren="${esc(x.name)}" value="${esc(x.name)}" maxlength="20" aria-label="Name of ${esc(x.name)}">
+        <div class="tg-eb"><span class="tg-n">${plural(x.n, 'session')}</span>${sure === x.name ? `<button class="tg-del" data-act="tg-rm" data-v="${esc(x.name)}">Remove from ${plural(x.n, 'session')}</button>` : `<button class="tg-del" data-act="tg-sure" data-v="${esc(x.name)}">Remove</button>`}</div></div>`).join('') || '<p class="muted tg-empty">No tags yet. Add them from the line on the exercise’s card in a session.</p>'}</div>`;
     }
-    const foot = edit ? `<button class="btn" data-act="tg-done">${it ? 'Done editing' : 'Done'}</button>` : `<button class="linkbtn" data-act="tg-edit">Edit tags</button><button class="btn" data-act="tg-close">Done</button>`;
+    const foot = edit ? `<button class="btn" data-act="tg-done">${it ? 'Done editing' : 'Done'}</button>` : `${mine.length ? '<button class="linkbtn" data-act="tg-edit">Edit tags</button>' : ''}<button class="btn" data-act="tg-close">Done</button>`;
     r.innerHTML = `<div class="tgs">${h}<div class="tg-body">${body}</div><div class="tg-foot">${foot}</div></div>`;
     const inp = r.querySelector('#tg-new'); if (inp) setTimeout(() => inp.focus(), 60);
   };
-  const addRow = k => `<div class="tg-addr"><div class="tg-addi"><input class="field" id="tg-new" maxlength="${k === 'w' ? 24 : 20}" autocomplete="off" placeholder="${k === 'w' ? 'Machine name' : 'Label'}" aria-label="${k === 'w' ? 'New machine' : 'New label'}"><button class="btn sm" data-act="tg-ok" data-k="${k}">${roll('Add')}</button></div>
-    ${k === 'w' ? `<div class="chips">${mcSuggest(ex).map(n => `<button class="chip sug" data-act="tg-ok" data-k="w" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : ''}</div>`;
-  const addMachine = (name, r) => {
-    name = name.replace(/\s+/g, ' ').trim().slice(0, 24); if (!name) return toast('Give the machine a name');
-    let m = machinesOf(ex).find(x => sameName(x.name, name));
-    if (!m) { if (machinesOf(ex).length >= 12) return toast('An exercise keeps up to 12 machines'); m = { id: sid(), name, what: '', setup: '' }; ex.machines = cleanMachines([...(ex.machines || []), m]); queue('x:' + ex.id, 0); }
-    add = null;
-    if (it) { setMachine(s, it, m.id); toast(`${name}: its own numbers start with today’s sets`); } else toast(`${name} added`);
-    draw(r); render(false);
-  };
-  const toggleLabel = (name, r) => {
-    if (!it) return; const ls = itemTags(it), had = ls.find(x => sameName(x, name));
-    if (had) it.tags = ls.filter(x => x !== had); else if (ls.length >= 8) return toast('Up to 8 labels on one exercise'); else it.tags = [...ls, name.trim().slice(0, 20)];
+  const toggle = (name, r) => {
+    if (!it) return; name = name.replace(/\s+/g, ' ').trim().slice(0, 20); if (!name) return toast('Give the tag a name');
+    const ls = itemTags(it), had = ls.find(x => sameName(x, name));
+    if (had) it.tags = ls.filter(x => x !== had); else if (ls.length >= 8) return toast('Up to 8 tags on one exercise'); else it.tags = [...ls, name];
     if (!it.tags.length) delete it.tags;
-    queue('s:' + s.id, 0); add = null; draw(r); render(false);
+    queue('s:' + s.id, 0); adding = false; draw(r); render(false);
   };
-  /* everywhere a label is used gets the new name; a machine is renamed on its exercise */
-  const rename = (kind, id, v) => {
-    v = v.replace(/\s+/g, ' ').trim(); if (!v) return;
-    if (kind === 'w') { const m = (ex.machines || []).find(x => x.id === id); if (!m || m.name === v) return; if (machinesOf(ex).some(x => x.id !== id && sameName(x.name, v))) return toast(`${v} is already a machine here`); m.name = v.slice(0, 24); queue('x:' + ex.id, 0); }
-    else { if (sameName(id, v) && id === v) return; for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (itemTags(i).some(t => sameName(t, id))) { i.tags = [...new Set(i.tags.map(t => sameName(t, id) ? v.slice(0, 20) : t))]; ch = true; } if (ch) queue('s:' + x.id, 0); } }
-    render(false); toast('Renamed');
+  /* a tag's new name everywhere it's used */
+  const rename = (from, v) => {
+    v = v.replace(/\s+/g, ' ').trim().slice(0, 20); if (!v || v === from) return;
+    for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (itemTags(i).some(t => sameName(t, from))) { i.tags = itemTags(i).map(t => sameName(t, from) ? v : t).filter((t, k, a) => a.findIndex(y => sameName(y, t)) === k); ch = true; } if (ch) queue('s:' + x.id, 0); }
+    render(false); toast(`Renamed to ${v}`);
   };
-  const move = (k, id, r) => {
-    if (k === 'w') { const m = (ex.machines || []).find(x => x.id === id); if (!m) return;
-      for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && i.mc === id) { delete i.mc; if (!itemTags(i).some(t => sameName(t, m.name))) i.tags = [...itemTags(i), m.name.slice(0, 20)]; ch = true; } if (ch) queue('s:' + x.id, 0); }
-      ex.machines = cleanMachines((ex.machines || []).filter(x => x.id !== id)); queue('x:' + ex.id, 0); toast(`${m.name} is now a label`);
-    } else { if (!w) return; let m = machinesOf(ex).find(x => sameName(x.name, id)); if (!m) { m = { id: sid(), name: id.slice(0, 24), what: '', setup: '' }; ex.machines = cleanMachines([...(ex.machines || []), m]); queue('x:' + ex.id, 0); }
-      for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && itemTags(i).some(t => sameName(t, id))) { i.tags = itemTags(i).filter(t => !sameName(t, id)); if (!i.tags.length) delete i.tags; if (!machineOf(ex, i.mc)) i.mc = m.id; ch = true; } if (ch) queue('s:' + x.id, 0); }
-      toast(`${m.name} is now a machine`); }
-    draw(r); render(false);
+  /* off every session of this exercise */
+  const remove = name => {
+    for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && itemTags(i).some(t => sameName(t, name))) { i.tags = itemTags(i).filter(t => !sameName(t, name)); if (!i.tags.length) delete i.tags; ch = true; } if (ch) queue('s:' + x.id, 0); }
+    render(false); toast(`${name} removed from ${ex.name}`);
   };
   openSheet('<div id="tg-root"></div>', root => {
     const r = root.querySelector('#tg-root'); draw(r);
     r.addEventListener('click', e => {
       const b = e.target.closest('[data-act]'); if (!b || !r.contains(b)) return; const a = b.dataset.act;
       e.stopPropagation();
-      if (a === 'close' || a === 'tg-close') { closeSheet(); return; }
-      if (a === 'tg-mc' && it) { e.stopPropagation(); setMachine(s, it, b.dataset.mc || null); draw(r); render(false); return; }
-      if (a === 'tg-lb') { e.stopPropagation(); return toggleLabel(b.dataset.v, r); }
-      if (a === 'tg-add') { e.stopPropagation(); add = b.dataset.k; return draw(r); }
-      if (a === 'tg-ok') { e.stopPropagation(); const v = b.dataset.v ?? r.querySelector('#tg-new')?.value ?? ''; return b.dataset.k === 'w' ? addMachine(v, r) : (v.trim() ? toggleLabel(v, r) : toast('Give the label a name')); }
-      if (a === 'tg-more') { e.stopPropagation(); more = true; return draw(r); }
-      if (a === 'tg-edit') { e.stopPropagation(); edit = true; add = null; return draw(r); }
-      if (a === 'tg-done') { e.stopPropagation(); if (!it) { closeSheet(); return; } edit = false; add = null; return draw(r); }
-      if (a === 'tg-move') { e.stopPropagation(); return move(b.dataset.k, b.dataset.id, r); }
-      if (a === 'tg-del') { e.stopPropagation(); const id = b.dataset.id; ex.machines = cleanMachines((ex.machines || []).filter(x => x.id !== id)); for (const x of S.sessions.values()) { let ch = false; for (const i of x.items) if (i.exId === ex.id && i.mc === id) { delete i.mc; ch = true; } if (ch) queue('s:' + x.id, 0); } queue('x:' + ex.id, 0); draw(r); render(false); return; }
+      if (a === 'close' || a === 'tg-close') return closeSheet();
+      if (a === 'tg-lb') return toggle(b.dataset.v, r);
+      if (a === 'tg-add') { adding = true; return draw(r); }
+      if (a === 'tg-ok') return toggle(r.querySelector('#tg-new')?.value || '', r);
+      if (a === 'tg-edit') { edit = true; adding = false; sure = null; return draw(r); }
+      if (a === 'tg-done') { if (!it) return closeSheet(); edit = false; return draw(r); }
+      if (a === 'tg-sure') { sure = b.dataset.v; return draw(r); }
+      if (a === 'tg-rm') { remove(b.dataset.v); sure = null; return draw(r); }
     });
-    r.addEventListener('change', e => { const t = e.target; if (t.dataset.ren) { rename(t.dataset.ren, t.dataset.id, t.value); draw(r); } });
-    r.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'tg-new') { e.preventDefault(); r.querySelector('[data-act="tg-ok"]:not([data-v])')?.click(); } if (e.key === 'Enter' && e.target.dataset.ren) e.target.blur(); });
+    r.addEventListener('change', e => { const t = e.target; if (t.dataset.ren) { rename(t.dataset.ren, t.value); draw(r); } });
+    r.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'tg-new') { e.preventDefault(); toggle(e.target.value, r); } if (e.key === 'Enter' && e.target.dataset.ren) e.target.blur(); });
   });
-}
-/* machine names worth offering: what this kind of exercise is usually done on, and machines named on others */
-function mcSuggest(ex) {
-  const own = (MC_SUGGEST.find(([re]) => re.test(ex.name)) || [null, []])[1], others = [];
-  for (const e of S.library) if (e.id !== ex.id) for (const m of machinesOf(e)) others.push(m.name);
-  return [...own, ...others].filter((n, i, a) => a.findIndex(x => sameName(x, n)) === i && !machinesOf(ex).some(m => sameName(m.name, n))).slice(0, 5);
 }
 const setInt = st => { const p = S.A.set.get(st.id); return p ? Math.round(p) : '·'; };
 function exCard(it, gmap) {
@@ -2141,7 +2023,7 @@ function suggLine(it, bw) {
   const g = suggestFor(s, it); if (!g) return '';
   const fmt = x => bw && !x.w ? `${x.r} reps` : `${fmtW(x.w)}×${x.r}`;
   const why = `${g.sets} ${g.sets === 1 ? 'set' : 'sets'} · ${WHY_SHORT[g.why] || ''}`;
-  return `<div class="sugg"><span class="sugg-t"><span class="lbl">Last${mcOf(liftKey(it)) ? ' on ' + esc(mName(exOf(it.exId), it.mc)) : ''}</span> ${fmt(g.last)} <span class="arr" aria-hidden="true">→</span> <span class="lbl">Try</span> <b>${fmt(g.next)}</b><small>${why}</small></span><button class="btn ghost sm" data-act="sugg-use" data-item="${it.id}">${roll('Use')}</button></div>`;
+  return `<div class="sugg"><span class="sugg-t"><span class="lbl">Last</span> ${fmt(g.last)} <span class="arr" aria-hidden="true">→</span> <span class="lbl">Try</span> <b>${fmt(g.next)}</b><small>${why}</small></span><button class="btn ghost sm" data-act="sugg-use" data-item="${it.id}">${roll('Use')}</button></div>`;
 }
 /* a warm-up set: W1, W2…, the same fields as a working set, lighter on the page */
 function wuRow(st, i) {
@@ -2162,7 +2044,7 @@ function setRow(st, i, gmap, it) {
   <input data-f="r" data-set="${st.id}" inputmode="numeric" enterkeyhint="next" value="${st.r ?? ''}" placeholder="${st.pr ?? '0'}" aria-label="Reps, set ${i + 1}" autocomplete="off"${ro}>
   <span class="int${p >= 99.5 ? ' top' : ''}" data-int="${st.id}">${setInt(st)}</span>
   <button class="chk" data-act="done" data-set="${st.id}" aria-label="${st.done ? 'Mark set not done' : 'Mark set done'}" aria-pressed="${!!st.done}">${ICON.check}</button>
-  ${prLine(st)}${susLine(st)}${mcAskLine(st, it)}${rirAsk(st, i, it)}${rirTip(st, it)}</div>`;
+  ${prLine(st)}${susLine(st)}${rirAsk(st, i, it)}${rirTip(st, it)}</div>`;
 }
 /* reps in reserve: after a working set is ticked, how many more reps were left in it (0 to 4+). Optional: the row
    under the set waits for a tap and goes when the next set is ticked. */
@@ -2172,7 +2054,7 @@ const rirDots = v => `<span class="tank" title="${rirText(v)} left in the tank">
 /* the question: one bar from "all out" to "easy", with a dot on what this set was last time, and a way to skip it */
 function rirAsk(st, i, it) {
   if (S.rirAsk !== st.id || !st.done || locked(cur())) return '';
-  const prev = it && lastSetsFor(liftKey(it), S.arg), was = prev && prev[i] ? prev[i].rir : null;
+  const prev = it && lastSetsFor(it.exId, S.arg), was = prev && prev[i] ? prev[i].rir : null;
   return `<div class="rir" role="group" aria-label="Reps left in the tank"><div class="rir-h"><span class="rir-q">How many more could you do?</span><button class="rir-skip" data-act="rir-skip">Skip</button></div>
   <div class="rir-bar">${[0, 1, 2, 3, 4].map(v => `<button class="${st.rir === v ? 'on' : ''}${was === v ? ' was' : ''}" data-act="rir" data-set="${st.id}" data-v="${v}" aria-pressed="${st.rir === v}" aria-label="${v === 0 ? 'None, all out' : `${rirText(v)} more`}${was === v ? ', same as last time' : ''}">${rirText(v)}</button>`).join('')}</div>
   <div class="rir-ends"><span>All out</span>${was != null ? '<span class="rir-was">last time</span>' : ''}<span>Easy</span></div></div>`;
@@ -2401,39 +2283,37 @@ function exRow(e) {
     return `<div class="exrow" style="grid-template-columns:minmax(0,1fr) auto auto"><button data-act="open-ex" data-id="${e.id}" style="min-width:0"><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}${e.archived ? '<span class="badge">removed</span>' : ''}<br><span class="sub">Cardio${r ? ` · ${plural(r.n, 'session')} · last ${fmtDate(r.last)}` : ''}</span></button>
     <span class="v">${r ? fmtDur(r.long.v) : '—'}<br><span class="lbl">longest</span></span>
     <button class="iconbtn" data-act="edit-ex" data-id="${e.id}" aria-label="Edit ${esc(e.name)}">${ICON.dots}</button></div>`; }
-  const x = S.A.ex.get(lastKey(e.id)), t = S.A.all.get(e.id), nm = machinesOf(e).length;
-  return `<div class="exrow" style="grid-template-columns:minmax(0,1fr) auto auto"><button data-act="open-ex" data-id="${e.id}" style="min-width:0"><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}${e.archived ? '<span class="badge">removed</span>' : ''}<br><span class="sub">${e.kind === 'bw' ? 'Bodyweight' : 'Weighted'}${nm ? ` · ${plural(nm, 'machine')}` : ''}${t ? ` · ${plural(t.n, 'session')} · last ${fmtDate(t.last)}` : ''}</span></button>
+  const x = S.A.ex.get(e.id);
+  return `<div class="exrow" style="grid-template-columns:minmax(0,1fr) auto auto"><button data-act="open-ex" data-id="${e.id}" style="min-width:0"><span class="n">${esc(e.name)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}${e.archived ? '<span class="badge">removed</span>' : ''}<br><span class="sub">${e.kind === 'bw' ? 'Bodyweight' : 'Weighted'}${x ? ` · ${plural(x.n, 'session')} · last ${fmtDate(x.last)}` : ''}</span></button>
   <span class="v">${x ? fmtW(x.best) : '—'}<br><span class="lbl">e1RM</span></span>
   <button class="iconbtn" data-act="edit-ex" data-id="${e.id}" aria-label="Edit ${esc(e.name)}">${ICON.dots}</button></div>`;
 }
 function vExercise() {
   if (isCardio(exOf(S.arg))) return vCardio(exOf(S.arg));
-  /* with machines, the headline, trend, records and coach follow one machine: the one picked here, else the last */
-  const ex = exOf(S.arg), k = exKey(ex), mc = mcOf(k), x = S.A.ex.get(k), all = S.A.all.get(ex.id), ms = machinesOf(ex);
-  const on = mc ? ` · ${esc(mName(ex, mc))}` : ms.length ? ' · no machine' : '';
+  const ex = exOf(S.arg), k = ex.id, x = S.A.ex.get(k), on = '';
   /* your 1RM: the higher of one set by hand and the best estimate, for the lift the page follows */
   const so = savedOrm(k), est = x ? x.best : 0, orm = Math.max(so?.kg || 0, est), byHand = !!so && so.kg >= est - 1e-6;
   const lf = S.exLabel && S.exLabel.id === ex.id ? S.exLabel.v : null;
   const hist = []; for (const s of sorted()) { for (const it of s.items) if (it.exId === ex.id && (!lf || itemTags(it).some(t => sameName(t, lf)))) { const sets = it.sets.filter(st => +st.r > 0); if (sets.length) hist.push({ s, sets, it }); } if (hist.length >= 12) break; }
   const bs = x?.bestSet;
   /* sets of it that look like typos, newest first, each opening its session ready to fix */
-  const sus = [...suspects().entries()].filter(([, v]) => baseId(v.exId) === ex.id).map(([id, v]) => ({ id, v, s: S.sessions.get(v.sid) })).filter(o => o.s).sort((a, b) => b.s.startedAt - a.s.startedAt);
+  const sus = [...suspects().entries()].filter(([, v]) => v.exId === ex.id).map(([id, v]) => ({ id, v, s: S.sessions.get(v.sid) })).filter(o => o.s).sort((a, b) => b.s.startedAt - a.s.startedAt);
   const susCard = sus.length ? `<section class="card span rv sus-card"><div class="card-h"><span class="lbl">${sus.length === 1 ? '1 set looks' : `${sus.length} sets look`} like a typo</span></div>
     ${sus.slice(0, 5).map(o => { const st = o.s.items.flatMap(i => i.sets).find(z => z.id === o.id); const w = +(st.w ?? st.pw) || 0; return `<div class="sus-row"><span><b>${w ? `${fmtW(w)} ${unit()} × ${st.r}` : `${st.r} reps`}</b> <span class="muted">· ${fmtDate(o.s.startedAt)}${susUsual(o.v) ? ` · ${susUsual(o.v)}${o.v.kind === 'r' ? ' reps' : ''}` : ''}</span></span><button class="btn sm" data-act="sus-open" data-id="${o.s.id}">${roll('Fix it')}</button></div>`; }).join('')}
     <p class="muted sus-why">Left out of your records, estimated max and the coach until you fix it, or keep it as it is.</p></section>` : '';
   return `<header class="s-top rv"><button class="iconbtn" data-act="back" aria-label="Back">${ICON.back}</button><span class="lbl" style="flex:1">Exercise</span><button class="btn ghost sm" data-act="edit-ex" data-id="${ex.id}">${roll('Edit')}</button></header>
   <h1 class="h1 rv" style="margin:14px 0 4px">${esc(ex.name)}${ex.isDefault ? '' : ' <span class="badge acc">custom</span>'}</h1><p class="muted rv">${esc(ex.muscle)} · ${ex.kind === 'bw' ? 'Bodyweight (load = bodyweight + added)' : 'Weighted'}${ex.archived ? ' · removed from list' : ''}</p>
   <div class="rv ex-pnote">${noteLine(ex, true)}</div>
-  <div class="dash" style="margin-top:18px">${susCard}${machinesCard(ex, k)}
+  <div class="dash" style="margin-top:18px">${susCard}
     <div class="card rv orm-card"><div class="card-h"><span class="lbl">1RM${on} · ${unit()}</span><button class="btn ghost sm" data-act="edit-orm" data-id="${esc(k)}">${roll(so ? 'Edit' : 'Set 1RM')}</button></div>
       <div class="bignum md">${big(orm ? fmtW(roundW(orm)) : '–')}<span class="dot"></span></div>
       <p class="muted" style="margin-top:14px;font-size:13px">${byHand ? `Set by you ${fmtDate(so.at || Date.now())}${est ? ` · best estimate ${fmtW(roundW(est))} ${unit()}` : ''}` : bs ? `Updates by itself · from ${fmtW(loadOf(bs, ex))} ${unit()} × ${bs.r} on ${fmtDate(x.bestT)}` : 'Log a set and it appears, then keeps itself up to date.'}</p>${exNext(ex)}</div>
     <div class="card rv"><div class="card-h"><span class="lbl">e1RM by session${on}</span><span class="lbl">${x ? x.pts.length : 0} logged</span></div>${trend(x)}</div>
     ${recordsCard(ex, k)}
     ${exGoalCard(ex)}
-    <div class="kv span rv"><div><span class="lbl">Sessions</span><div class="term">${all ? all.n : 0}</div></div><div><span class="lbl">Volume</span><div class="term">${fmtVol(all ? all.vol : 0)}</div></div><div><span class="lbl">PRs</span><div class="term">${S.A.rec.events.filter(e => baseId(e.exId) === ex.id).length}</div></div><div><span class="lbl">Last</span><div class="term">${all ? fmtDate(all.last) : '—'}</div></div></div>
-    <section class="card span rv"><div class="card-h"><span class="lbl">Recent sets${lf ? ` · ${esc(lf)}` : ''}</span></div>${labelFilter(ex, lf)}
-    ${hist.length ? hist.map(h => `<button class="hist-s" data-act="open" data-id="${h.s.id}" style="width:100%"><span class="term">${fmtDate(h.s.startedAt)}</span><span class="sl">${machineOf(ex, h.it.mc) || itemTags(h.it).length ? `<span class="hs-t">${tagChips(ex, h.it)}</span>` : ''}${h.sets.map(st => `${fmtW(+st.w || 0)}×${st.r}`).join(' · ')}</span></button>`).join('') : `<div class="empty">No sets logged for this exercise yet.</div>`}</section>
+    <div class="kv span rv"><div><span class="lbl">Sessions</span><div class="term">${x ? x.n : 0}</div></div><div><span class="lbl">Volume</span><div class="term">${fmtVol(x ? x.vol : 0)}</div></div><div><span class="lbl">PRs</span><div class="term">${S.A.rec.events.filter(e => e.exId === ex.id).length}</div></div><div><span class="lbl">Last</span><div class="term">${x ? fmtDate(x.last) : '—'}</div></div></div>
+    <section class="card span rv"><div class="card-h"><span class="lbl">Recent sets${lf ? ` · ${esc(lf)}` : ''}</span>${labelUse().ex(ex.id).length ? `<button class="btn ghost sm" data-act="tags" data-id="${ex.id}">${roll('Edit tags')}</button>` : ''}</div>${labelFilter(ex, lf)}
+    ${hist.length ? hist.map(h => `<button class="hist-s" data-act="open" data-id="${h.s.id}" style="width:100%"><span class="term">${fmtDate(h.s.startedAt)}</span><span class="sl">${itemTags(h.it).length ? `<span class="hs-t">${tagChips(h.it)}</span>` : ''}${h.sets.map(st => `${fmtW(+st.w || 0)}×${st.r}`).join(' · ')}</span></button>`).join('') : `<div class="empty">No sets logged for this exercise yet.</div>`}</section>
   </div>`;
 }
 /* a cardio exercise: its records (longest, farthest, fastest), minutes per session, totals and recent bouts */
@@ -2456,49 +2336,14 @@ function vCardio(ex) {
     ${bouts.length ? bouts.map(b => `<button class="hist-s" data-act="open" data-id="${b.s.id}" style="width:100%"><span class="term">${fmtDate(b.s.startedAt)}</span><span class="sl">${boutText(b.st)}</span></button>`).join('') : `<div class="empty">Nothing logged for ${esc(ex.name)} yet.</div>`}</section>
   </div>`;
 }
-/* an exercise's machines on its page: each one's estimated max and sessions (tap one and the page follows it),
-   older sessions that name none ("Not set", which can all be tagged at once), and adding or editing machines */
-function machinesCard(ex, k) {
-  if (ex.kind !== 'w') return '';
-  const ms = machinesOf(ex), ns = untagged(ex.id);
-  if (!ms.length) return `<div class="span rv mc-none"><button class="chip addc" data-act="mc-add" data-id="${ex.id}">${TAG_ICO}+ New machine</button><span class="muted">Done on more than one? Each keeps its own numbers.</span></div>`;
-  const tile = (key, name) => { const orm = oneRmOf(key), ls = lastSeen(key), on = key === k;
-    return `<button class="mtile${on ? ' on' : ''}${mcOf(key) ? '' : ' none'}" data-act="ex-pick" data-id="${ex.id}" data-k="${esc(key)}" aria-pressed="${on}"><b>${esc(name)}</b><span class="m1">${orm ? fmtW(roundW(orm)) : '–'}</span><small>${orm ? `1RM ${unit()}` : 'not used yet'}${ls ? ` · last ${fmtW(+ls.st.w || 0)}×${ls.st.r}` : ''}</small></button>`; };
-  return `<section class="card span rv mc-card"><div class="card-h"><span class="lbl">Machines</span><button class="btn ghost sm" data-act="tags" data-id="${ex.id}">${roll('Edit tags')}</button></div>
-    <div class="mtiles">${ms.map(m => tile(ex.id + '@' + m.id, m.name)).join('')}${S.A.ex.get(ex.id) ? tile(ex.id, 'No machine') : ''}<button class="mtile add" data-act="mc-add" data-id="${ex.id}">+ New machine</button></div>
-    ${ns ? `<div class="mc-ns"><span class="muted">${plural(ns, 'session')} from before you added machines</span><button class="btn line sm" data-act="mc-tag" data-id="${ex.id}">${roll(`Put ${ns === 1 ? 'it' : 'them'} on a machine`)}</button></div>` : ''}</section>`;
-}
 /* the labels this exercise has been tagged with: tap one and Recent sets shows only those sessions */
 function labelFilter(ex, lf) {
   const ls = labelUse().ex(ex.id); if (!ls.length) return '';
   return `<div class="chips lb-f">${ls.slice(0, 8).map(x => { const on = lf && sameName(lf, x.name); return `<button class="chip${on ? ' on' : ''}" aria-pressed="${!!on}" data-act="ex-lb" data-id="${ex.id}" data-v="${esc(x.name)}">${esc(x.name)} <small>${x.n}</small></button>`; }).join('')}</div>`;
 }
-/* finished sessions where the exercise has logged sets but names no machine */
-const untaggedSessions = exId => sorted().filter(s => s.endedAt && s.items.some(i => i.exId === exId && !i.mc && i.sets.some(setLogged)));
-const untagged = exId => untaggedSessions(exId).length;
-/* "these were all on A": every older session of the exercise that names no machine gets one, with Undo */
-function tagSheet(exId) {
-  const ex = exOf(exId), ms = machinesOf(ex), list = untaggedSessions(exId); if (!ex || !ms.length || !list.length) return;
-  let sel = lastMc(exId) || ms[0].id;
-  openSheet(`<div class="sh-h"><h3>Which machine were they on?</h3>${xBtn()}</div>
-  <p class="muted sh-note">${plural(list.length, 'session')} of ${esc(ex.name)} from before you added machines, ${fmtDate(list[list.length - 1].startedAt)} to ${fmtDate(list[0].startedAt)}. To do them one by one, open a session, tap Edit, then its tags.</p>
-  <div class="su-list" id="tg-list" role="radiogroup" aria-label="Machines"></div>
-  <div class="btns"><button class="btn ghost" data-act="close">Cancel</button><button class="btn" id="tg-go"></button></div>`, r => {
-    const draw = () => { r.querySelector('#tg-list').innerHTML = ms.map((m, i) => `<button class="su-r${m.id === sel ? ' on' : ''}" role="radio" aria-checked="${m.id === sel}" data-mc="${m.id}"><span class="su-rt"><b>${esc(m.name)}</b><small>${esc(m.setup || m.what || '')}</small></span><span class="su-dot" aria-hidden="true"></span></button>`).join('');
-      r.querySelector('#tg-go').innerHTML = roll(`Put ${plural(list.length, 'session')} on ${esc(mName(ex, sel))}`); };
-    r.querySelector('#tg-list').addEventListener('click', e => { const b = e.target.closest('[data-mc]'); if (b) { sel = b.dataset.mc; draw(); } });
-    r.querySelector('#tg-go').onclick = () => {
-      const was = []; for (const s of list) for (const i of s.items) if (i.exId === exId && !i.mc) { i.mc = sel; was.push(i); }
-      for (const s of list) queue('s:' + s.id, 0);
-      closeSheet(); render(false);
-      toast(`${plural(list.length, 'session')} on ${mName(ex, sel)}`, { label: 'Undo', fn: () => { for (const i of was) delete i.mc; for (const s of list) queue('s:' + s.id, 0); render(false); } });
-    };
-    draw();
-  });
-}
 /* the exercise's records: heaviest set, most reps, and best reps at each of the heaviest weights */
 function recordsCard(ex, k = ex.id) {
-  const rc = S.A.rec.ex.get(k), bw = ex.kind === 'bw', w = v => bw ? (v ? `+${fmtW(v)}` : 'body') : fmtW(v), on = mcOf(k) ? ` · ${esc(mName(ex, mcOf(k)))}` : machinesOf(ex).length ? ' · no machine' : '';
+  const rc = S.A.rec.ex.get(k), bw = ex.kind === 'bw', w = v => bw ? (v ? `+${fmtW(v)}` : 'body') : fmtW(v), on = '';
   if (!rc) return `<section class="card span rv"><div class="card-h"><span class="lbl">Records${on}</span></div><div class="empty">${on ? 'Nothing logged on it yet.' : 'Log a set to start your records.'}</div></section>`;
   const last = S.A.rec.events.filter(e => e.exId === k).pop();
   return `<section class="card span rv recs"><div class="card-h"><span class="lbl">Records${on} · ${bw ? 'added ' : ''}${unit()}</span>${last ? `<span class="lbl">last PR ${fmtDate(last.t)}</span>` : ''}</div>
@@ -2740,7 +2585,7 @@ function vPrefs() {
 const HOW = `<div class="sh-h"><h3>How the numbers work</h3>${xBtn()}</div><div class="how">
     <p><b>Set intensity.</b> Each set’s estimated one-rep max (weight × (1 + reps ÷ 30)) as a percentage of your best estimate on that exercise up to that day. 100 means you matched or beat your best. Bodyweight exercises use your bodyweight plus any added load.</p>
     <p><b>Session intensity.</b> The average of your set intensities, weighted by load × reps, so heavy working sets count more than light ones. Easy under 60, moderate to 75, hard to 88, then max effort. It reads “calibrating” until each exercise has a couple of sessions behind it.</p>
-    <p><b>One-rep max.</b> Each lift (an exercise, or each of its machines) shows your 1RM: the higher of one you set by hand and the best estimate from your sets. A completed set that beats it raises it straight away, and fixing that set brings it back.</p>
+    <p><b>One-rep max.</b> Each exercise shows your 1RM: the higher of one you set by hand and the best estimate from your sets. A completed set that beats it raises it straight away, and fixing that set brings it back.</p>
     <p><b>Records (PRs).</b> A weight PR is heavier than anything you’ve lifted on that exercise. A rep PR is more reps than you’ve ever done at that weight or heavier. Heavier and more reps than your record set is both. Each set is judged as you type it, against everything before it, earlier sets that day included; an exercise’s first session sets the baseline. For bodyweight moves the weight is the added load.</p>
     <p><b>Next-set targets.</b> From your last two sessions of the exercise. With a rep range in your split (say 8–12), keep the weight and add reps until every set reaches the top, then add about 2.5% (at least 2.5 kg or 5 lb) and go back to the bottom; fall under the range twice and it drops 5%. Without a range: if your top set went at least as well as the time before, add weight and keep the reps; if it slipped, or your later sets fell short, hold the weight. Bodyweight moves add reps.</p>
     <p><b>Coach: today’s call.</b> <i>Rest</i> after more training days in a row than your split plans (2–4 without a split, by experience), or when your split has a rest day next. <i>Go easy</i> (about 10% lighter, a set fewer) when this week’s sets are 50% above your usual week, when two main lifts have come in 5% under their recent best two sessions running, when yesterday gave today’s muscles 6+ sets, or after two weeks away.</p>
@@ -2905,7 +2750,7 @@ function pickerList() {
   $('#pkm').hidden = !!(rp && rp.cardio) || !!q;
   const qx = $('#sheet-body .q-x'); if (qx) qx.hidden = !S.pk.q;
   $('#pkm').innerHTML = rp && rp.cardio ? '' : ['', ...(rp ? [] : ['Cardio']), ...muscles().filter(x => x !== 'Cardio')].map(x => `<button class="chip${m === x ? ' on' : ''}" data-act="pk-m" data-m="${esc(x)}">${esc(x || 'All')}</button>`).join('');
-  const uses = id => S.A.all.get(id)?.n || S.A.cr.ex.get(id)?.n || 0, sid0 = S.pk.mode === 'session' || rp ? S.arg : null;
+  const uses = id => S.A.ex.get(id)?.n || S.A.cr.ex.get(id)?.n || 0, sid0 = S.pk.mode === 'session' || rp ? S.arg : null;
   const inSess = rp ? new Set(cur()?.items.map(x => x.exId)) : null;
   const lib = S.library.filter(e => !e.archived && fits(e) && (!m || (m === 'Cardio' ? isCardio(e) || e.muscle === 'Cardio' : e.muscle === m)) && (!ql || e.name.toLowerCase().includes(ql)))
     .sort((a, b) => (ql ? hitRank(a.name, ql) - hitRank(b.name, ql) : 0) || uses(b.id) - uses(a.id) || a.name.localeCompare(b.name));
@@ -2915,7 +2760,7 @@ function pickerList() {
     const here = inSess && inSess.has(e.id) ? ' · in this session' : '';
     if (isCardio(e)) { const b = lastBoutFor(e.id, sid0), du = cMeasure(e).du;
       return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span class="pk-t"><span class="n">${hitName(e.name, ql)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<span class="sub">Cardio${here}</span></span><span class="last">${b ? `${fmtDur(b.t)}${b.d ? ` · ${fmtDist(b.d, du)} ${du}` : ''}` : ''}</span></button>`; }
-    const last = lastSetsFor(lastKey(e.id), sid0);
+    const last = lastSetsFor(e.id, sid0);
     const t = last ? last.reduce((b, st) => e1rm(loadOf(st, e), st.r) > e1rm(loadOf(b, e), b.r) ? st : b, last[0]) : null;
     return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span class="pk-t"><span class="n">${hitName(e.name, ql)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<span class="sub">${esc(e.muscle)}${e.kind === 'bw' ? ' · bodyweight' : ''}${here}</span></span><span class="last">${t ? `${fmtW(+t.w || 0)}×${t.r}` : ''}</span></button>`;
   };
@@ -3149,11 +2994,10 @@ function splitItems(d, withCoach) {
     /* cardio: one bout, the planned minutes as its time hint */
     if (isCardio(e)) { const m = lastMetrics(e.id) || defaultMetrics(e.name), lb = lastBoutFor(e.id);
       return { id: sid(), exId: e.id, m, sets: [{ id: sid(), w: null, r: null, pw: null, pr: null, t: null, pt: (x.min || 30) * 60, d: null, pd: lb && m.includes('d') ? lb.d ?? null : null, done: false, g: null }] }; }
-    /* on the machine it was last done on */
-    const mc = lastMc(e.id), k = mc ? e.id + '@' + mc : e.id;
-    const last = lastSetsFor(k), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g), plan = withCoach ? planFor(k, { reps: x.reps, sets: x.sets }) : null;
+    const last = lastSetsFor(e.id), r0 = parseInt(String(x.reps)) || null, gr = x.g && groups.get(x.g), plan = withCoach ? planFor(e.id, { reps: x.reps, sets: x.sets }) : null;
+    /* last time's tags carry over */
     const tg = lastTags(e.id);
-    return { id: sid(), exId: e.id, ...(mc ? { mc } : {}), ...(tg.length ? { tags: tg } : {}), sets: Array.from({ length: plan ? plan.sets : x.sets }, (_, i) => {
+    return { id: sid(), exId: e.id, ...(tg.length ? { tags: tg } : {}), sets: Array.from({ length: plan ? plan.sets : x.sets }, (_, i) => {
       const l = plan ? { w: plan.next.w, r: plan.next.r } : last && last[Math.min(i, last.length - 1)];
       /* superset / giant set: set i of each linked exercise forms round i; a single linked exercise links all its sets */
       let g = null; if (gr) { const key = gr.js.length > 1 ? x.g + ':' + i : x.g; if (!gid.has(key)) gid.set(key, sid()); g = gid.get(key); }
@@ -3171,7 +3015,7 @@ function repeatSession(id, force = false) {
   newSession({ name: src.name, splitId: src.splitId, splitDay: src.splitDay,
     items: src.items.map(it => isCardio(exOf(it.exId))
       ? { id: sid(), exId: it.exId, m: itemMetrics(it).slice(), sets: it.sets.map(st => ({ id: sid(), w: null, r: null, pw: null, pr: null, t: null, pt: st.t ?? st.pt ?? null, d: null, pd: st.d ?? st.pd ?? null, done: false, g: null })) }
-      : { id: sid(), exId: it.exId, ...(machineOf(exOf(it.exId), it.mc) ? { mc: it.mc } : {}), ...(itemTags(it).length ? { tags: itemTags(it).slice() } : {}), sets: it.sets.map(st => { let g = null; if (st.g) { if (!gm.has(st.g)) gm.set(st.g, sid()); g = gm.get(st.g); } return { id: sid(), w: null, r: null, pw: st.w ?? st.pw ?? null, pr: st.r ?? st.pr ?? null, done: false, g }; }) }) });
+      : { id: sid(), exId: it.exId, ...(itemTags(it).length ? { tags: itemTags(it).slice() } : {}), sets: it.sets.map(st => { let g = null; if (st.g) { if (!gm.has(st.g)) gm.set(st.g, sid()); g = gm.get(st.g); } return { id: sid(), w: null, r: null, pw: st.w ?? st.pw ?? null, pr: st.r ?? st.pr ?? null, done: false, g }; }) }) });
   toast('Last time’s numbers are filled in as hints');
 }
 function addExercise(exId) {
@@ -3187,9 +3031,9 @@ function addExercise(exId) {
     requestAnimationFrame(() => { const el = $(`[data-item="${it.id}"]`); if (el) el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); });
     return;
   }
-  const mc = lastMc(exId), last = lastSetsFor(mc ? exId + '@' + mc : exId, s.id);
+  const last = lastSetsFor(exId, s.id);
   const sets = last ? last.slice(0, 8).map(st => ({ id: sid(), w: null, r: null, pw: st.w ?? null, pr: st.r ?? null, done: false, g: null })) : [{ id: sid(), w: null, r: null, pw: null, pr: null, done: false, g: null }];
-  const tg = lastTags(exId, s.id), it = { id: sid(), exId, ...(mc ? { mc } : {}), ...(tg.length ? { tags: tg } : {}), sets }; s.items.push(it); queue('s:' + s.id, 0); render(false);
+  const tg = lastTags(exId, s.id), it = { id: sid(), exId, ...(tg.length ? { tags: tg } : {}), sets }; s.items.push(it); queue('s:' + s.id, 0); render(false);
   requestAnimationFrame(() => { const el = $(`[data-item="${it.id}"]`); if (el) el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); });
 }
 /* an exercise dragged to a new place: in the session's list, or in a split day's */
@@ -3231,7 +3075,7 @@ function addDrop(setId) {
 }
 function toggleDone(setId) {
   const s = cur(), f = s && findSet(s, setId); if (!f) return; const st = f.st;
-  if (st.done) { st.done = false; if (S.rirAsk === st.id) S.rirAsk = null; if (S.rirTip === st.id) S.rirTip = null; if (S.mcAsk === st.id) S.mcAsk = null; queue('s:' + s.id, 300); render(false); return; }
+  if (st.done) { st.done = false; if (S.rirAsk === st.id) S.rirAsk = null; if (S.rirTip === st.id) S.rirTip = null; queue('s:' + s.id, 300); render(false); return; }
   const ex = exOf(f.it.exId);
   if (f.wu) {
     if (st.w == null && st.pw != null) st.w = st.pw;
@@ -3252,9 +3096,6 @@ function toggleDone(setId) {
   if (st.r == null && st.pr != null) st.r = st.pr;
   if (!(+st.r > 0)) { render(false); return toast('Add reps first'); }
   st.done = true; S.justDone = st.id; S.rirAsk = st.id; S.rirTip = null; queue('s:' + s.id, 300); buzz(12);
-  /* far from this lift's usual weight: ask about the machine first, the reps left can wait */
-  if (S.mcAsk && S.mcAsk !== st.id) S.mcAsk = null;
-  if (machineAsk(s, f.it, st)) S.rirAsk = null;
   let nextName = null;
   if (st.g && !s.endedAt) { const g = groupsOf(s).find(x => x.g === st.g); if (g) { const idx = g.m.findIndex(x => x.st.id === st.id); const nxt = g.m.slice(idx + 1).find(x => !x.st.done); if (nxt) nextName = exOf(nxt.it.exId)?.name; } }
   render(false);
@@ -3307,11 +3148,11 @@ function finishSheet(s, undo) {
   const prs = bestPerSession(S.A.rec.events.filter(e => e.sid === s.id));
   let best = null;
   for (const it of s.items) { const ex = exOf(it.exId); if (!ex || isCardio(ex)) continue;
-    for (const st of it.sets) { if (!counted(st)) continue; const v = e1rm(loadOf(st, ex), +st.r); if (!best || v > best.v) best = { v, st, ex, mc: machineOf(ex, it.mc) ? it.mc : null }; } }
+    for (const st of it.sets) { if (!counted(st)) continue; const v = e1rm(loadOf(st, ex), +st.r); if (!best || v > best.v) best = { v, st, ex }; } }
   openSheet(`<div class="sh-h"><div><span class="lbl">${DAYS[new Date(s.startedAt).getDay()].slice(0, 3)} · ${fmtDate(s.startedAt)} · ${plural(min, 'min')}</span><h3>${esc(sessName(s))}, done</h3></div>${xBtn()}</div>
     <div class="ts-kv${a.sets ? '' : ' three'}">${stats}</div>${vs}
-    ${prs.length ? `<span class="lbl fs-sub">${prs.length === 1 ? 'Record' : 'Records'}</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(liftName(p.exId) || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}
-    ${best ? `<span class="lbl fs-sub">Best set</span><p class="fs-best">${esc(best.ex.name)}${best.mc ? ` · ${esc(mName(best.ex, best.mc))}` : ''} <b>${best.ex.kind === 'bw' && !best.st.w ? `${best.st.r} reps` : `${best.ex.kind === 'bw' ? '+' : ''}${fmtW(+best.st.w || 0)} ${unit()} × ${best.st.r}`}</b>${best.ex.kind === 'bw' ? '' : ` <span class="muted">· est. 1RM ${fmtW(best.v)} ${unit()}</span>`}</p>` : ''}
+    ${prs.length ? `<span class="lbl fs-sub">${prs.length === 1 ? 'Record' : 'Records'}</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(exName(p.exId) || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}
+    ${best ? `<span class="lbl fs-sub">Best set</span><p class="fs-best">${esc(best.ex.name)} <b>${best.ex.kind === 'bw' && !best.st.w ? `${best.st.r} reps` : `${best.ex.kind === 'bw' ? '+' : ''}${fmtW(+best.st.w || 0)} ${unit()} × ${best.st.r}`}</b>${best.ex.kind === 'bw' ? '' : ` <span class="muted">· est. 1RM ${fmtW(best.v)} ${unit()}</span>`}</p>` : ''}
     <div class="btns"><button class="btn line" id="fs-undo">${roll('Undo finish')}</button><button class="btn" data-act="close">${roll('Done')}</button></div>`, r => {
     r.querySelector('#fs-undo').onclick = () => { closeSheet(); undo(); };
   });
@@ -3440,9 +3281,9 @@ function saveEdit(how) {
    changes when it came from the session that changed: then it goes back to your best estimate, and the session's
    Undo takes that back too. A corrected set that beats it shows as a new 1RM. */
 function ormChanges(before, after) {
-  const top = (s, k) => { let b = 0; if (s) { const ex = exOf(k); for (const it of s.items) if (liftKey(it) === k) for (const st of it.sets) if (+st.r > 0 && !(st.id && suspects().has(st.id))) b = Math.max(b, e1rm(loadOf(st, ex), +st.r)); } return roundW(b); };
+  const top = (s, k) => { let b = 0; if (s) { const ex = exOf(k); for (const it of s.items) if (it.exId === k) for (const st of it.sets) if (+st.r > 0 && !(st.id && suspects().has(st.id))) b = Math.max(b, e1rm(loadOf(st, ex), +st.r)); } return roundW(b); };
   const out = [];
-  for (const k of new Set([...(before ? before.items : []), ...after.items].map(liftKey))) {
+  for (const k of new Set([...(before ? before.items : []), ...after.items].map(it => it.exId))) {
     const sv = savedOrm(k), now = top(after, k), was = top(before, k);
     if (sv && was > 0 && Math.abs(was - sv.kg) < 0.01 && now < was) out.push({ k, up: false, to: roundW(prevBestE1rm(k)), prev: sv });
     else if (now > Math.max(sv?.kg || 0, roundW(prevBestE1rm(k, after.id))) + 1e-6 && now > was + 1e-6) out.push({ k, up: true, to: now });
@@ -3454,7 +3295,7 @@ function applyOneRm(changes) {
   const downs = changes.filter(c => !c.up), u = unit();
   for (const c of downs) setSavedOrm(c.k, 0);
   const one = changes.length === 1 && changes[0];
-  const note = !changes.length ? '' : one ? (one.up ? ` · new 1RM ${fmtW(one.to)} ${u} on ${liftName(one.k)}` : ` · ${liftName(one.k)} 1RM back to ${one.to > 0 ? `${fmtW(one.to)} ${u}` : 'its estimate'}`) : ' · 1RMs updated';
+  const note = !changes.length ? '' : one ? (one.up ? ` · new 1RM ${fmtW(one.to)} ${u} on ${exName(one.k)}` : ` · ${exName(one.k)} 1RM back to ${one.to > 0 ? `${fmtW(one.to)} ${u}` : 'its estimate'}`) : ' · 1RMs updated';
   return { note, undone: !downs.length, undo() { for (const c of downs) setSavedOrm(c.k, c.prev.kg, c.prev.at); } };
 }
 
@@ -3719,7 +3560,7 @@ function replaceItem(itemId, exId) {
    With no history the reps hint stays and the weight goes: weights don't carry from one exercise to another. */
 function swapHints(s, ex) {
   if (isCardio(ex)) { const lb = lastBoutFor(ex.id, s.id); return () => lb ? { pt: lb.t ?? null, pd: lb.d ?? null } : null; }
-  const mc = lastMc(ex.id), last = lastSetsFor(mc ? ex.id + '@' + mc : ex.id, s.id);
+  const last = lastSetsFor(ex.id, s.id);
   return i => { const l = last && last[Math.min(i, last.length - 1)]; return l ? { pw: l.w ?? null, pr: l.r ?? null } : null; };
 }
 /* split: true keeps the logged sets with the old exercise and moves the rest into a new card just below */
@@ -3731,10 +3572,9 @@ function swapItem(s, it, ex, split) {
     /* a drop chain is one exercise's: a set leaving the rest of its chain leaves the chain (a superset round stays linked) */
     for (const st of move) if (st.g && keep.some(k => k.g === st.g) && !s.items.some(o => o !== it && o.sets.some(k => k.g === st.g))) st.g = null;
     it.sets = keep; to = { id: sid(), exId: ex.id, sets: move };
-    if (lastMc(ex.id)) to.mc = lastMc(ex.id);
     if (lastTags(ex.id, s.id).length) to.tags = lastTags(ex.id, s.id);
     s.items.splice(s.items.indexOf(it) + 1, 0, to);
-  } else { to.exId = ex.id; if (lastMc(ex.id)) to.mc = lastMc(ex.id); else delete to.mc; const tg = lastTags(ex.id, s.id); if (tg.length) to.tags = tg; else delete to.tags; if (!to.sets.some(setLogged)) delete to.wu; }
+  } else { to.exId = ex.id; const tg = lastTags(ex.id, s.id); if (tg.length) to.tags = tg; else delete to.tags; if (!to.sets.some(setLogged)) delete to.wu; }
   /* cardio tracks what was tracked last time; sets that moved with their numbers keep what shows them */
   if (c && !to.sets.some(setLogged)) to.m = lastMetrics(ex.id, s.id) || defaultMetrics(ex.name);
   /* sets not logged yet take the new exercise's hints; a weight typed for the old one goes */
@@ -3893,12 +3733,12 @@ function exportData(fmt) {
   if (fmt === 'csv') {
     /* cardio bouts share the sheet: their time, distance (km, or mi with lb), heart rate, calories and effort */
     const du = unit() === 'lb' ? 'mi' : 'km', dist = m => m > 0 ? fmtDist(m, du) : '';
-    const rows = [['date', 'session', 'exercise', 'muscle', 'set', 'weight_' + unit(), 'reps', 'e1rm_' + unit(), 'intensity', 'group', 'time_min', 'distance_' + du, 'avg_hr', 'kcal', 'effort', 'machine', 'labels']];
+    const rows = [['date', 'session', 'exercise', 'muscle', 'set', 'weight_' + unit(), 'reps', 'e1rm_' + unit(), 'intensity', 'group', 'time_min', 'distance_' + du, 'avg_hr', 'kcal', 'effort', 'tags']];
     for (const s of [...sorted()].reverse()) { const gm = new Map(); for (const g of groupsOf(s)) for (const x of g.m) gm.set(x.st.id, g.type);
       const when = `${local(s.startedAt)} ${fmtTime(s.startedAt).replace('.', ':')}`;
       for (const it of s.items) { const ex = exOf(it.exId); it.sets.forEach((st, i) => {
-        if (isCardio(ex)) { if (+st.t > 0) rows.push([when, sessName(s), ex.name, 'Cardio', i + 1, '', '', '', st.e ? effortInt(st.e) : '', '', Math.round(st.t / 6) / 10, dist(st.d), st.hr ?? '', st.kc ?? '', st.e ?? '', '', itemTags(it).join('; ')]); return; }
-        if (!(+st.r > 0)) return; rows.push([when, sessName(s), ex?.name || '', ex?.muscle || '', i + 1, fmtW(+st.w || 0), st.r, fmtW(e1rm(loadOf(st, ex), st.r)), Math.round(S.A.set.get(st.id) || 0), gm.get(st.id) || '', '', '', '', '', '', machineOf(ex, it.mc)?.name || '', itemTags(it).join('; ')]); }); } }
+        if (isCardio(ex)) { if (+st.t > 0) rows.push([when, sessName(s), ex.name, 'Cardio', i + 1, '', '', '', st.e ? effortInt(st.e) : '', '', Math.round(st.t / 6) / 10, dist(st.d), st.hr ?? '', st.kc ?? '', st.e ?? '', itemTags(it).join('; ')]); return; }
+        if (!(+st.r > 0)) return; rows.push([when, sessName(s), ex?.name || '', ex?.muscle || '', i + 1, fmtW(+st.w || 0), st.r, fmtW(e1rm(loadOf(st, ex), st.r)), Math.round(S.A.set.get(st.id) || 0), gm.get(st.id) || '', '', '', '', '', '', itemTags(it).join('; ')]); }); } }
     const csv = rows.map(r => r.map(c => { c = String(c); if (/^[=+\-@]/.test(c)) c = "'" + c; return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(',')).join('\n');
     return download(`synergym-${stamp}.csv`, csv, 'text/csv');
   }
@@ -4061,13 +3901,7 @@ const ACT = {
   'rir-skip': () => { S.rirAsk = null; render(false); },
   'tags': el => tagsSheet(el.dataset.id, el.dataset.item || null, { add: el.dataset.add || null }),
   'ex-note': el => noteSheet(el.dataset.id),
-  'mc-add': el => tagsSheet(el.dataset.id, null, { add: 'w' }),
-  'mc-switch': el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); if (!it || locked(s)) return; setMachine(s, it, el.dataset.mc); render(false); buzz(8); toast(`On ${mName(exOf(it.exId), it.mc)}: Last → Try follows it`); },
-  'mca-pick': el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); if (!it) return; mcAsked.add(it.id); S.mcAsk = null; setMachine(s, it, el.dataset.mc); render(false); toast(`On ${mName(exOf(it.exId), it.mc)}: its numbers are its own`); },
-  'mca-no': el => { mcAsked.add(el.dataset.item); S.mcAsk = null; render(false); },
   'ex-lb': el => { const v = el.dataset.v; S.exLabel = S.exLabel && S.exLabel.id === el.dataset.id && sameName(S.exLabel.v, v) ? null : { id: el.dataset.id, v }; render(false); },
-  'mc-tag': el => tagSheet(el.dataset.id),
-  'ex-pick': el => { S.exPick = { id: el.dataset.id, k: el.dataset.k }; render(false); },
   'sugg-use': el => useSuggestion(el.dataset.item),
   plates: el => { const s = cur(), it = s && s.items.find(x => x.id === el.dataset.item); const st = it && [...it.sets].reverse().find(x => (x.w ?? x.pw) > 0); plateSheet(st ? st.w ?? st.pw : (el.dataset.w ? +el.dataset.w : null)); },
   'bw-del': el => { S.profile.bwLog = unlogBw(S.profile.bwLog, el.dataset.d); const l = S.profile.bwLog; if (l.length) S.profile.bw = l[l.length - 1].kg; queue('p', 300); render(false); },

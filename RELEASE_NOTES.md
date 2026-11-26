@@ -10,6 +10,20 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.2.2-alpha · 26 November 2026
+
+**Tags, simpler**
+
+- **One kind of tag:** machines and labels are merged into tags. Tag an exercise with whatever you want to find
+  again: the machine (Hammer, Cable stack), the grip, a belt, paused. Tap the tags line on its card to add or remove
+  them, make a new one, or pick from your other exercises' tags and a few ideas that fit it.
+- **Your numbers stay one per exercise:** tags never change Last → Try, the faded hints, intensity, 1RM or records.
+  There's no machine to pick and no "Different machine today?" question any more.
+- **Find sessions by tag:** on an exercise's page, tap a tag to see only the sessions that had it. **Edit tags**
+  renames a tag everywhere, or takes it off that exercise's sessions.
+
+---
+
 ## 0.2.1-alpha · 26 November 2026
 
 **Tags: machines and labels**

@@ -78,8 +78,8 @@ alter table public.exercises drop constraint if exists exercises_kind_check;
 alter table public.exercises add constraint exercises_kind_check check (kind in ('w','bw','c'));
 -- A note that stays with the exercise (seat, grip, setup), added in 0.1.44.
 alter table public.exercises add column if not exists note text check (note is null or char_length(note) <= 200);
--- The machines an exercise is done on, added in 0.2.0: [{ id, name, what, setup }], at most 12. A session item names
--- the one it was done on (items[].mc), and each machine counts as its own lift.
+-- The machines an exercise was done on, added in 0.2.0 and unused since 0.2.2, when tags (items[].tags, labels that
+-- never change the numbers) replaced them. Kept so older rows and the import function stay valid.
 alter table public.exercises add column if not exists machines jsonb
   check (machines is null or (jsonb_typeof(machines) = 'array' and jsonb_array_length(machines) <= 12 and pg_column_size(machines) <= 8192));
 
