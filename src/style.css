@@ -2203,7 +2203,7 @@ html.ro-dragging,html.ro-dragging *{user-select:none;-webkit-user-select:none;cu
 .tg-ed{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
 .tg-ed:first-child{border-top:0}
 .tg-eb{display:flex;align-items:center;gap:8px}
-.tg-n{margin-left:auto;font-size:.78rem;color:var(--muted)}
+.tg-n{margin-right:auto;font-size:.78rem;color:var(--muted)}
 .tg-del{margin-left:auto;color:var(--bad);font-size:.84rem;font-weight:600;padding:6px 2px}
 .tg-empty{padding:12px;margin:0;font-size:.86rem}
 .tg-foot{display:flex;align-items:center;gap:10px;margin-top:var(--s0);position:sticky;bottom:0;padding-top:10px;background:var(--bg)}
