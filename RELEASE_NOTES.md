@@ -10,6 +10,19 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.3.0-alpha · 28 November 2026
+
+**Colours from a 1933 classic**
+
+- **Six Wada themes:** Indigo, Ivory, Tyrian, Glaucous, Naples and Slate Olive, each built from a combination in Sanzo
+  Wada's *A Dictionary of Color Combinations* (1933). Pick one in Settings › Appearance.
+- **One standout per screen:** in these themes the Start button carries the palette's brightest colour, and everything
+  else stays calm.
+- **Light and dark pairs:** the sun and moon switch flips each between its light and dark version: Indigo and Ivory,
+  Tyrian and Glaucous, Slate Olive and Naples.
+
+---
+
 ## 0.2.4-alpha · 28 November 2026
 
 **Install it from the login page**

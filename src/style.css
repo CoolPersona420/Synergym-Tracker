@@ -107,6 +107,60 @@
   --heat0:#1E1E1E; --heat-ink:#D4F25A;
   --hero-bg:#161616; --hero-deep:#0A0A0A; --hero-ink:#F2F2F2; --hero-ink-2:#A0A0A0; --hero-accent:#D4F25A; --hero-line:rgba(255,255,255,.1);
   --orb-solid:#D4F25A; --orb-glass:rgba(255,255,255,.1); color-scheme:dark}
+/* Wada palettes: from Sanzo Wada's A Dictionary of Color Combinations (1933), the numbers are its combinations.
+   Each pair is one combination, light and dark; the brightest colour is kept for one standout per screen (the hero
+   and the Start button), everything else stays calm. */
+:root[data-theme="wada-indigo"]{
+  --bg:#060F26; --page:#060F26; --surface:#0E1A38; --surface-2:#172548; --field:#0B1632; --line:#22325A;
+  --ink:#F5ECDB; --ink-2:#C9BFAE; --muted:#949AB2;
+  --accent:#F48067; --on-accent:#051230; --solid:#F5ECDB; --solid-ink:#051230;
+  --good:#AFD472; --bad:#FF8A7A; --glass:rgba(6,15,38,.72); --shadow:0 .618rem 1.618rem rgba(0,0,0,.4);
+  --heat0:#172548; --heat-ink:#F48067;
+  --hero-bg:linear-gradient(160deg,#13244C 0%,#060F26 100%); --hero-deep:#030918; --hero-ink:#F5ECDB; --hero-ink-2:#A9AFC4; --hero-accent:#F48067; --hero-line:rgba(245,236,219,.12);
+  --orb-solid:#F48067; --orb-glass:rgba(245,236,219,.12); --orb-ink:#051230; color-scheme:dark}
+:root[data-theme="wada-ivory"]{
+  --bg:#F1E6CF; --page:#F1E6CF; --surface:#FBF5E9; --surface-2:#E6D8BC; --field:#F7EEDD; --line:#DCCBA9;
+  --ink:#111314; --ink-2:#3F3A33; --muted:#675D50;
+  --accent:#B94B17; --on-accent:#FFF8EE; --solid:#111314; --solid-ink:#F5ECDB;
+  --good:#3F6B2A; --bad:#AE2817; --glass:rgba(241,230,207,.76); --shadow:0 .618rem 1.618rem rgba(60,40,10,.1);
+  --heat0:#E6D8BC; --heat-ink:#B94B17;
+  --hero-bg:#111314; --hero-deep:#000000; --hero-ink:#F5ECDB; --hero-ink-2:#BDB3A0; --hero-accent:#E57A3E; --hero-line:rgba(245,236,219,.14);
+  --orb-solid:#D96629; --orb-glass:rgba(17,19,20,.3); --orb-ink:#111314; color-scheme:light}
+:root[data-theme="wada-tyrian"]{
+  --bg:#0C2638; --page:#0C2638; --surface:#123349; --surface-2:#1A4059; --field:#0F2D41; --line:#24506C;
+  --ink:#F2F5F3; --ink-2:#BFD0D8; --muted:#8FAAB9;
+  --accent:#F99D1B; --on-accent:#0C2638; --solid:#F2F5F3; --solid-ink:#0C2638;
+  --good:#AFD472; --bad:#FF8A6B; --glass:rgba(12,38,56,.74); --shadow:0 .618rem 1.618rem rgba(0,0,0,.35);
+  --heat0:#1A4059; --heat-ink:#F99D1B;
+  --hero-bg:#12354E; --hero-deep:#081B29; --hero-ink:#FFFFFF; --hero-ink-2:#A9C0CE; --hero-accent:#F99D1B; --hero-line:rgba(255,255,255,.12);
+  --orb-solid:#F99D1B; --orb-glass:rgba(255,255,255,.12); --orb-ink:#0C2638; color-scheme:dark}
+:root[data-theme="wada-glaucous"]{
+  --bg:#D3E2DB; --page:#D3E2DB; --surface:#EEF5F1; --surface-2:#C2D6CD; --field:#E3EDE8; --line:#B0C7BD;
+  --ink:#12354E; --ink-2:#2E5068; --muted:#486373;
+  --accent:#B84A08; --on-accent:#FFFFFF; --solid:#12354E; --solid-ink:#EEF5F1;
+  --good:#2E6B3C; --bad:#AE3414; --glass:rgba(211,226,219,.76); --shadow:0 .618rem 1.618rem rgba(18,53,78,.1);
+  --heat0:#C2D6CD; --heat-ink:#12354E;
+  --hero-bg:#12354E; --hero-deep:#081B29; --hero-ink:#FFFFFF; --hero-ink-2:#B4CDC2; --hero-accent:#F37420; --hero-line:rgba(255,255,255,.14);
+  --orb-solid:#F37420; --orb-glass:rgba(18,53,78,.2); --orb-ink:#12354E; color-scheme:light}
+:root[data-theme="wada-naples"]{
+  --bg:#F6EBC4; --page:#F6EBC4; --surface:#FDF7E2; --surface-2:#ECDFB0; --field:#FAF1D3; --line:#DDD0A0;
+  --ink:#253122; --ink-2:#465042; --muted:#5D6455;
+  --accent:#C53D17; --on-accent:#FFF8EC; --solid:#253122; --solid-ink:#FBF3D6;
+  --good:#3B6B2C; --bad:#AE2D13; --glass:rgba(246,235,196,.76); --shadow:0 .618rem 1.618rem rgba(37,49,34,.1);
+  --heat0:#ECDFB0; --heat-ink:#253122;
+  --hero-bg:#253122; --hero-deep:#141B12; --hero-ink:#FBF3D6; --hero-ink-2:#B9BFAE; --hero-accent:#F15A30; --hero-line:rgba(251,243,214,.14);
+  --orb-solid:#F15A30; --orb-glass:rgba(37,49,34,.2); --orb-ink:#253122; color-scheme:light}
+:root[data-theme="wada-olive"]{
+  --bg:#161D15; --page:#161D15; --surface:#202A1F; --surface-2:#2A3629; --field:#1B2419; --line:#344232;
+  --ink:#F6ECCB; --ink-2:#CFC8AE; --muted:#979F8D;
+  --accent:#F36A42; --on-accent:#161D15; --solid:#F6ECCB; --solid-ink:#161D15;
+  --good:#AFD472; --bad:#FF8A6B; --glass:rgba(22,29,21,.74); --shadow:0 .618rem 1.618rem rgba(0,0,0,.4);
+  --heat0:#2A3629; --heat-ink:#F15A30;
+  --hero-bg:#253122; --hero-deep:#0E130D; --hero-ink:#F6ECCB; --hero-ink-2:#B6BFC1; --hero-accent:#F15A30; --hero-line:rgba(246,236,203,.12);
+  --orb-solid:#F15A30; --orb-glass:rgba(246,236,203,.12); --orb-ink:#161D15; color-scheme:dark}
+/* Wada themes: the Start button is the one standout on every screen, in the combination's brightest colour */
+:root[data-theme^="wada-"] .nav-train .ring,:root[data-theme^="wada-"] .nav-train .nl{background:var(--orb-solid);color:var(--orb-ink)}
+:root[data-theme^="wada-"] .nav-train.live .ring::after{background:var(--orb-ink);box-shadow:0 0 0 2px var(--orb-solid)}
 
 /* ---------- base ---------- */
 *{box-sizing:border-box}
@@ -765,6 +819,8 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;margin-le
 .theme-card:hover{transform:translateY(-2px)}
 .theme-card.on{border-color:var(--accent)}
 .theme-card small{display:block;font-weight:400;color:var(--muted);font-size:.72rem}
+.themes-h{margin:var(--s0) 0 var(--s-1);font-size:.78rem;font-weight:600;color:var(--muted)}
+.themes-h i{font-family:var(--font-serif);font-weight:500}
 .tp{position:relative;height:3.6rem;border-radius:var(--r-sm);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(127,127,127,.25)}
 .tp b{position:absolute;left:8px;top:8px;width:55%;height:20px;border-radius:5px}
 .tp i{position:absolute;left:8px;bottom:8px;width:35%;height:5px;border-radius:3px}
