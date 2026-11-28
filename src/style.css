@@ -1588,6 +1588,13 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 .auth-off{width:100%;height:auto;min-height:3.4rem;padding:.75rem var(--s0);white-space:normal;line-height:1.25;text-align:center}
 .auth-box{min-width:0;max-width:100%}
 .auth-off-n{font-size:.78rem;text-align:center;margin:-4px 0 0}
+.auth-inst{align-self:center;display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:999px;border:1px solid var(--line);font-size:.88rem;font-weight:600;color:var(--ink-2);transition:color .2s var(--ease),border-color .2s var(--ease)}
+.auth-inst .ico{width:17px;height:17px}
+.auth-inst:hover{color:var(--ink);border-color:var(--ink)}
+.ins-steps{list-style:none;counter-reset:n;margin:var(--s-1) 0 var(--s1);padding:0;display:flex;flex-direction:column;gap:12px}
+.ins-steps li{counter-increment:n;display:flex;gap:12px;align-items:flex-start;line-height:1.45}
+.ins-steps li::before{content:counter(n);flex:none;display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:50%;background:var(--ink);color:var(--surface);font-weight:700;font-size:.85rem}
+.ins-steps[data-how="firefox"] li::before{background:var(--surface-2);color:var(--ink)}
 .sync-note{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:var(--r-md);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font-size:.86rem;color:var(--ink-2);line-height:1.45}
 .sync-note b{color:var(--ink);font-size:.95rem}
 .off-pts{display:flex;flex-direction:column;gap:10px;margin:4px 0 6px;color:var(--ink-2);line-height:1.45}

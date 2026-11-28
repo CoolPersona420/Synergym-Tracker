@@ -8,6 +8,7 @@ import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
 import { DEFAULT_EXERCISES } from './data/exercises.js';
 import { reduced, LITE, isIOS } from './lib/env.js';
+import { installHow } from './lib/install.js';
 import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays, cleanKind } from './lib/sanitize.js';
 import { CARDIO, METRICS, howOf, defaultMetrics, parseTime, fmtDur, fmtMin, distUnit, fmtDist, parseDist, pace, fmtPace, effortInt, effortWord, scanCardio, CARDIO_LABEL } from './lib/cardio.js';
@@ -975,8 +976,11 @@ function vAuth() {
   const off = S.syncFlow || m === 'forgot' || m === 'check' ? '' : canGoLocal()
     ? `<div class="auth-or"><span>or</span></div><button class="btn line lg auth-off" data-act="go-local-new">Use offline without an account</button><p class="muted auth-off-n">Everything stays on this phone. Create an account later to sync.</p>`
     : coarse.matches && !standalone() ? `<p class="muted auth-off-n">Want to use Synergym without an account? Add it to your Home Screen and open it from there.</p>` : '';
-  return `<div class="auth"><main class="auth-main"><div class="auth-box${swap ? ' swap' : ''}"><div class="auth-logo">${lockup()}</div>${sync}${box}${off}${back}</div></main></div>`;
+  /* not installed yet: how to put it on the Home Screen, or in its own window on a computer */
+  const inst = S.syncFlow || standalone() ? '' : `<button class="auth-inst" data-act="install">${INSTALL_ICO}Install the app</button>`;
+  return `<div class="auth"><main class="auth-main"><div class="auth-box${swap ? ' swap' : ''}"><div class="auth-logo">${lockup()}</div>${sync}${box}${off}${back}${inst}</div></main></div>`;
 }
+const INSTALL_ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 7.5v7M9 11.5l3 3 3-3"/></svg>';
 function vRecover() {
   return shell(`<h1>Set a <em>new password</em>.</h1>
   <form id="f-recover" novalidate><label>New password<input class="field" type="password" name="password" data-f="pw" autocomplete="new-password" minlength="8" required></label><div class="pw-meter" aria-hidden="true"><i id="pwm"></i></div><span class="muted" id="pwt" style="font-size:.78rem;margin-top:-8px">${PW_HINT}</span>${S.authMsg ? `<div class="msg${S.authMsg.err ? ' err' : ''}">${esc(S.authMsg.text)}</div>` : ''}<button class="btn lg wide" type="submit">Save password</button></form>`);
@@ -3996,8 +4000,9 @@ const ACT = {
   how: () => openSheet(HOW),
   install: async () => {
     if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); installEvt = null; if (r && r.outcome === 'accepted') toast('Synergym is on your home screen'); return; }
-    const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    openSheet(`<h2 style="margin-bottom:8px">Install Synergym</h2><p class="muted">${ios ? 'In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.' : 'Open your browser menu (⋮) and choose <b>Install app</b> or <b>Add to Home screen</b>.'} It then opens full screen, like any other app.</p><button class="btn lg wide" data-act="close" style="margin-top:16px">Got it</button>`);
+    /* no prompt from the browser: the steps for this device */
+    const h = installHow(navigator.userAgent, { platform: navigator.platform, touch: navigator.maxTouchPoints });
+    openSheet(`<div class="sh-h"><h3>${h.title}</h3>${xBtn()}</div><ol class="ins-steps" data-how="${h.key}">${h.steps.map(t => `<li><span>${t}</span></li>`).join('')}</ol><button class="btn lg wide" data-act="close">Got it</button>`);
   },
   'theme-flip': flipTheme,
   'd-theme': el => { const t = el.dataset.t; applyTheme(t); S.profile.theme = t; queue('p', 300); render(false); },

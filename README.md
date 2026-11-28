@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.2.3, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.2.4, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.2.3-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.2.4-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -90,7 +90,7 @@ The version lives in `package.json` (`0.2.3-alpha`) and shows in Settings › Ab
   Only light is added, so each theme keeps its own colours.
 - **Week start:** weeks start on Monday, Sunday or Saturday (**Settings › Training**), for the weekly
   target, streaks, charts and the today panel.
-- **Phone app:** install it to the Home Screen. It opens without a connection and never zooms. A floating icon dock
+- **Phone app:** install it to the Home Screen (the login page's **Install the app** shows how on each device, or opens the browser's own install prompt). It opens without a connection and never zooms. A floating icon dock
   holds the five tabs (Home, Splits, Exercises, Logbook, Settings), with the + session button beside it; tap a tab, or
   press and slide along the dock, as on iPhone. Every switch in the app (Units, Week starts on, the Logbook's
   Calendar | List, the Coach tabs and more) slides the same way. On Settings the + steps aside and the dock stretches

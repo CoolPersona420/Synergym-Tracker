@@ -10,6 +10,17 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.2.4-alpha · 28 November 2026
+
+**Install it from the login page**
+
+- **Install the app:** a button on the login page, on phones and computers. In Chrome or Edge it opens the browser's
+  own install prompt; on an iPhone, an Android phone, a Mac or anywhere else it shows the two or three steps for that
+  device. Opened from the Home Screen, the button isn't there.
+- **Clearer steps in Settings too:** Settings › Install the app shows the same steps for your device.
+
+---
+
 ## 0.2.3-alpha · 26 November 2026
 
 **Find sessions by tag**
