@@ -19,6 +19,8 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
   stroke lands with a heavy, angled press, turns on hard corners and sweeps out to a sharp point, with dry
   scratches running through it. Every letter comes in two hand-painted versions that alternate, so no two
   neighbours look stamped.
+- **In your theme's colour:** the brush is red by default, the same red as the Start button, and takes each theme's
+  own accent when you switch.
 - **Home paints only your name:** the words around it are set like the app's own headings, in condensed capitals.
 - **Today's plan, tidied:** the day's numbers sit clear of the session in progress, and each reads as a number and
   its label. Pulling the panel down past open no longer pulls it away from the top of the screen.

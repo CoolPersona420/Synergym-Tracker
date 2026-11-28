@@ -2618,3 +2618,9 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 .display .g-name{font-family:var(--font-title);font-weight:400;font-size:1.05em;letter-spacing:0;line-height:.8;padding:0 .04em;
   text-transform:none}
 .display .ln:has(.g-name){overflow:visible}
+/* the brush is painted in the theme's own colour: Auto and Mono in the wolf's red (the Start button's), the Wada and
+   Hokusai themes in their seal colour, every other theme in its accent */
+:root{--brush:var(--accent)}
+:root:not([data-theme]),:root[data-theme="light"],:root[data-theme="dark"],:root[data-theme^="wada-"],
+:root[data-theme="kanagawa"],:root[data-theme="lotus"]{--brush:var(--orb-solid)}
+.h1,.ttl-c,.s-name,.s-name::placeholder,.sp-name,textarea.sp-name,.auth-box h2,.ob h1,.co-tt,.display .g-name{color:var(--brush)}
