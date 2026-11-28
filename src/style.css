@@ -2595,3 +2595,10 @@ body::after{animation:none;opacity:.055;
 .lb-key .dl-key{display:inline-block;width:9px;height:9px;border-radius:3px;outline:1.5px dashed color-mix(in srgb,var(--ink) 70%,transparent);outline-offset:0;margin-right:6px;vertical-align:-1px}
 @media (min-width:60rem){.lb-d.dl{outline-offset:-3px}}
 .lb-ev.dl{background-image:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 10%,transparent) 0 1px,transparent 1px 5px)}
+
+/* ---------- saving an edited past session: two clear choices, the usual one first ---------- */
+.save-opts{display:flex;flex-direction:column;gap:var(--s-1);margin-top:var(--s-1)}
+.save-opts .opt{gap:4px;padding:var(--s0) var(--s0) calc(var(--s0) + 2px)}
+.save-opts .opt b{font-size:1.02rem}
+.save-opts .opt span{font-size:.86rem;line-height:1.45}
+.save-opts .opt.on{border-color:var(--ink);box-shadow:var(--key-soft)}

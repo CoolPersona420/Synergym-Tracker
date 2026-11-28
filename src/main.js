@@ -3280,11 +3280,20 @@ function saveEditSheet() {
   const e = S.edit, s = e && S.sessions.get(e.id); if (!s) return;
   if (!logged(s)) return toast('Log at least one set with reps first');
   if (!e.orig) return saveEdit('day');
-  const when = fmtDate(e.orig.startedAt);
-  menuSheet('Save changes', [
-    { label: 'Save as today’s session', hint: `${when} stays as it was`, fn: () => saveEdit('new') },
-    { label: `Update ${when}`, hint: 'fix it where it is', fn: () => saveEdit('update') }
-  ]);
+  /* nothing changed, or the session is today's anyway: no question, it just saves */
+  if (!e.dirty || dayKey(e.orig.startedAt) === dayKey(Date.now())) return saveEdit('update');
+  /* an older one: save the changes to it (the usual), or log them as a new session today */
+  const w = sessWhen(e.orig.startedAt), d = fmtDate(e.orig.startedAt);
+  openSheet(`<div class="sh-h"><h3>Save changes</h3>${xBtn()}</div>
+  <div class="save-opts">
+    <button class="opt on" data-act="edit-save-update"><b>Update ${w}</b><span class="muted">Saves your changes to ${w} (${d}), the one you opened.</span></button>
+    <button class="opt" data-act="edit-save-new"><b>Log it as a new session today</b><span class="muted">Today gets a new session with these sets. ${w[0].toUpperCase() + w.slice(1)} stays as it was.</span></button>
+  </div>`);
+}
+/* a past session as people say it: yesterday’s session, Tuesday’s session, the 25 Nov session */
+function sessWhen(t) {
+  const dt = new Date(t), n = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(t).setHours(0, 0, 0, 0)) / 864e5), wd = DAYS[dt.getDay()];
+  return n === 1 ? 'yesterday’s session' : n > 1 && n < 7 ? `${wd[0]}${wd.slice(1).toLowerCase()}’s session` : `the ${dt.getDate()} ${MONTHS[dt.getMonth()].slice(0, 3)} session`;
 }
 /* how: 'update' the original, save as a 'new' session today, or keep a missed 'day' as it is */
 function saveEdit(how) {
@@ -3960,6 +3969,8 @@ const ACT = {
   'row-edit': el => { SW && SW.close(false); editFromRow(el.dataset.id); },
   'sess-edit': startEdit,
   'edit-save': saveEditSheet,
+  'edit-save-update': () => { closeSheet(); saveEdit('update'); },
+  'edit-save-new': () => { closeSheet(); saveEdit('new'); },
   'edit-discard': discardEdit,
   'lb-m': el => lbMove(+el.dataset.d),
   'lb-pick': el => lbPick(el.dataset.k),

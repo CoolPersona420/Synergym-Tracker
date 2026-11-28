@@ -96,7 +96,7 @@ test('Edit, then Save as today’s session: a new session today, the original un
   await page.click('.s-edit');
   await w.fill('82.5');
   await page.click('[data-act="edit-save"]');
-  await page.locator('#sheet button', { hasText: 'Save as today’s session' }).click();
+  await page.locator('#sheet button', { hasText: 'Log it as a new session today' }).click();
   await expect(page.locator('#toast')).toContainText('Saved as today’s session');
   await expect.poll(() => fake.sessions.length).toBe(3);
   const copy = fake.sessions.find(s => !before.has(s.id));
@@ -137,4 +137,42 @@ test('Discard, or leaving mid-edit, puts the session back as it was; Undo brings
   await page.waitForTimeout(800);
   expect(row(fake, last.id).items[0].sets[0].w).toBe(80);
   expect(await outbox(page)).not.toContain('"w":90');
+});
+
+test('saving an edit of an older session asks in plain words, the usual choice first, naming the day', async ({ page }) => {
+  const { fake, last, w } = await openLast(page);
+  await page.click('.s-edit');
+  await w.fill('85');
+  await page.click('[data-act="edit-save"]');
+  const opts = page.locator('#sheet .save-opts .opt');
+  await expect(opts).toHaveCount(2);
+  const day = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(last.started_at).getDay()];
+  await expect(opts.first()).toContainText(`Update ${day}’s session`);
+  await expect(opts.first()).toContainText('the one you opened');
+  await expect(opts.nth(1)).toContainText('Log it as a new session today');
+  await expect(opts.nth(1)).toContainText(`${day}’s session stays as it was`);
+  await opts.first().click();
+  await expect.poll(() => row(fake, last.id).items[0].sets[0].w).toBe(85);
+});
+
+test('no question when nothing changed, or when the session is from today: Save just saves', async ({ page }) => {
+  const data = benchHistory(), ex = data.exercises[0];
+  const today = { id: crypto.randomUUID(), name: 'Push', started_at: new Date(Date.now() - 2 * 3600e3).toISOString(), ended_at: new Date(Date.now() - 3600e3).toISOString(),
+    items: [{ id: 't1', exId: ex.id, sets: [{ id: 'ts1', w: 80, r: 5, done: true }] }] };
+  const fake = new FakeSupabase({ ...data, sessions: [...data.sessions, today] });
+  await login(page, fake, 'A');
+  /* unchanged: Save leaves edit mode without asking */
+  await page.goto('/session/' + data.sessions[0].id);
+  await page.click('.s-edit');
+  await page.click('[data-act="edit-save"]');
+  await expect(page.locator('#sheet')).toBeHidden();
+  await expect(page.locator('[data-act="edit-save"]')).toHaveCount(0);
+  /* today's: it saves in place */
+  await page.goto('/session/' + today.id);
+  await page.click('.s-edit');
+  await page.locator('[data-f="w"][data-set="ts1"]').fill('82.5');
+  await page.click('[data-act="edit-save"]');
+  await expect(page.locator('#sheet')).toBeHidden();
+  await expect(page.locator('#toast')).toContainText('Updated');
+  await expect.poll(() => row(fake, today.id).items[0].sets[0].w).toBe(82.5);
 });
