@@ -12,32 +12,32 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ## 0.2.5-alpha · 28 November 2026
 
-**Revamp: Japanese art, tactile buttons, more room to scroll**
+**Revamp: deloads your way, Japanese-art themes, more room to scroll**
 
-- **Themes from Japanese art:** Great Wave and Lotus from Hokusai's *The Great Wave off Kanagawa*, and six palettes
-  from Sanzo Wada's *A Dictionary of Color Combinations* (1933): Indigo, Ivory, Tyrian, Glaucous, Naples and Slate
-  Olive. In Settings › Appearance, tap Theme for a popup of every theme, each with its colours. Auto and Mono are warmer too: paper and sumi tones, with the
-  wolf's red for the Start button.
-- **More room while you scroll:** on a phone the dock slides away as you scroll down a page and comes back when you
-  scroll up or stop. Tap the tab you're on to glide back to the top.
-- **Buttons you can feel:** they sink when pressed and spring back, and leave a drop of ink where you touched.
-- **Calmer type:** the main title ends in a soft, hand-drawn italic; numbers line up in columns; headings and text wrap
-  evenly; a still paper grain replaces the flickering film grain.
-- **Balanced layout:** the login box sits on the golden section (1 : 1.618 above and below), and each screen has one
-  standout colour, the Start button.
-- **The wolf stands out:** light on every dark background, dark on light ones.
 - **Deloads are your call, one session at a time:** when a lighter session is due, the coach asks instead of
   applying it: **Deload this session**, or **Dismiss**. The **Deload** switch on a session's date line makes that
   session lighter (about 10% off, half the sets) and marks it; switch it on in each session you want to be one, off
   at any time. Deload sessions are marked **Deload** in the Logbook, with a dashed ring in its calendar, on the session
   and in an exercise's recent sets; search “deload” to list them.
-- **A clearer session bar:** when the session started (start and end once it's over) over its sets and volume, a red
-  Finish button, and a line that empties as your rest runs down. It slides away while you scroll, like the dock.
+- **Themes from Japanese art:** Great Wave and Lotus from Hokusai's *The Great Wave off Kanagawa*, and six palettes
+  from Sanzo Wada's *A Dictionary of Color Combinations* (1933): Indigo, Ivory, Tyrian, Glaucous, Naples and Slate
+  Olive. In Settings › Appearance, tap Theme for a popup of every theme, each with its colours. Auto and Mono are
+  warmer too: paper and sumi tones, with the wolf's red for the Start button.
 - **Replace an exercise in a split:** an exercise's ⋯ menu in a split day has **Replace exercise**. The picker lists
   the same muscle first, and the new exercise takes its place with its sets, reps and any link; Undo puts it back.
+- **A clearer session bar:** when the session started (start and end once it's over) over its sets and volume, a red
+  Finish button, and a line that empties as your rest runs down. It slides away while you scroll, like the dock.
+- **More room while you scroll:** on a phone the dock slides away as you scroll down a page and comes back when you
+  scroll up or stop. Tap the tab you're on to glide back to the top.
+- **Buttons you can feel:** they sink when pressed and spring back, and leave a drop of ink where you touched.
 - **Simpler words, one title face:** Home greets you in two short lines, and every page title (Home, Logbook,
   Exercises, Splits, Settings, a session, the login) is set in the same soft italic.
 
+- **Calmer type:** the main title ends in a soft, hand-drawn italic; numbers line up in columns; headings and text wrap
+  evenly; a still paper grain replaces the flickering film grain.
+- **Balanced layout:** the login box sits on the golden section (1 : 1.618 above and below), and each screen has one
+  standout colour, the Start button.
+- **The wolf stands out:** light on every dark background, dark on light ones.
 ---
 
 ## 0.2.4-alpha · 28 November 2026
