@@ -12,14 +12,13 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ## 0.2.6-alpha · 28 November 2026
 
-**Clearer saving, and a paper finish**
+**Clearer saving, and a clean background**
 
 - **Plain choices:** saving an edited older session now asks in plain words, with the usual choice first: **Update
   Tuesday's session** (saves your changes to the session you opened), or **Log it as a new session today** (today
   gets a new session with these sets; Tuesday's stays as it was).
 - **No question when there isn't one:** a session from today, or one you didn't change, just saves.
-- **Paper, not blotches:** the texture behind every page is now like fine cotton paper (black card in the dark):
-  an even, fine tooth with only a whisper of tone, no streaks.
+- **No more texture:** the grain behind every page is gone; each theme's colour is clean and flat.
 
 ---
 
