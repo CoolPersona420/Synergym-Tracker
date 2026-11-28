@@ -1,7 +1,7 @@
 /* Synergym service worker.
    - Opens the app without a connection: pages are network-first with the last good copy as a fallback;
      hashed build files are cache-first (their names change whenever their contents do).
-   - Fonts and icons are served from cache and refreshed in the background.
+   - Fonts (Google's and the app's own title face) and icons are served from cache and refreshed in the background.
    Database and auth requests (Supabase) are never cached. */
 const SHELL = 'sg-shell-v1', ASSETS = 'sg-assets-v1', STATIC = 'sg-static-v1';
 const KEEP = [SHELL, ASSETS, STATIC];
@@ -75,8 +75,8 @@ self.addEventListener('fetch', e => {
     })));
     return;
   }
-  /* icons, manifest, theme script and Google Fonts: cached copy now, fresh copy for next time */
-  const own = url.origin === location.origin && /^\/(icon|apple-touch-icon|manifest\.webmanifest|theme\.js)/.test(url.pathname);
+  /* icons, manifest, theme script, the title font and Google Fonts: cached copy now, fresh copy for next time */
+  const own = url.origin === location.origin && /^\/(icon|apple-touch-icon|manifest\.webmanifest|theme\.js|fonts\/)/.test(url.pathname);
   const fonts = url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com';
   if (own || fonts) {
     e.respondWith((async () => {

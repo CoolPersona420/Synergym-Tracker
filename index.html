@@ -17,7 +17,8 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Teko:wght@500;600;700&family=Mr+Dafoe&family=Fraunces:ital,opsz,wght,SOFT,WONK@1,9..144,300..800,0..100,0..1&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="preload" href="/fonts/synergym-brush.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Teko:wght@500;600;700&family=Fraunces:ital,opsz,wght,SOFT,WONK@1,9..144,300..800,0..100,0..1&family=Geist+Mono:wght@400;500&display=swap">
 </head>
 <body>
 <div class="app" id="app">
@@ -26,8 +27,6 @@
 </div>
 <div class="sheet" id="sheet" hidden><div class="scrim" data-act="close"></div><div class="sp" role="dialog" aria-modal="true"><div class="grab"></div><div id="sheet-body"></div></div></div>
 <div id="toast" role="status"></div>
-<!-- the brush titles' ragged ink edges (style.css: --brush-edge) -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><filter id="brush-edge" x="-5%" y="-12%" width="110%" height="124%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency=".05 .9" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
 <input type="file" id="imp" accept="application/json,.json" class="sr" tabindex="-1" aria-hidden="true">
 <script type="module" src="/src/main.js"></script>
 </body>
