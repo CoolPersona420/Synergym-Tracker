@@ -24,12 +24,12 @@ from brush import stroke  # noqa: E402
 from glyphs import GLYPHS  # noqa: E402
 
 SLANT = 16            # degrees of lean added to the upright drawings
-WIDTH = 188           # the brush's flat edge, in font units
-LOWER_WIDTH = 0.86    # lowercase is painted with a slightly smaller press
+WIDTH = 240           # the brush's flat edge, in font units
+LOWER_WIDTH = 0.9     # lowercase is painted with a slightly smaller press
 ANGLE = 34            # the brush's edge against the horizontal
 SPACE = 250
-TRACK = 58            # air between painted letters
-WIDEN = 1.2           # the drawings are widened for the heavy brush
+TRACK = 72            # air between painted letters
+WIDEN = 1.3           # the drawings are widened for the heavy brush
 ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 OUT = os.path.join(ROOT, 'public', 'fonts', 'synergym-brush.woff2')
 

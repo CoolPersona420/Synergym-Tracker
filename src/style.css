@@ -1906,6 +1906,7 @@ a.srow{color:inherit;text-decoration:none}
 .ts-live > span:nth-child(2){flex:1;min-width:0;display:flex;flex-direction:column}
 .ts-live .muted{font-size:.85rem}
 .ts-kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.ts-live + .ts-kv{margin-top:var(--s-1)}
 .ts-kv > div{display:flex;flex-direction:column;gap:4px;padding:.6rem .7rem;border-radius:var(--r-sm);background:var(--surface-2);min-width:0}
 .ts-kv b{font-family:var(--font-display);font-size:1.15rem;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ts-prs{display:grid;gap:6px}
@@ -2609,9 +2610,11 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 @media (max-width:47.99rem){.hero .display{font-size:clamp(1.8rem,8vw,2.35rem)}}
 .display em{font-size:1em}
 .display .ln{padding:0 .3em .16em .12em;margin:0 0 -.08em -.12em}
-/* Home's greeting: only the name is painted. The words around it are plain and quiet, like the small print beside a
-   poster's title, so the brush has one thing to say. The painted name runs larger and may reach past its line */
-.display,.display em{font-family:var(--font-ui);font-weight:700;letter-spacing:-.02em}
-.display em{font-weight:500}
-.display .g-name{font-family:var(--font-title);font-weight:400;font-size:1.34em;letter-spacing:0;line-height:.8;padding:0 .04em}
+/* Home's greeting: only the name is painted. The words around it are set like the app's own headings (TRAIN, the
+   wordmark): condensed capitals, so the brush name stands out against them like a poster. The painted name keeps
+   its own case and may reach past its line */
+.display,.display em{font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:.01em}
+.display .ln>span{font-size:1.3em;line-height:.95}
+.display .g-name{font-family:var(--font-title);font-weight:400;font-size:1.05em;letter-spacing:0;line-height:.8;padding:0 .04em;
+  text-transform:none}
 .display .ln:has(.g-name){overflow:visible}

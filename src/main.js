@@ -1234,7 +1234,7 @@ function todayContent() {
   let today;
   if (a) { const q = S.A.sess.get(a.id); today = `<div class="ts-live"><span class="dot live"></span><span><b>${esc(sessName(a))}</b><span class="muted">In progress · ${plural(q ? q.sets : 0, 'set')} logged</span></span><button class="btn sm" data-act="ts-go" data-to="resume" data-id="${a.id}">Resume</button></div>`; }
   else today = '';
-  if (done.length) today += `<div class="ts-kv"><div><b>${plural(done.length, 'session')}</b><span class="lbl">done</span></div><div><b>${tot.sets}</b><span class="lbl">sets</span></div><div><b>${fmtVol(tot.vol)}</b><span class="lbl">volume</span></div><div><b>${tot.min}</b><span class="lbl">minutes</span></div></div>
+  if (done.length) today += `<div class="ts-kv"><div><b>${done.length}</b><span class="lbl">${done.length === 1 ? 'session' : 'sessions'}</span></div><div><b>${tot.sets}</b><span class="lbl">sets</span></div><div><b>${fmtVol(tot.vol)}</b><span class="lbl">volume</span></div><div><b>${tot.min}</b><span class="lbl">minutes</span></div></div>
     <div class="list">${done.map(sessRowToday).join('')}</div>
     ${prs.length ? `<span class="lbl ts-sub">PRs today</span><div class="ts-prs">${prs.map(p => `<div><span class="pr">${PR_LABEL[p.kind]}</span><b>${esc(exName(p.exId) || 'Exercise')}</b><span>${prSet(p)}</span></div>`).join('')}</div>` : ''}`;
   else if (!a) today += isRestToday() ? `<p class="ts-note">${ICON.moon}Rest day. Recovery counts.</p>` : `<p class="ts-note">Nothing logged yet today.</p>`;
