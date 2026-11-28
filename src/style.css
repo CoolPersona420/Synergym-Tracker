@@ -2594,8 +2594,8 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 .save-opts .opt span{font-size:.86rem;line-height:1.45}
 .save-opts .opt.on{border-color:var(--ink);box-shadow:var(--key-soft)}
 
-/* ---------- the title face: Synergym Brush, drawn for the app (tools/brush-font): bold, fast Japanese brush lettering,
-   each stroke pressed in and swept out to a sharp, dry point. On every page title, the Home greeting,
+/* ---------- the title face: Synergym Brush, drawn for the app (tools/brush-font): thick, aggressive Japanese brush
+   lettering, each stroke pressed in hard and swept out to a sharp, dry point. On every page title, the Home greeting,
    session and split names, the login and onboarding headings and the Coach title. The rough ink is in the letters
    themselves, so there is no mask or filter. It's slanted already, so it's never made italic on top; prongs reach past
    the letters, so lines get room on the right ---------- */

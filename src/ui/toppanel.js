@@ -7,8 +7,9 @@
 
 /* the panel reaches this far above the screen, so a spring's overshoot never shows a gap at the top */
 const OVER = 64;
-/* resistance past the end of the pull, as in UIScrollView */
-const C = 0.55;
+/* past fully open, the panel gives only a little, firmly, and never more than STRETCH: it stays tucked under the top
+   of the screen (it reaches OVER above it), so pulling on it never opens a gap there */
+const STRETCH = 36;
 const OPEN = { k: 300, z: 0.8 }, SHUT = { k: 360, z: 1 };
 /* how far the content trails the panel's edge while it moves (0 slides with it, 1 stays put) */
 const PARALLAX = 0.72;
@@ -25,11 +26,11 @@ export function topPanel({ content, canPull, hintText, reduced = false, buzz = (
   const fresh = e => e !== last && !!(last = e);
 
   const clamp = (a, lo, hi) => Math.min(hi, Math.max(lo, a));
-  const band = d => (1 - 1 / (d * C / innerHeight + 1)) * innerHeight;
+  const band = d => STRETCH * (1 - 1 / (1 + d / 140));
   /* where the panel's lower edge is (y px down the screen), and everything that follows it */
   const paint = () => {
-    const f = clamp(y / (hv || 1), 0, 1);
-    panel.style.transform = `translate3d(0,${(y - hv).toFixed(2)}px,0)`;
+    const f = clamp(y / (hv || 1), 0, 1), at = Math.min(y, hv + OVER - 8);   /* a fast spring can't overshoot past the top either */
+    panel.style.transform = `translate3d(0,${(at - hv).toFixed(2)}px,0)`;
     /* parallax: the content lags behind the edge, so it is revealed top first rather than sliding in bottom first */
     body.style.transform = f < 1 ? `translate3d(0,${((hv - y) * PARALLAX).toFixed(2)}px,0)` : '';
     body.style.opacity = f < 1 ? clamp(f * 1.6, 0, 1).toFixed(3) : '';

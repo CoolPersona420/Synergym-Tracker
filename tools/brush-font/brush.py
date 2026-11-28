@@ -65,6 +65,26 @@ def trace(pts, rad):
     return poly if poly.is_valid else poly.buffer(0)
 
 
+def angular(points, step=6.0, cut=0.2):
+    """A fast, hard brush turns on corners rather than in smooth arcs: a straight run between the points, each turn
+    just clipped (two rounds of corner cutting), then sampled about every `step` units."""
+    P = np.array(points, float)
+    for _ in range(2):
+        if len(P) < 3:
+            break
+        Q = [P[0]]
+        for a, z in zip(P[:-1], P[1:]):
+            Q += [a + (z - a) * cut, a + (z - a) * (1 - cut)]
+        Q.append(P[-1])
+        P = np.array(Q)
+    out = []
+    for a, z in zip(P[:-1], P[1:]):
+        n = max(1, int(np.linalg.norm(z - a) / step))
+        out += [a + (z - a) * t for t in np.linspace(0, 1, n, endpoint=False)]
+    out.append(P[-1])
+    return np.array(out)
+
+
 def bowed(points, bow, rnd):
     """A hand never paints a ruler line: a short straight path gets a gentle curve."""
     P = np.array([p[:2] for p in points], float)
@@ -82,7 +102,8 @@ def bowed(points, bow, rnd):
     return P + np.outer(np.sin(np.pi * np.clip(t, 0, 1)) * bow * L * side, n)
 
 
-def stroke(points, width=185, angle=34, bristles=15, seed=0, start=True, end=True, flick=1.0, skip=0.5, bow=0.035):
+def stroke(points, width=185, angle=34, bristles=15, seed=0, start=True, end=True, flick=1.0, skip=0.5, bow=0.035,
+           edgy=True):
     """One painted stroke, the way a Japanese brush lays it: the brush lands pressed and angled (a firm, blunt entry
     that swells a little), runs full, and on a free end sweeps out to a sharp point (harai) as it lifts, its outer
     bristles running dry into streaks (kasure) and a few splaying off as fine spikes. A corner end (`end=False`) stops
@@ -90,7 +111,7 @@ def stroke(points, width=185, angle=34, bristles=15, seed=0, start=True, end=Tru
     rng = np.random.default_rng(seed)
     rnd = random.Random(seed)
     W = width
-    path = spline(bowed(points, bow, rnd))
+    path = (angular if edgy else spline)(bowed(points, bow, rnd))
     tip_over = 0.6 * W                                 # the sweep carries on past the path's end to its point
     lead = 0.05 * W if start else 0
     post = (tip_over + 1.1 * W * flick) if end else 0
@@ -115,11 +136,11 @@ def stroke(points, width=185, angle=34, bristles=15, seed=0, start=True, end=Tru
     shapes = []
     for u in np.linspace(-1, 1, bristles) + rng.uniform(-0.04, 0.04, bristles):
         v = rng.uniform(-0.26, 0.26)
-        r = W * rng.uniform(0.05, 0.085)
+        r = W * rng.uniform(0.045, 0.09)
         outer = abs(u) > 0.5
         splay = end and rnd.random() < (0.26 if outer else 0.04)
         width_here = Wspread if splay else Ws
-        pos = path + e * ((u + 0.045 * noise(m, rng, 12)) * width_here / 2)[:, None] + f * (v * width_here / 2)[:, None]
+        pos = path + e * ((u + 0.07 * noise(m, rng, 9)) * width_here / 2)[:, None] + f * (v * width_here / 2)[:, None]
         a = rnd.uniform(-lead, lead) if start else 0.0
         if not end:
             b = L + rnd.uniform(-0.02, 0.06) * W
@@ -131,9 +152,9 @@ def stroke(points, width=185, angle=34, bristles=15, seed=0, start=True, end=Tru
         taper = np.clip((s - a) / (0.08 * W), 0, 1) * np.clip((b - s) / t_out, 0, 1)
         rad = r * np.sqrt(taper) * (np.sqrt(lift) if (end and not splay) else 1)
         # kasure: going fast, a bristle runs out of ink part way and leaves a white streak to the end, or skips a stretch
-        if L > 1.6 * W and rnd.random() < skip * (1.35 if outer else 0.4):
-            g0 = rnd.uniform(0.6, 0.92) * L
-            g1 = s[-1] + 1 if rnd.random() < 0.55 else g0 + rnd.uniform(0.12, 0.3) * L
+        if L > 1.2 * W and rnd.random() < skip * (1.3 if outer else 0.55):
+            g0 = rnd.uniform(0.25, 0.9) * L               # scratches run through the stroke, most towards its end
+            g1 = s[-1] + 1 if rnd.random() < 0.5 else g0 + rnd.uniform(0.15, 0.4) * L
             rad = rad * (1 - np.clip(np.minimum(s - g0, g1 - s) / (0.1 * W), 0, 1))
         idx = np.where(rad > 0.5)[0]
         for run in np.split(idx, np.where(np.diff(idx) > 1)[0] + 1):   # each run of ink is its own mark
