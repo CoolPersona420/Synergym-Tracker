@@ -1,6 +1,6 @@
 # Synergym roadmap: Alpha to Beta
 
-**Roadmap version 1.1** · 27 October 2026 · app at 0.0.8-alpha
+**Roadmap version 1.1** · 27 October 2026 · app at 0.0.8-alpha · statuses updated 28 November 2026 (app 0.2.5-alpha)
 
 This roadmap covers the rest of the Alpha, up to the start of the Beta. It's split into phases. Phase 1 is
 set out below; later phases are added as they're planned. The Beta starts once every phase on this roadmap
@@ -47,7 +47,7 @@ next.
 
 | Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
-| 1.1.1 | **Effort per set (RIR / RPE).** One optional tap after a set: "how many more reps could you have done?" (0–4). | Next-set suggestions only see weight × reps, so they can't tell an easy 8 from a grinding 8 and sometimes push too fast or hold back. | Next-set suggestions (`src/lib/progress.js`), set rows in the session view. The coach assumes 2 reps in reserve; real RIR would make every target and goal projection sharper. | Planned |
+| 1.1.1 | **Effort per set (RIR / RPE).** One optional tap after a set: "how many more reps could you have done?" (0–4). | Next-set suggestions only see weight × reps, so they can't tell an easy 8 from a grinding 8 and sometimes push too fast or hold back. | Next-set suggestions (`src/lib/progress.js`), set rows in the session view. The coach assumes 2 reps in reserve; real RIR would make every target and goal projection sharper. | Shipped in v0.1.44-alpha (Reps in reserve: “How many more could you do?” after a set) |
 | 1.1.2 | **Rep-range progression from the split.** With a range like 8–12: keep the weight until every set reaches 12, then add weight and drop back to 8 (double progression). | The most proven method for most lifters. | Split days already store reps as a range (e.g. `"8-12"`); suggestions engine. | Shipped in v0.0.8-alpha (the coach's targets) |
 | 1.1.3 | **Stall and deload alerts.** When a lift hasn't improved in 3 sessions, or session intensity keeps falling, say so and suggest a lighter week or a variation. | Catches plateaus and fatigue before they cost weeks. | Records engine (`src/lib/records.js`), set and session intensity. | Shipped in v0.0.8-alpha (the coach's deload and split checks) |
 
@@ -56,7 +56,7 @@ next.
 | Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
 | 1.2.1 | **More set types:** timed holds (planks), cardio (time and distance), assisted lifts (weight taken off), and left/right sides for one-arm or one-leg work. | Today everything must be weight × reps, so some workouts can't be logged accurately. | Bodyweight exercises (added load); cardio with time, distance and pace, heart rate, calories and effort. | In progress: cardio shipped in v0.1.22-alpha; timed holds, assisted lifts and sides are planned |
-| 1.2.2 | **Warm-up sets.** Generate them from the working weight (bar, about 50%, 70%, 85%) with the plates shown. | Used every session; saves the mental math. | Plate calculator (`src/lib/plates.js`). | Planned |
+| 1.2.2 | **Warm-up sets.** Generate them from the working weight (bar, about 50%, 70%, 85%) with the plates shown. | Used every session; saves the mental math. | Plate calculator (`src/lib/plates.js`). | Shipped in v0.1.44-alpha (+ Warm-up, building to the working weight; plates shown) |
 | 1.2.3 | **Rest time per exercise.** For example, 3 min for squats and 60 s for curls. | One rest timer for everything is wrong for most sessions. | Rest timer (one setting in Settings › Training). | Planned |
 
 ### 1.3 Balance and recovery
@@ -70,8 +70,8 @@ next.
 
 | Id | Enhancement | Why it helps | What already exists | Status |
 |---|---|---|---|---|
-| 1.4.1 | **Notes that stay with each exercise** (seat height, grip, cues), shown the next time you do it. | Setup details stop getting lost between sessions. | Session notes (per session only). | Planned |
-| 1.4.2 | **Swap an exercise** for another that works the same muscle, for when equipment is taken. | Keeps the plan on track in a busy gym. | Exercise library with muscle groups. | Planned |
+| 1.4.1 | **Notes that stay with each exercise** (seat height, grip, cues), shown the next time you do it. | Setup details stop getting lost between sessions. | Session notes (per session only). | Shipped in v0.1.44-alpha (exercise setup notes) |
+| 1.4.2 | **Swap an exercise** for another that works the same muscle, for when equipment is taken. | Keeps the plan on track in a busy gym. | Exercise library with muscle groups. | Shipped in v0.1.41-alpha (⋯ › Replace exercise) |
 
 ### 1.5 The coach (added in roadmap 1.1)
 

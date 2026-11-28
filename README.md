@@ -1,14 +1,48 @@
-# Synergym
+<p align="center">
+  <img src="docs/synergym.jpg" alt="Synergym on four phones: Home, a live session, the Logbook calendar and the Coach" width="100%">
+</p>
 
-A lifting log for phone and desktop: log sessions as you train, see how hard each set and session
-was, follow a training split, and watch your progress add up. Live at
-<https://synergym-tracker-log.vercel.app>.
+<h1 align="center">Synergym</h1>
+
+<p align="center">
+  A lifting log for phone and desktop. Log sets as you train, follow a split,<br>
+  and let the coach set your next targets.
+</p>
+
+<p align="center">
+  <a href="https://synergym-tracker-log.vercel.app"><b>Open the app</b></a> ·
+  <a href="RELEASE_NOTES.md">What's new</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="https://github.com/CoolPersona420/Synergym-Tracker/issues">Report a problem</a>
+</p>
+
+<p align="center">
+  <img alt="Version 0.2.5 alpha" src="https://img.shields.io/badge/version-0.2.5--alpha-0E0E0F">
+  <a href="https://github.com/CoolPersona420/Synergym-Tracker/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/CoolPersona420/Synergym-Tracker/actions/workflows/test.yml/badge.svg"></a>
+</p>
 
 **Version 0.2.5, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
 The version lives in `package.json` (`0.2.5-alpha`) and shows in Settings › About with the build it came from.
 
-## What it does
+## Highlights
+
+- **Log fast.** Last time's numbers as hints, a rest timer, warm-ups, supersets and drop sets, tags and setup notes.
+- **A coach that reads your log.** Weight, reps and sets for every exercise; today's call (train, go easy, rest);
+  deloads when you choose, one session at a time; lift goals with a realistic date.
+- **Records and intensity.** Every set judged as you type it, weight and rep PRs, and a score for how hard each
+  session was.
+- **Logbook.** Every session as a list or a calendar, with filters and search.
+- **Splits.** Plan your week, start any day as a session, and share a plan with another lifter.
+- **Install it.** On a phone it runs like an app and works offline; the login page shows how on each device.
+- **19 themes.** Mono, the classics, six from Sanzo Wada's *Dictionary of Color Combinations* and two from
+  Hokusai's *Great Wave*.
+- **Your data.** Export JSON or CSV at any time, and import a backup.
+
+Want your own copy? See [Deploy](#deploy-about-10-minutes) and [Local development](#local-development).
+
+<details>
+<summary><b>Everything it does, in detail</b></summary>
 
 - **Log sessions:** weight and reps per set (last time's numbers show as hints), a tick to finish a set,
   a rest timer, drop sets, and linked sets that are named automatically (superset, giant set, drop set,
@@ -117,6 +151,8 @@ The version lives in `package.json` (`0.2.5-alpha`) and shows in Settings › Ab
 
 What changed in each release is in [RELEASE_NOTES.md](RELEASE_NOTES.md). What's planned from here to the Beta is in [ROADMAP.md](ROADMAP.md), in phases. Phase 1 covers coaching
 progression, more set types, warm-ups, muscle balance and more.
+
+</details>
 
 ## How it's built
 
@@ -246,6 +282,9 @@ once in the Vercel dashboard: project → Analytics → Enable.
 
 ## Coach
 
+<details>
+<summary>How the coach decides</summary>
+
 The coach is a set of plain rules over your own log (`src/lib/coach.js`, pure functions with unit tests).
 It runs in your browser, needs no extra data, and is worked out again only when finished sessions,
 exercises, splits, goals or the date change, so the app stays as quick as before (three years of
@@ -290,6 +329,8 @@ every coach hint goes, sessions show plain next-set suggestions, and goals are k
   within 10%, Peak (heavy doubles and singles, then a test) within 3%. That lift's session targets follow
   the block. Goals are stored on the profile (`lift_goals`), so they sync, export and import.
 
+</details>
+
 ## Export and import
 
 **Settings → Export JSON** saves everything (exercises, sessions, splits, settings, bodyweight log);
@@ -298,6 +339,9 @@ with a file: it shows what will be deleted and offers to export first, then swap
 database transaction (`import_replace`), so a failed import changes nothing.
 
 ## Data model
+
+<details>
+<summary>Tables and columns</summary>
 
 | Table | Holds | Who can see it |
 |---|---|---|
@@ -311,3 +355,6 @@ database transaction (`import_replace`), so a failed import changes nothing.
 The functions `share_split`, `unshare_split`, `split_recipients`, `shared_with_me`,
 `get_public_split`, `restore_default_exercises`, `delete_account`, `import_replace` and `report_error` handle the
 cross-user actions safely.
+
+</details>
+

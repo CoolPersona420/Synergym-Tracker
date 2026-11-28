@@ -2580,9 +2580,9 @@ body::after{animation:none;opacity:.055;
 /* ---------- one title face across the app: every page title in Fraunces at its softest. The Home greeting is a title
    too: its hello upright, its sentence in the italic. The condensed face stays for numbers and the wordmark ---------- */
 :root{--title-v:"SOFT" 100,"WONK" 1,"opsz" 144}
-.h1,.ttl-c,.s-name,.auth-box h2,.ob h1{font-family:var(--font-serif);font-style:italic;font-weight:600;text-transform:none;letter-spacing:-.02em;font-variation-settings:var(--title-v)}
+.h1,.ttl-c,.s-name,.auth-box h2,.ob h1,.co-tt{font-family:var(--font-serif);font-style:italic;font-weight:600;text-transform:none;letter-spacing:-.02em;font-variation-settings:var(--title-v)}
 .h1,.ob h1,.auth-box h2{font-size:clamp(2.3rem,9.5vw,3.2rem);line-height:1.02}
-.ttl-c{font-size:1.5rem;letter-spacing:-.01em}
+.ttl-c,.co-tt{font-size:1.6rem;letter-spacing:-.01em;line-height:1.1}
 .ttl-c,body.scrolled header.top .ttl-c{transform:none}
 .display{font-family:var(--font-serif);font-weight:600;text-transform:none;letter-spacing:-.025em;line-height:1.02;font-variation-settings:"SOFT" 100,"WONK" 0,"opsz" 144}
 .display .ln>span,.display .w{transform:none!important}
