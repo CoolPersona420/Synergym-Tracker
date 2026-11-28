@@ -2405,13 +2405,11 @@ html.lite .a-in,html.lite .chk.a-pop,html.lite .tsum.a-bump,html.lite .nav-badge
    fills the top third and the widgets start on the third line.
    ===================================================================================================================== */
 
-/* ---------- the dock steps aside while you scroll down (src/ui/dockhide.js) ---------- */
+/* ---------- the dock follows your scrolling (src/ui/dockhide.js moves it with `translate`); fully hidden, it takes no
+   taps ---------- */
 @media (max-width:59.99rem){
-  body.dock-away .nav{transform:translateY(calc(100% + 28px + env(safe-area-inset-bottom,0px)));opacity:0;pointer-events:none;
-    transition:transform .42s cubic-bezier(.4,0,.6,1),opacity .28s var(--ease)}
-  body:not(.dock-away):not(.in-session):not(.in-full) .nav{transition:transform .62s var(--spring),opacity .3s var(--ease),visibility 0s}
+  body.dock-away .nav{pointer-events:none}
 }
-@media (prefers-reduced-motion:reduce){body.dock-away .nav{transition:opacity .2s}}
 
 /* ---------- tactile buttons: a raised key that sinks when pressed and springs back ---------- */
 :root{

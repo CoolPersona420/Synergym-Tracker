@@ -4501,7 +4501,7 @@ function boot() {
   SW = swipeRows({ enabled: () => coarse.matches && S.loaded && $('#sheet').hidden, buzz, reduced });
   dockDrag($('#nav'), { enabled: () => phoneDash() && S.loaded && $('#sheet').hidden, onPick: el => go(el.dataset.v), buzz });
   /* the dock steps aside while you scroll down a page; buttons press like keys and leave a drop of ink */
-  DOCK = dockAutoHide({ enabled: () => matchMedia('(max-width:59.99rem)').matches && S.loaded && $('#sheet').hidden && S.view !== 'session', reduced });
+  DOCK = dockAutoHide({ nav: $('#nav'), enabled: () => matchMedia('(max-width:59.99rem)').matches && S.loaded && $('#sheet').hidden && S.view !== 'session', reduced });
   tactile({ reduced });
   /* every switch can be slid along too */
   segDrag({ buzz });
