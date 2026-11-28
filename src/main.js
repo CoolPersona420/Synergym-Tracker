@@ -1165,25 +1165,27 @@ function doneLines(done, nx, hi) {
 function vToday() {
   const now = new Date(), a = activeSession(), list = sorted();
   const nx = !a && nextSplitDay(), done = a ? [] : doneToday(), hi = esc(((S.profile.name || '').trim().split(/\s+/)[0] || S.profile.username || '').slice(0, 24));
+  /* only the name is painted in the brush; the words around it stay in the plain face */
+  const nm = hi && `<span class="g-name">${hi}</span>`;
   let lines, cta;
   if (a) {
     const sa = S.A.sess.get(a.id);
-    lines = [greet(hi), say(pick(['Back to it.', 'Finish strong.'], 2))];
+    lines = [greet(nm), say(pick(['Back to it.', 'Finish strong.'], 2))];
     cta = `${pickBtn(`In progress · ${plural(sa.sets, 'set')} logged`, esc(sessName(a)), '', { cls: 'live', attrs: `data-act="resume" data-id="${a.id}"`, aria: 'Resume session', icon: ICON.play, deskIcon: false })}<button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
   } else if (nx && nx.second) {
     /* the split plans a second session today and the first is done */
     const d = nx.sp.days[nx.i], first = done.find(s => s.splitId === nx.sp.id && s.splitDay === nx.i - 1);
-    lines = [greet(hi), say(pick(['Round two today.', 'One down, one to go.'], 8))];
+    lines = [greet(nm), say(pick(['Round two today.', 'One down, one to go.'], 8))];
     cta = `${pickBtn(`${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}`, esc(d.type || 'Training'), '')}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${first ? `<button class="btn line sm dt-done" data-act="open" data-id="${first.id}">${ICON.check}${ord(dayNum(nx.sp.days, nx.i - 1)[1])} session done</button>` : ''}<button class="btn line sm" data-act="start" data-force="1">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start ${dayLabel(nx.sp.days, nx.i)}"><span class="fab-l" aria-hidden="true">Start ${ord(dayNum(nx.sp.days, nx.i)[1])} session</span>${ICON.plus}</button></div>`;
   } else if (done.length) {
     /* trained today: show it as done; the split's next day waits for the next visit */
     const last = done[0], tot = done.reduce((t, x) => { const q = S.A.sess.get(x.id); return q ? { sets: t.sets + q.sets, vol: t.vol + q.vol } : t; }, { sets: 0, vol: 0 });
-    lines = doneLines(done, nx, hi);
+    lines = doneLines(done, nx, nm);
     cta = `<div class="what done-today"><span class="dt-field"><span class="dt-t"><i>Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</i><b>${done.slice().reverse().map(x => esc(sessName(x))).join(' + ')}</b><span class="dt-s">${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></span><span class="dt-c" aria-hidden="true">${ICON.check}</span></span></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${done.length > 1 ? `<button class="btn line sm" data-act="today-sessions">View sessions</button>` : `<button class="btn line sm" data-act="open" data-id="${last.id}">View session</button><button class="btn line sm" data-act="second">${ICON.plus}Second session</button>`}</div>`;
   } else if (isRestToday()) {
-    lines = [hi ? `Rest day, ${hi}.` : 'Rest day.', say(pick(['Recover well.', 'Rest is training too.'], 6))];
+    lines = [hi ? `Rest day, ${nm}.` : 'Rest day.', say(pick(['Recover well.', 'Rest is training too.'], 6))];
     cta = nx ? `${pickBtn(`Rest day · up next${nx.picked ? ' · your pick' : ''}`, `${esc(nx.sp.days[nx.i].type || 'Training')}`, `${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)} · waits for tomorrow`)}`
       : `<div class="what"><span>Rest day</span><b>Recovery counts</b><span>Logged for today</span></div>`;
     cta += `
@@ -1193,13 +1195,13 @@ function vToday() {
     /* the greeting agrees with the coach: no "is calling" when a week off or a rest day is the call */
     const co = coachOn() && coach().next, cc = co && co.when === 'today' && callOf(co);
     const tt = d.type ? esc(d.type) : 'Training';
-    lines = cc === 'rest' ? [greet(hi), say(co.brk === 'off' ? 'Time for a week off.' : 'Rest is the call today.')]
-      : cc === 'easy' ? [greet(hi), say(`${tt}, light today.`)]
-      : [greet(hi), say(`${tt} today.`)];
+    lines = cc === 'rest' ? [greet(nm), say(co.brk === 'off' ? 'Time for a week off.' : 'Rest is the call today.')]
+      : cc === 'easy' ? [greet(nm), say(`${tt}, light today.`)]
+      : [greet(nm), say(`${tt} today.`)];
     cta = `${pickBtn(`${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}${nx.picked ? ' · your pick' : ''}`, `${esc(d.type || 'Training')}`, `${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}`)}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   } else {
-    lines = [greet(hi), say(list.length ? pick(['Ready to lift?', 'Let’s train.'], 4) : 'Log your first workout.')];
+    lines = [greet(nm), say(list.length ? pick(['Ready to lift?', 'Let’s train.'], 4) : 'Log your first workout.')];
     cta = `<div class="what"></div>
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   }

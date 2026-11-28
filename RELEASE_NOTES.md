@@ -15,9 +15,10 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 **Our own brush font**
 
 - **Painted titles, in a font of our own:** every title (Home's greeting, page titles, session and split names, the
-  login, the Coach) is set in Synergym Brush, drawn for the app: punk brush lettering, painted fast with a
-  bristle brush whose strokes splinter into sharp prongs. Every letter comes in two hand-painted versions that
-  alternate, so no two neighbours look stamped.
+  login, the Coach) is set in Synergym Brush, drawn for the app: bold, fast Japanese brush lettering. Each stroke
+  lands with a firm, angled press and sweeps out to a sharp point that runs dry into streaks. Every letter comes in
+  two hand-painted versions that alternate, so no two neighbours look stamped.
+- **Home paints only your name:** the greeting around it is plain and quiet, so the brush has one thing to say.
 - **Session intensity stays a number:** it keeps the condensed figures, like every other big number.
 - **A body font to match:** the rest of the app is set in Zen Kaku Gothic New, a calm Japanese gothic that lets the
   brush titles lead.

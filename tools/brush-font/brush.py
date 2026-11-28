@@ -1,10 +1,9 @@
-"""The brush: a flat, hard-pressed brush made of bristles, the way punk and street lettering is painted fast.
+"""The brush: a Japanese brush painted fast, made of bristles.
 
 A path is a list of points (font units, y up) that a smooth curve passes through. The brush is a row of bristles held
-at an angle (its flat edge), each with its own width, a little wander, and its own idea of when to land and when to
-let go. Where a stroke starts, a few bristles touch down early as thin spikes; where it ends, some run dry and stop
-short while others flick on past the stroke, so ends splinter into sharp prongs. A bristle can skip a stretch when the
-brush moves fast, leaving a dry streak. The stroke is the union of the bristles' marks.
+at an angle (its flat edge), each with its own width and a little wander. It lands pressed, runs full, and sweeps out
+to a sharp point as it lifts; going fast, some bristles run dry and leave white streaks (kasure), and a few splay off
+the tip as fine spikes. The stroke is the union of the bristles' marks.
 """
 import math
 import random
@@ -66,54 +65,77 @@ def trace(pts, rad):
     return poly if poly.is_valid else poly.buffer(0)
 
 
-def stroke(points, width=150, angle=34, bristles=13, seed=0, start=True, end=True, flick=1.0, skip=0.3):
-    """One painted stroke. `start`/`end` say whether that end is free (it splinters) or a corner (it stays blunt)."""
+def bowed(points, bow, rnd):
+    """A hand never paints a ruler line: a short straight path gets a gentle curve."""
+    P = np.array([p[:2] for p in points], float)
+    if len(P) > 4 or bow <= 0:
+        return P
+    a, z = P[0], P[-1]
+    L = np.linalg.norm(z - a)
+    if L < 1:
+        return P
+    n = np.array([-(z - a)[1], (z - a)[0]]) / L
+    side = rnd.choice([-1, 1])
+    if len(P) == 2:
+        P = np.array([a, (a + z) / 2, z])
+    t = np.array([np.dot(p - a, z - a) / L ** 2 for p in P])
+    return P + np.outer(np.sin(np.pi * np.clip(t, 0, 1)) * bow * L * side, n)
+
+
+def stroke(points, width=185, angle=34, bristles=15, seed=0, start=True, end=True, flick=1.0, skip=0.5, bow=0.035):
+    """One painted stroke, the way a Japanese brush lays it: the brush lands pressed and angled (a firm, blunt entry
+    that swells a little), runs full, and on a free end sweeps out to a sharp point (harai) as it lifts, its outer
+    bristles running dry into streaks (kasure) and a few splaying off as fine spikes. A corner end (`end=False`) stops
+    without lifting."""
     rng = np.random.default_rng(seed)
     rnd = random.Random(seed)
     W = width
-    path = spline(points)
-    pre, post = (0.45 * W if start else 0), (1.25 * W * flick if end else 0)
-    path, k0 = extend(path, pre, post)
+    path = spline(bowed(points, bow, rnd))
+    tip_over = 0.6 * W                                 # the sweep carries on past the path's end to its point
+    lead = 0.05 * W if start else 0
+    post = (tip_over + 1.1 * W * flick) if end else 0
+    path, k0 = extend(path, lead, post)
     seg = np.linalg.norm(np.diff(path, axis=0), axis=1)
     s = np.concatenate([[0], np.cumsum(seg)]) - (np.sum(seg[:k0]) if k0 else 0)
     L = s[-1] - post                                   # where the drawn path itself ends
     m = len(path)
-    load = 1 + 0.07 * noise(m, rng, 20)                # the hand presses a little more, a little less
-    land = np.clip((s + 0.2 * W) / (0.55 * W), 0.72, 1) if start else np.ones(m)
-    Ws = W * load * land
+    load = 1 + 0.06 * noise(m, rng, 20)                # the hand presses a little more, a little less
+    if start:                                          # lands pressed and angled (a clean edge), swells a little
+        entry = (0.9 + 0.1 * np.clip(s / (0.25 * W), 0, 1)) * (1 + 0.1 * np.exp(-((s - 0.3 * W) / (0.22 * W)) ** 2))
+    else:
+        entry = np.ones(m)
+    T = min(1.6 * W, 0.65 * L + 0.5 * W)               # the sweep out (harai): long, unless the stroke is short
+    lift = np.clip((L + tip_over - s) / T, 0, 1) ** 0.95 if end else np.ones(m)
+    Ws = W * load * entry * lift
+    Wspread = W * load * entry * np.maximum(lift, 0.5)  # a splayed bristle doesn't close in with the rest
     phi = math.radians(angle) + math.radians(5) * noise(m, rng, 30)    # the brush turns a little in the hand
     e = np.column_stack([np.cos(phi), np.sin(phi)])   # along the brush's edge
     f = np.column_stack([-np.sin(phi), np.cos(phi)])  # across its thickness
 
     shapes = []
-    for u in np.linspace(-1, 1, bristles) + rng.uniform(-0.05, 0.05, bristles):
-        v = rng.uniform(-0.28, 0.28)
-        r = W * rng.uniform(0.055, 0.095)
-        pos = path + e * ((u + 0.05 * noise(m, rng, 12)) * Ws / 2)[:, None] + f * (v * Ws / 2)[:, None]
-        outer = abs(u) > 0.55
-        # where this bristle lands and lets go
-        if start and rnd.random() < (0.4 if outer else 0.12):
-            a = -rnd.uniform(0.05, 0.42) * W                # touches down early: a thin spike leading in
-        else:
-            a = rnd.uniform(0, 0.1) * W
-        roll = rnd.random()
+    for u in np.linspace(-1, 1, bristles) + rng.uniform(-0.04, 0.04, bristles):
+        v = rng.uniform(-0.26, 0.26)
+        r = W * rng.uniform(0.05, 0.085)
+        outer = abs(u) > 0.5
+        splay = end and rnd.random() < (0.26 if outer else 0.04)
+        width_here = Wspread if splay else Ws
+        pos = path + e * ((u + 0.045 * noise(m, rng, 12)) * width_here / 2)[:, None] + f * (v * width_here / 2)[:, None]
+        a = rnd.uniform(-lead, lead) if start else 0.0
         if not end:
-            b = L + rnd.uniform(-0.04, 0.08) * W
-        elif roll < (0.3 if outer else 0.18):
-            b = L - rnd.uniform(0.08, 0.45) * W            # runs dry and stops short
-        elif roll < (0.62 if outer else 0.8):
-            b = L + rnd.uniform(-0.05, 0.12) * W           # lifts with the brush
+            b = L + rnd.uniform(-0.02, 0.06) * W
+        elif splay:
+            b = L + tip_over + rnd.uniform(0.25, 1.0) * W * flick   # a bristle splays off: a fine spike
         else:
-            b = L + rnd.uniform(0.3, 1.2) * W * flick      # flicks on past the stroke: a prong
-        t_in = rnd.uniform(0.2, 0.45) * W if start else 0.08 * W
-        t_out = (rnd.uniform(0.5, 0.95) if b > L + 0.2 * W else rnd.uniform(0.15, 0.4)) * W if end else 0.08 * W
-        rad = r * np.sqrt(np.clip((s - a) / t_in, 0, 1) * np.clip((b - s) / t_out, 0, 1))
-        # a fast brush skips: one stretch of this bristle leaves no ink
-        if L > 2.2 * W and rnd.random() < skip * (1.3 if outer else 0.6):
-            g0 = rnd.uniform(0.35, 0.8) * L
-            g1 = g0 + rnd.uniform(0.12, 0.3) * L
-            rad = rad * (1 - np.clip(np.minimum(s - g0, g1 - s) / (0.12 * W), 0, 1))
-        idx = np.where(rad > 0.4)[0]
+            b = L + tip_over * rnd.uniform(0.7, 1.05)
+        t_out = rnd.uniform(0.35, 0.7) * W if splay else 0.12 * W
+        taper = np.clip((s - a) / (0.08 * W), 0, 1) * np.clip((b - s) / t_out, 0, 1)
+        rad = r * np.sqrt(taper) * (np.sqrt(lift) if (end and not splay) else 1)
+        # kasure: going fast, a bristle runs out of ink part way and leaves a white streak to the end, or skips a stretch
+        if L > 1.6 * W and rnd.random() < skip * (1.35 if outer else 0.4):
+            g0 = rnd.uniform(0.6, 0.92) * L
+            g1 = s[-1] + 1 if rnd.random() < 0.55 else g0 + rnd.uniform(0.12, 0.3) * L
+            rad = rad * (1 - np.clip(np.minimum(s - g0, g1 - s) / (0.1 * W), 0, 1))
+        idx = np.where(rad > 0.5)[0]
         for run in np.split(idx, np.where(np.diff(idx) > 1)[0] + 1):   # each run of ink is its own mark
             if len(run) < 2:
                 continue

@@ -23,13 +23,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 from brush import stroke  # noqa: E402
 from glyphs import GLYPHS  # noqa: E402
 
-SLANT = 13            # degrees of lean added to the upright drawings
-WIDTH = 150           # the brush's flat edge, in font units
+SLANT = 16            # degrees of lean added to the upright drawings
+WIDTH = 188           # the brush's flat edge, in font units
 LOWER_WIDTH = 0.86    # lowercase is painted with a slightly smaller press
 ANGLE = 34            # the brush's edge against the horizontal
 SPACE = 250
-TRACK = 45            # air between painted letters
-WIDEN = 1.14          # the drawings are widened for the heavy brush
+TRACK = 58            # air between painted letters
+WIDEN = 1.2           # the drawings are widened for the heavy brush
 ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 OUT = os.path.join(ROOT, 'public', 'fonts', 'synergym-brush.woff2')
 
@@ -47,6 +47,18 @@ def segments(pts):
     return [(s, i == 0, i == len(segs) - 1) for i, s in enumerate(segs)]
 
 
+def hook_of(parts):
+    """The stroke that ends a lowercase letter going down onto the baseline, furthest right: it gets a flick."""
+    best = None
+    for p in parts:
+        if isinstance(p, tuple):
+            continue
+        (x0, y0), (x1, y1) = p[-2][:2], p[-1][:2]
+        if y1 <= 20 and (y0 - y1) > 2.5 * abs(x1 - x0) and (best is None or x1 > best[-1][0]):
+            best = p
+    return best
+
+
 def paint(ch, variant=0):
     adv, parts = GLYPHS[ch]
     rnd = random.Random(ord(ch) * 101 + variant * 7919)
@@ -57,11 +69,15 @@ def paint(ch, variant=0):
         if isinstance(part, tuple) and part and part[0] == 'dot':
             x, y = part[1:]
             x *= WIDEN
-            shapes.append(stroke([(x - 22, y + 38), (x + 16, y - 34)], width=width * 0.85, seed=seed, flick=0.45, skip=0))
+            shapes.append(stroke([(x - 26, y + 40), (x + 18, y - 32)], width=width * 0.92, seed=seed, flick=0.3, skip=0,
+                                 bow=0))
             continue
         pts, opt = (part if isinstance(part, tuple) else (part, {}))
         jit = 9 if variant else 0              # the second hand doesn't trace the first exactly
         pts = [(p[0] * WIDEN * (1.06 if ch.isupper() else 1) + rnd.uniform(-jit, jit), p[1] + rnd.uniform(-jit, jit)) + tuple(p[2:]) for p in pts]
+        if ch.islower() and part is hook_of(parts):
+            x, y = pts[-1][:2]
+            pts = pts + [(x + 58, y + 62)]     # hane: the last stem flicks up towards the next letter
         w = width * opt.get('width', 1)
         angle = ANGLE + rnd.uniform(-4, 4)
         for k, (seg, free_start, free_end) in enumerate(segments(pts)):

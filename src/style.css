@@ -2593,8 +2593,8 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 .save-opts .opt span{font-size:.86rem;line-height:1.45}
 .save-opts .opt.on{border-color:var(--ink);box-shadow:var(--key-soft)}
 
-/* ---------- the title face: Synergym Brush, drawn for the app (tools/brush-font): punk brush lettering, painted fast
-   with a hard-pressed bristle brush whose strokes splinter into prongs. On every page title, the Home greeting,
+/* ---------- the title face: Synergym Brush, drawn for the app (tools/brush-font): bold, fast Japanese brush lettering,
+   each stroke pressed in and swept out to a sharp, dry point. On every page title, the Home greeting,
    session and split names, the login and onboarding headings and the Coach title. The rough ink is in the letters
    themselves, so there is no mask or filter. It's slanted already, so it's never made italic on top; prongs reach past
    the letters, so lines get room on the right ---------- */
@@ -2609,3 +2609,9 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 @media (max-width:47.99rem){.hero .display{font-size:clamp(1.8rem,8vw,2.35rem)}}
 .display em{font-size:1em}
 .display .ln{padding:0 .3em .16em .12em;margin:0 0 -.08em -.12em}
+/* Home's greeting: only the name is painted. The words around it are plain and quiet, like the small print beside a
+   poster's title, so the brush has one thing to say. The painted name runs larger and may reach past its line */
+.display,.display em{font-family:var(--font-ui);font-weight:700;letter-spacing:-.02em}
+.display em{font-weight:500}
+.display .g-name{font-family:var(--font-title);font-weight:400;font-size:1.34em;letter-spacing:0;line-height:.8;padding:0 .04em}
+.display .ln:has(.g-name){overflow:visible}
