@@ -1595,6 +1595,8 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 .ins-steps li{counter-increment:n;display:flex;gap:12px;align-items:flex-start;line-height:1.45}
 .ins-steps li::before{content:counter(n);flex:none;display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:50%;background:var(--ink);color:var(--surface);font-weight:700;font-size:.85rem}
 .ins-steps[data-how="firefox"] li::before{background:var(--surface-2);color:var(--ink)}
+.ins-k{display:inline-grid;place-items:center;min-width:1.45em;height:1.3em;padding:0 .25em;margin:0 .1em;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);font-size:.95em;font-weight:700;line-height:1;vertical-align:-.22em}
+.ins-note{margin:calc(var(--s1) * -.5) 0 var(--s1);font-size:.85rem;color:var(--muted)}
 .sync-note{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:var(--r-md);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font-size:.86rem;color:var(--ink-2);line-height:1.45}
 .sync-note b{color:var(--ink);font-size:.95rem}
 .off-pts{display:flex;flex-direction:column;gap:10px;margin:4px 0 6px;color:var(--ink-2);line-height:1.45}

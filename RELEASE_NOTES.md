@@ -18,6 +18,9 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
   own install prompt; on an iPhone, an Android phone, a Mac or anywhere else it shows the two or three steps for that
   device. Opened from the Home Screen, the button isn't there.
 - **Clearer steps in Settings too:** Settings › Install the app shows the same steps for your device.
+- **Every Android browser:** Chrome, Samsung Internet, Edge and Firefox each get their own steps, with the menu icon to
+  look for. A link opened inside Instagram, Facebook or TikTok first shows how to open it in your browser, since those
+  apps can't install it.
 
 ---
 

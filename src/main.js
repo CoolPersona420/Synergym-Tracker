@@ -4002,7 +4002,7 @@ const ACT = {
     if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); installEvt = null; if (r && r.outcome === 'accepted') toast('Synergym is on your home screen'); return; }
     /* no prompt from the browser: the steps for this device */
     const h = installHow(navigator.userAgent, { platform: navigator.platform, touch: navigator.maxTouchPoints });
-    openSheet(`<div class="sh-h"><h3>${h.title}</h3>${xBtn()}</div><ol class="ins-steps" data-how="${h.key}">${h.steps.map(t => `<li><span>${t}</span></li>`).join('')}</ol><button class="btn lg wide" data-act="close">Got it</button>`);
+    openSheet(`<div class="sh-h"><h3>${h.title}</h3>${xBtn()}</div><ol class="ins-steps" data-how="${h.key}">${h.steps.map(t => `<li><span>${t}</span></li>`).join('')}</ol>${h.note ? `<p class="ins-note">${h.note}</p>` : ''}<button class="btn lg wide" data-act="close">Got it</button>`);
   },
   'theme-flip': flipTheme,
   'd-theme': el => { const t = el.dataset.t; applyTheme(t); S.profile.theme = t; queue('p', 300); render(false); },

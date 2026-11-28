@@ -14,6 +14,8 @@ test('the login page shows Install the app, with the steps for this device', asy
     await expect(page.locator('#sheet h3')).toHaveText('Add Synergym to your Home Screen');
     await expect(page.locator('.ins-steps li')).toHaveCount(3);
     await expect(page.locator('.ins-steps li').nth(1)).toContainText('Install app');
+    await expect(page.locator('.ins-steps .ins-k')).toHaveText('⋮');
+    await expect(page.locator('.ins-note')).toContainText('Already installed?');
   } else {
     await expect(page.locator('#sheet h3')).toHaveText('Install Synergym');
     await expect(page.locator('.ins-steps li').first()).toContainText('install icon');
