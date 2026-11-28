@@ -26,6 +26,12 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 - **Balanced layout:** the login box sits on the golden section (1 : 1.618 above and below), and each screen has one
   standout colour, the Start button.
 - **The wolf stands out:** light on every dark background, dark on light ones.
+- **Deloads are your call:** when a lighter week is due, the coach asks instead of applying it. Start it, or skip
+  this one (it asks again next week). A running deload can be ended at any time, and a **Deload** switch on a live
+  session's date line starts or stops one right there.
+- **A clearer session bar:** when the session started (start and end once it's over) over its sets and volume, a red
+  Finish button, and a line that empties as your rest runs down. It slides away while you scroll, like the dock.
+- **Simpler words:** Home greets you in two short lines; the session's name and intensity use the soft italic.
 
 ---
 

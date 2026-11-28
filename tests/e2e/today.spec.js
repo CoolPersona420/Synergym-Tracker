@@ -201,7 +201,7 @@ test('on a rest day no session can be started until the rest day is undone', asy
 test('after training, the greeting names what’s next in the split', async ({ page }) => {
   await login(page, setup(), 'A');
   const h = page.locator('.hero h1.display');
-  await expect(h).toContainText('Push is done,');
+  await expect(h).toContainText('Push is done.');
   await expect(h).toContainText('Pull is next.');
 });
 
@@ -210,5 +210,5 @@ test('after a session with a PR, the greeting names the lift', async ({ page }) 
   /* an older, lighter Bench Press: today's 80×8 is a weight PR */
   fake.sessions.push({ ...sessionOn(fake.splits[0].id, 1, 4), id: crypto.randomUUID(), items: [{ id: 'o1', exId: bench.id, sets: [{ id: 'o1s', w: 75, r: 8, done: true }] }] });
   await login(page, fake, 'A');
-  await expect(page.locator('.hero h1.display')).toContainText(/a new PR on\s*Bench Press\./);
+  await expect(page.locator('.hero h1.display')).toContainText(/New PR on\s*Bench Press\./);
 });

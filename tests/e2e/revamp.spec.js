@@ -53,3 +53,45 @@ test('a button press leaves a drop of ink where it was touched', async ({ page }
   await page.mouse.up();
   await expect(b).not.toHaveClass(/\bink\b/, { timeout: 3000 });
 });
+
+/* a live session long enough to scroll: six exercises, the first with one set left to tick */
+function liveSession() {
+  const ex = ['Bench Press', 'Overhead Press', 'Incline Dumbbell Press', 'Tricep Pushdown', 'Lateral Raise', 'Dip'].map(name => ({ id: crypto.randomUUID(), name, muscle: 'Chest', kind: 'w' }));
+  const live = { id: crypto.randomUUID(), name: 'Push', started_at: new Date(Date.now() - (24 * 60 + 51) * 1000).toISOString(), ended_at: null,
+    items: ex.map((e, j) => ({ id: 'L' + j, exId: e.id, sets: [1, 2, 3].map(s => ({ id: `l${j}${s}`, w: j < 2 ? 60 : null, r: j < 2 ? 8 : null, done: j < 2 && !(j === 0 && s === 3) })) })) };
+  return { fake: new FakeSupabase({ defaults: [], exercises: ex, sessions: [live] }), live };
+}
+
+test('the session bar shows when the session started over its sets and volume, Finish in the standout colour, and a line that empties with the rest', async ({ page }) => {
+  const { fake, live } = liveSession();
+  await login(page, fake, 'A');
+  await page.goto('/session/' + live.id);
+  const bar = page.locator('.transport');
+  const started = await page.evaluate(id => { const d = new Date(Date.now() - (24 * 60 + 51) * 1000); return [d.getHours(), d.getMinutes()]; }, live.id);
+  await expect(bar.locator('.tsum .tl')).toContainText(/started \d{1,2}[.:]\d{2}/i);
+  await expect(bar.locator('.tsum .tl time')).toContainText(String(started[1]).padStart(2, '0'));
+  await expect(bar.locator('.tsum .tv')).toContainText('6 sets');
+  const [fin, ring] = await page.evaluate(() => { const p = document.createElement('i'); p.style.background = 'var(--ring)'; document.body.append(p); const r = getComputedStyle(p).backgroundColor; p.remove(); return [getComputedStyle(document.querySelector('.tfin')).backgroundColor, r]; });
+  expect(fin).toBe(ring);
+  /* tick the last set: the rest timer starts and its line is full, then empties */
+  await page.locator('article.ex').first().locator('.chk').nth(2).click();
+  await expect(bar.locator('.tsum.rest')).toBeVisible();
+  await expect(bar.locator('.tprog')).toHaveClass(/\bon\b/);
+  const scale = () => bar.locator('.tprog').evaluate(el => new DOMMatrix(getComputedStyle(el).transform).a);
+  await expect.poll(scale).toBeGreaterThan(0.9);
+  const a = await scale();
+  await expect.poll(scale, { timeout: 4000 }).toBeLessThan(a - 0.005);
+});
+
+test('phone: in a session the bar slides away while scrolling down and comes back on scroll up', async ({ page }, info) => {
+  test.skip(info.project.name !== 'phone', 'the bars only hide on a phone');
+  const { fake, live } = liveSession();
+  await login(page, fake, 'A');
+  await page.goto('/session/' + live.id);
+  await expect(page.locator('.transport .tfin')).toBeVisible();
+  await page.waitForTimeout(600);
+  expect(await scrollSteps(page, 40)).toBe(true);
+  await expect.poll(() => page.locator('.transport').evaluate(el => el.getBoundingClientRect().top >= innerHeight - 1)).toBe(true);
+  expect(await scrollSteps(page, -10, 2)).toBe(false);
+  await expect(page.locator('.transport .tfin')).toBeInViewport();
+});

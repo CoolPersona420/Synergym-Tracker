@@ -388,9 +388,23 @@ export function withBreak(r, d) {
   return { ...r, call, brk: off ? 'off' : 'deload', reasons: [why, ...(r.call === 'train' ? [] : r.reasons)] };
 }
 
-/* ctx: { now, exp, target, split, lastSplitDay, nextMuscles, muscleOf, goals, savedOf(exId) → { kg, at } | null, round } */
+/* A deload is the lifter's call. One the coach finds due is only a question ('ask') until they start it; they can
+   skip it ('skipped', asked again once skipUntil passes) or end one early. One they start, due or not, runs for a
+   week ('now', chosen). A week off isn't a question: it stays the coach's call.
+   choice: { on: ms the deload started or null, skipUntil: ms or null } */
+export const DELOAD_DAYS = 7;
+export function deloadChoice(d, choice, now) {
+  const on = choice && choice.on && now - choice.on >= 0 && now - choice.on < DELOAD_DAYS * DAY ? choice.on : null;
+  if (on) return { ...d, status: 'now', kind: 'deload', chosen: true, day: Math.floor((now - on) / DAY) + 1,
+    reasons: ['You started a deload week: your usual days, about 10% lighter and half the sets.', ...(d.status === 'now' ? d.reasons : [])] };
+  if (d.status === 'now' && d.kind === 'deload') return { ...d, status: choice && choice.skipUntil > now ? 'skipped' : 'ask', due: true };
+  return d;
+}
+
+/* ctx: { now, exp, target, split, lastSplitDay, nextMuscles, muscleOf, goals, savedOf(exId) → { kg, at } | null, round,
+   deloadChoice: { on, skipUntil } } */
 export function analyse(log, ctx) {
-  const series = seriesByLift(log), deload = deloadCheck(log, series, ctx);
+  const series = seriesByLift(log), deload = deloadChoice(deloadCheck(log, series, ctx), ctx.deloadChoice, ctx.now);
   const ready = withBreak(readiness(log, series, ctx), deload);
   const split = splitCheck(log, series, { ...ctx, deload });
   const goals = (ctx.goals || []).map(g => goalPlan(g, series.get(g.exId), { ...ctx, saved: ctx.savedOf ? ctx.savedOf(g.exId) : null }));

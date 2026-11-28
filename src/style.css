@@ -2405,11 +2405,40 @@ html.lite .a-in,html.lite .chk.a-pop,html.lite .tsum.a-bump,html.lite .nav-badge
    fills the top third and the widgets start on the third line.
    ===================================================================================================================== */
 
-/* ---------- the dock follows your scrolling (src/ui/dockhide.js moves it with `translate`); fully hidden, it takes no
-   taps ---------- */
+/* ---------- the dock and the session bar step aside while you scroll down (src/ui/dockhide.js sets body.dock-away
+   and --dock-h). `translate` transitions run on the compositor, so the slide stays smooth however busy the page is;
+   going, a quick even ease; coming back, a fast start that settles softly, with no bounce ---------- */
+:root{--glide:cubic-bezier(.32,.72,0,1);--glide-out:cubic-bezier(.4,0,.2,1)}
 @media (max-width:59.99rem){
-  body.dock-away .nav{pointer-events:none}
+  .nav{transition:transform .5s var(--ease),opacity .35s var(--ease),visibility 0s,translate .5s var(--glide)}
+  body.dock-away .nav{translate:0 var(--dock-h,170px);pointer-events:none;
+    transition:transform .5s var(--ease),opacity .35s var(--ease),visibility 0s,translate .36s var(--glide-out)}
+  .transport{will-change:transform;transition:translate .5s var(--glide)}
+  body.dock-away .transport:not(.ed-bar){translate:0 var(--dock-h,120px);pointer-events:none;transition:translate .36s var(--glide-out)}
 }
+@media (prefers-reduced-motion:reduce){body.dock-away .nav,body.dock-away .transport,.nav,.transport{transition-duration:.01s}}
+
+/* ---------- the session bar: raised glass like the dock, a live clock over the sets and volume, Finish as the one
+   standout, and a line that empties with the rest timer ---------- */
+.transport{min-height:3.5rem;gap:4px;
+  box-shadow:0 .7rem 2rem rgba(0,0,0,.16),0 .1rem .35rem rgba(0,0,0,.08),inset 0 1px 0 var(--rim-hi,rgba(255,255,255,.6)),inset 0 0 0 1px color-mix(in srgb,var(--ink) 8%,transparent)}
+.transport .tb{transition:transform .5s var(--spring),background .2s,color .2s}
+.transport .tb:active{transform:scale(.86);transition-duration:.08s}
+.tsum{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.1}
+.tsum .tl{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;font-weight:400;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tsum .tl i{width:6px;height:6px;border-radius:50%;background:var(--ring);animation:pulse 1.6s infinite}
+.tsum .tl time{color:var(--ink-2);font-variant-numeric:tabular-nums}
+.tsum .tv{font-size:.98rem;font-weight:700;color:var(--ink);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.tsum .tv.a-bump{animation:a-bump .35s var(--ease)}
+.tsum.rest{flex-direction:row;align-items:baseline;gap:0}
+.tfin{box-shadow:var(--key);transition:transform .6s var(--spring),box-shadow .3s var(--ease)}
+.tfin:active{transform:scale(.95);box-shadow:var(--key-down);transition-duration:.08s}
+.tfin[data-act="finish"]{background:var(--ring);color:var(--ring-ink);padding:0 1.15rem}
+.tfin[data-act="finish"] i{background:currentColor;opacity:.92}
+.tprog{position:absolute;left:1.6rem;right:1.6rem;bottom:5px;height:2.5px;border-radius:3px;background:var(--accent);transform-origin:left center;transform:scaleX(0);opacity:0;
+  transition:transform 1s linear,opacity .3s var(--ease);pointer-events:none}
+.tprog.on{opacity:.9}
+@media (prefers-reduced-motion:reduce){.tsum .tl i{animation:none}.tprog{transition:opacity .2s}}
 
 /* ---------- tactile buttons: a raised key that sinks when pressed and springs back ---------- */
 :root{
@@ -2517,3 +2546,25 @@ body::after{animation:none;opacity:.055;
 /* ---------- the wolf always stands out from what's behind it: light on dark, dark on light, its eyes red ---------- */
 .wolf-t .w-body{fill:var(--ink);stroke:var(--ink)}
 :root.is-dark .lockup .wolf{filter:drop-shadow(0 0 1.2rem color-mix(in srgb,var(--ink) 14%,transparent))}
+
+/* ---------- deloads are your call: a Deload switch on a live session's date line, and a question when one is due ---------- */
+.s-meta{display:flex;align-items:center;justify-content:space-between;gap:var(--s-1);flex-wrap:wrap}
+.dl-tog{display:inline-flex;align-items:center;gap:7px;padding:5px 11px 5px 7px;border-radius:999px;background:var(--surface);box-shadow:var(--key-soft),inset 0 0 0 1px var(--line);
+  font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);transition:transform .5s var(--spring),background .3s var(--ease),color .3s}
+.dl-tog i{position:relative;width:24px;height:14px;border-radius:999px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);transition:background .3s var(--ease)}
+.dl-tog i::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--muted);transition:transform .45s var(--spring),background .3s}
+.dl-tog.on{color:var(--ink)}
+.dl-tog.on i{background:var(--ring)}
+.dl-tog.on i::after{transform:translateX(10px);background:var(--ring-ink)}
+.dl-tog:active{transform:scale(.94);transition-duration:.08s}
+.co-band.co-ask{grid-template-columns:auto minmax(0,1fr);text-align:left;cursor:default}
+.co-band.co-ask > .btns{grid-column:1 / -1;margin:2px 0 0;justify-content:flex-end}
+.co-dl{justify-content:flex-start;margin-top:var(--s-1)}
+@media (prefers-reduced-motion:reduce){.dl-tog,.dl-tog i::after{transition:none}}
+
+/* ---------- the special font beyond Home's title: a session's name and its intensity, in the soft italic ---------- */
+.s-name{font-family:var(--font-serif);font-style:italic;font-weight:600;text-transform:none;letter-spacing:-.02em;font-size:2.2rem;line-height:1.1;
+  font-variation-settings:"SOFT" 100,"WONK" 1,"opsz" 144}
+.s-name::placeholder{color:var(--ink);opacity:1}
+.s-hero .bignum .n{font-family:var(--font-serif);font-style:italic;font-weight:600;letter-spacing:-.03em;line-height:.85;padding-right:.06em;
+  font-variation-settings:"SOFT" 100,"WONK" 0,"opsz" 144;font-variant-numeric:lining-nums proportional-nums}

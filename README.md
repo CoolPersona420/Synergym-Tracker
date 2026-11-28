@@ -271,10 +271,13 @@ every coach hint goes, sessions show plain next-set suggestions, and goals are k
 - **Deloads and weeks off.** A lighter week about every 10, 6 or 5 weeks of hard training (beginner,
   intermediate, advanced), counted from the last break of 6+ days or the last lighter week, and straight
   away when half the main lifts stall or two keep falling. A full week off after 16 weeks without a break,
-  or when lifts stay stuck after a recent deload. While a deload is due, every target is about 10% lighter
-  with half the sets. After a lighter week, stalls are ignored for two weeks while lifts bounce back. A break
-  that's due leads today's call, so it never says train while Recovery says rest: a due week off reads **Week
-  off** (a rest day) and a due deload turns a training day into **Deload** (an easy one).
+  or when lifts stay stuck after a recent deload. A deload is the lifter's call: when one is due the coach asks
+  (on Coach › Recovery and in a live session) and nothing changes until they **Start deload**. **Skip this one**
+  asks again a week later; a running deload ends after 7 days or with **End deload** at any time, and the
+  **Deload** switch on a live session's date line starts or stops one there, due or not (saved in
+  `profiles.deload`). During a deload every target is about 10% lighter with half the sets. After a lighter week,
+  stalls are ignored for two weeks while lifts bounce back. A week off that's due leads today's call (**Week
+  off**, a rest day), and a started deload turns a training day into **Deload** (an easy one).
 - **The split.** Give a split 6–8 weeks. Time to change when, at the rate you actually train, a 4+ day split
   hits major muscles less than once a week, or when half the main lifts have stalled after 8+ weeks outside a
   deload; worth a tweak after 16 weeks with fewer than half still climbing, or if it skips a major muscle.

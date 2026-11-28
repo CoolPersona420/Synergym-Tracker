@@ -2,7 +2,7 @@ import { makeClient } from './lib/sb.js';
 import { findTypos } from './lib/typos.js';
 import { readSnap, writeSnap, clearSnaps } from './lib/snapcache.js';
 import './style.css';
-import { analyse, readiness, withBreak, prescribe, parseRange, goalPlan } from './lib/coach.js';
+import { analyse, readiness, withBreak, prescribe, parseRange, goalPlan, DELOAD_DAYS } from './lib/coach.js';
 import { suggestNext } from './lib/progress.js';
 import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
@@ -534,7 +534,7 @@ const CO = { a: null, k: null };
 const coachOn = () => S.profile.coachOn !== false;
 function coach() {
   const now = Date.now(), p = S.profile;
-  const k = [DATA_REV, dayKey(now), p.exp, p.target, bwNow(), p.unit, JSON.stringify(p.liftGoals || []), (p.restDays || []).slice(-1)[0] || ''].join('|');
+  const k = [DATA_REV, dayKey(now), p.exp, p.target, bwNow(), p.unit, JSON.stringify(p.liftGoals || []), (p.restDays || []).slice(-1)[0] || '', JSON.stringify(p.deload || null)].join('|');
   if (CO.a && CO.k === k && CO.s === S.sessions && CO.l === S.library && CO.p === S.splits) return CO.a;
   const exMap = new Map(S.library.map(e => [e.id, e]));
   const log = [...S.sessions.values()].filter(s => s.endedAt).sort((a, b) => a.startedAt - b.startedAt).map(s => ({ id: s.id, t: s.startedAt, splitId: s.splitId, splitDay: s.splitDay,
@@ -544,7 +544,8 @@ function coach() {
   const nx = nextSplitDay(), last = log[log.length - 1], sp = nx ? nx.sp : (last && last.splitId && S.splits.get(last.splitId)) || null, day = nx && nx.sp.days[nx.i];
   const ctx = { now, exp: p.exp, target: p.target, round: snapW, split: sp && { id: sp.id, name: sp.name, days: sp.days }, lastSplitDay: last && sp && last.splitId === sp.id ? last.splitDay : null,
     nextMuscles: day ? [...new Set(day.exercises.filter(x => x.kind !== 'c').map(x => x.muscle))] : [], muscleOf: id => exMap.get(id)?.muscle,
-    goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)), savedOf: id => savedOrm(id) };
+    goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)), savedOf: id => savedOrm(id),
+    deloadChoice: p.deload ? { on: p.deload.on, skipUntil: p.deload.skip } : null };
   const a = analyse(log, ctx);
   /* trained today: the call is for tomorrow morning */
   if (doneToday().length) { const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(8, 0, 0, 0); a.next = { ...withBreak(readiness(log, a.series, { ...ctx, now: t.getTime() }), a.deload), when: 'tomorrow' }; }
@@ -1136,27 +1137,29 @@ function setRestToday(on) {
   toast(on ? 'Rest day logged. Recover well.' : 'Rest day removed');
 }
 function greet(hi) {
-  const h = new Date().getHours(), tod = h < 5 || h >= 22 ? 'Up late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-  return pick([`Hey ${hi},`, `${tod}, ${hi},`, `Welcome back, ${hi},`, `Let’s go, ${hi},`, `Ready, ${hi}?`], 1);
+  const h = new Date().getHours(), tod = h < 5 || h >= 22 ? 'Up late' : h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening';
+  return hi ? pick([`Hi ${hi}.`, `${tod}, ${hi}.`, `Hey ${hi}.`], 1) : pick(['Hi there.', `${tod}.`], 1);
 }
+/* the greeting's second line: one plain sentence, in the soft italic */
+const say = t => `<em>${t}</em>`;
 
 /* once you've trained, the greeting names the best true thing about today: a record, the week's target reached,
    a round streak, or else what's next in the split. Built from today's sessions, with suspected typos left out
    (they never make a record), so it can't cheer a mistake. */
 const NUMW = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 function doneLines(done, nx, hi) {
-  const good = pick([`Good work, ${hi},`, `Nice work, ${hi},`, `Well done, ${hi},`], 9);
+  const good = hi ? pick([`Nice work, ${hi}.`, `Well done, ${hi}.`], 9) : 'Nice work.';
   const prs = [...new Set(done.flatMap(x => S.A.sess.get(x.id)?.prs || []))].filter(id => exOf(id));
-  if (prs.length === 1) return [good, 'a new PR on', `<em>${esc(exName(prs[0]))}</em>.`];
-  if (prs.length > 1) return [good, `${NUMW[prs.length] || prs.length} PRs`, '<em>today</em>.'];
+  if (prs.length === 1) return [good, say(`New PR on ${esc(exName(prs[0]))}.`)];
+  if (prs.length > 1) { const n = NUMW[prs.length] || String(prs.length); return [good, say(`${n[0].toUpperCase()}${n.slice(1)} new PRs today.`)]; }
   const tgt = S.profile.target || 3, wk = weekCount();
   if (wk >= tgt && wk - done.length < tgt) {
     const st = consistency().streak;
-    if (st >= 4 && st % 4 === 0) return [`${st} weeks`, 'in a row,', `<em>${hi}</em>.`];
-    return [`That’s ${tgt} of ${tgt},`, `${hi},`, '<em>week done</em>.'];
+    if (st >= 4 && st % 4 === 0) return [good, say(`${st} weeks in a row.`)];
+    return [good, say(`Week done: ${tgt} of ${tgt}.`)];
   }
-  if (nx && !nx.second) return [`${esc(sessName(done[0]))} is done,`, `${hi}.`, `<em>${esc(nx.sp.days[nx.i].type || 'Training')} is next</em>.`];
-  return [good, ...pick([['today’s work', '<em>is done</em>.'], ['session', '<em>complete</em>.'], ['that’s a wrap', '<em>for today</em>.']], 7)];
+  if (nx && !nx.second) return [`${esc(sessName(done[0]))} is done.`, say(`${esc(nx.sp.days[nx.i].type || 'Training')} is next.`)];
+  return [good, say(pick(['Workout done.', 'That’s a wrap.'], 7))];
 }
 
 /* ---------- Home ---------- */
@@ -1166,12 +1169,12 @@ function vToday() {
   let lines, cta;
   if (a) {
     const sa = S.A.sess.get(a.id);
-    lines = [greet(hi), ...pick([['your session', '<em>is live</em>.'], ['the bar is', '<em>waiting</em>.'], ['finish what', '<em>you started</em>.']], 2)];
+    lines = [greet(hi), say(pick(['Back to it.', 'Finish strong.'], 2))];
     cta = `${pickBtn(`In progress · ${plural(sa.sets, 'set')} logged`, esc(sessName(a)), '', { cls: 'live', attrs: `data-act="resume" data-id="${a.id}"`, aria: 'Resume session', icon: ICON.play, deskIcon: false })}<button class="fab magnet" data-act="resume" data-id="${a.id}" aria-label="Resume session"><span class="fab-l" aria-hidden="true">Resume session</span>${ICON.play}</button>`;
   } else if (nx && nx.second) {
     /* the split plans a second session today and the first is done */
     const d = nx.sp.days[nx.i], first = done.find(s => s.splitId === nx.sp.id && s.splitDay === nx.i - 1);
-    lines = [greet(hi), ...pick([['one down,', '<em>one to go</em>.'], ['round two', '<em>is on deck</em>.'], ['session two', '<em>is up next</em>.']], 8)];
+    lines = [greet(hi), say(pick(['Round two today.', 'One down, one to go.'], 8))];
     cta = `${pickBtn(`${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}`, esc(d.type || 'Training'), '')}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${first ? `<button class="btn line sm dt-done" data-act="open" data-id="${first.id}">${ICON.check}${ord(dayNum(nx.sp.days, nx.i - 1)[1])} session done</button>` : ''}<button class="btn line sm" data-act="start" data-force="1">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start ${dayLabel(nx.sp.days, nx.i)}"><span class="fab-l" aria-hidden="true">Start ${ord(dayNum(nx.sp.days, nx.i)[1])} session</span>${ICON.plus}</button></div>`;
   } else if (done.length) {
@@ -1181,24 +1184,23 @@ function vToday() {
     cta = `<div class="what done-today"><span class="dt-field"><span class="dt-t"><i>Completed today${done.length > 1 ? ` · ${done.length} sessions` : ''}</i><b>${done.slice().reverse().map(x => esc(sessName(x))).join(' + ')}</b><span class="dt-s">${plural(tot.sets, 'set')} · ${fmtVol(tot.vol)}${nx ? ` · next: ${esc(nx.sp.days[nx.i].type || 'Training')}, ${dayLabel(nx.sp.days, nx.i)}` : ''}</span></span><span class="dt-c" aria-hidden="true">${ICON.check}</span></span></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${done.length > 1 ? `<button class="btn line sm" data-act="today-sessions">View sessions</button>` : `<button class="btn line sm" data-act="open" data-id="${last.id}">View session</button><button class="btn line sm" data-act="second">${ICON.plus}Second session</button>`}</div>`;
   } else if (isRestToday()) {
-    lines = [pick([`Hey ${hi},`, `Easy does it, ${hi},`, `Rest well, ${hi},`], 10), ...pick([['today is a', '<em>rest day</em>.'], ['recovery is', '<em>training too</em>.'], ['rest up,', '<em>come back stronger</em>.']], 6)];
+    lines = [hi ? `Rest day, ${hi}.` : 'Rest day.', say(pick(['Recover well.', 'Rest is training too.'], 6))];
     cta = nx ? `${pickBtn(`Rest day · up next${nx.picked ? ' · your pick' : ''}`, `${esc(nx.sp.days[nx.i].type || 'Training')}`, `${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)} · waits for tomorrow`)}`
       : `<div class="what"><span>Rest day</span><b>Recovery counts</b><span>Logged for today</span></div>`;
     cta += `
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-undo">${ICON.moon}Undo rest day</button></div>`;
   } else if (nx) {
-    const d = nx.sp.days[nx.i], ty = d.type ? esc(d.type) : 'training day';
+    const d = nx.sp.days[nx.i];
     /* the greeting agrees with the coach: no "is calling" when a week off or a rest day is the call */
     const co = coachOn() && coach().next, cc = co && co.when === 'today' && callOf(co);
-    lines = cc === 'rest' ? [greet(hi), ...(co.brk === 'off' ? pick([['a week off', '<em>is due</em>.'], ['time for', '<em>a week off</em>.']], 3) : pick([['rest is', '<em>the call today</em>.'], ['recovery', '<em>comes first</em>.']], 3))]
-      : cc === 'easy' ? [greet(hi), ty, pick(['<em>goes light today</em>.', '<em>is an easy one</em>.'], 3)]
-      : [greet(hi), ty, pick(['<em>is up next</em>.', '<em>is on deck</em>.', '<em>is calling</em>.'], 3)];
+    const tt = d.type ? esc(d.type) : 'Training';
+    lines = cc === 'rest' ? [greet(hi), say(co.brk === 'off' ? 'Time for a week off.' : 'Rest is the call today.')]
+      : cc === 'easy' ? [greet(hi), say(`${tt}, light today.`)]
+      : [greet(hi), say(`${tt} today.`)];
     cta = `${pickBtn(`${esc(nx.sp.name)} · ${dayLabel(nx.sp.days, nx.i)}${nx.picked ? ' · your pick' : ''}`, `${esc(d.type || 'Training')}`, `${d.exercises.slice(0, 3).map(x => esc(x.name)).join(' · ') || 'No exercises planned yet'}${d.exercises.length > 3 ? ` +${d.exercises.length - 3}` : ''}`)}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="btn line sm" data-act="start">Empty</button><button class="fab magnet" data-act="start-day" data-sp="${nx.sp.id}" data-day="${nx.i}" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   } else {
-    lines = [greet(hi), ...(list.length
-      ? pick([['every set', '<em>adds up</em>.'], ['show up,', '<em>stack wins</em>.'], ['strength is', '<em>built weekly</em>.'], ['one more', '<em>good session</em>.']], 4)
-      : pick([['let’s log your', '<em>first session</em>.'], ['your first', '<em>session awaits</em>.'], ['day one', '<em>starts now</em>.']], 4))];
+    lines = [greet(hi), say(list.length ? pick(['Ready to lift?', 'Let’s train.'], 4) : 'Log your first workout.')];
     cta = `<div class="what"></div>
       <div style="display:flex;gap:8px;align-items:center"><button class="btn line sm" data-act="rest-today">${ICON.moon}Rest day</button><button class="fab magnet" data-act="start-menu" aria-label="Start session"><span class="fab-l" aria-hidden="true">Start session</span>${ICON.plus}</button></div>`;
   }
@@ -1279,7 +1281,7 @@ const WHY = { load: 'Last time went well: add weight.', 'range-up': 'Every set r
   repeat: 'Last time slipped: match it before moving on.', consolidate: 'Later sets fell short: own this weight first.', reset: 'Too heavy twice running: 5% lighter, build back up.',
   easy: 'Easy day: about 10% lighter, one set fewer.', deload: 'Deload: about 10% lighter, half the sets.', goal: 'This week of your goal block.' };
 const WHY_SHORT = { load: 'add weight', 'range-up': 'top of the range: add weight', reps: 'one more rep', repeat: 'match last time', consolidate: 'own this weight first', reset: 'too heavy twice: 5% lighter', easy: 'easy day: lighter', deload: 'deload: lighter, fewer sets', goal: 'goal block' };
-const REC = { ok: ['On track', 'good'], soon: ['Deload next week', 'warn'], now: ['Deload now', 'warn'], off: ['Take a week off', 'warn'], rested: ['Rested', 'good'] };
+const REC = { ok: ['On track', 'good'], soon: ['Deload next week', 'warn'], now: ['Deload week', 'warn'], ask: ['Deload due', 'warn'], skipped: ['Deload skipped', 'good'], off: ['Take a week off', 'warn'], rested: ['Rested', 'good'] };
 const recKey = d => d.status === 'now' && d.kind === 'week-off' ? 'off' : d.status;
 const SPLIT_ST = { keep: ['Keep it', 'good'], consider: ['Worth a tweak', 'warn'], change: ['Time to change', 'warn'], none: ['No split', ''] };
 const GOAL_ST = { ready: ['Ready to test', 'good'], 'on-track': ['On track', 'good'], behind: ['Behind the deadline', 'warn'], stalled: ['Stalled', 'warn'], long: ['Long-term', ''], 'no-data': ['No data yet', ''] };
@@ -1305,7 +1307,7 @@ function dayTargets(d) {
 }
 /* what's lightening today's targets, if anything: a deload week, then an easy or rest call */
 function coachMood(a) {
-  if (a.deload.status === 'now') return { k: 'deload', t: a.deload.kind === 'week-off' ? 'Week off due' : 'Deload week', b: 'Targets are about 10% lighter with half the sets.' };
+  if (a.deload.status === 'now') return { k: 'deload', t: a.deload.kind === 'week-off' ? 'Week off due' : 'Deload week', b: a.deload.chosen ? `Day ${Math.min(DELOAD_DAYS, a.deload.day)} of ${DELOAD_DAYS}: targets about 10% lighter with half the sets.` : 'Targets are about 10% lighter with half the sets.' };
   if (a.ready.call !== 'train') return { k: 'easy', t: a.ready.call === 'rest' ? 'Rest was the call' : 'Easy day', b: 'Targets are about 10% lighter, one set fewer.' };
   return null;
 }
@@ -1325,7 +1327,7 @@ function vCoach() {
       <div class="co-cm"><span class="lbl">${today ? 'Today' : 'Tomorrow'} · ${wk} of ${S.profile.target || 3} this week</span><h2 class="co-call-t co-${c}">${callTitle(r, c)}</h2></div></div>
     <p class="co-lead">${esc(reasons[0] || CALL[c][1])}</p>
     ${btn || more.length ? `<div class="co-acts">${btn}${more.length ? `<details class="co-more"><summary>Why</summary>${whyList(more)}</details>` : ''}</div>` : ''}</section>`;
-  const recWarn = ['soon', 'now'].includes(a.deload.status) || ['change', 'consider'].includes(a.split.status);
+  const recWarn = ['soon', 'now', 'ask'].includes(a.deload.status) || ['change', 'consider'].includes(a.split.status);
   const tabs = `<div class="seg co-tabs rv" role="tablist" aria-label="Coach">${COACH_TABS.map(([id, t]) => `<button role="tab" aria-selected="${tab === id}" class="${tab === id ? 'on' : ''}" data-act="coach-tab" data-t="${id}">${t}${id === 'goals' && a.goals.length ? ` <span class="co-n">${a.goals.length}</span>` : ''}${id === 'recovery' && recWarn ? ' <i class="co-dot" aria-label="needs a look"></i>' : ''}</button>`).join('')}</div>`;
   const foot = `<p class="muted co-foot rv">The coach reads your log: estimated maxes, rep ranges, training load and recovery. It’s guidance, not medical advice: if something hurts, stop. <button class="linkbtn" data-act="how">How it works</button></p>`;
   /* on a computer there's room for it all at once: today's call as a wide banner, then the next session and goals
@@ -1357,7 +1359,8 @@ function coachRecovery(a, nx) {
   const rec = `<section class="card rv co-rec"><div class="card-h"><span class="lbl">Lighter weeks</span>${pill(REC[rk])}</div>
     <div class="co-meter" role="img" aria-label="${dl.weeks} of about ${dl.every} weeks"><i style="width:${pct}%"></i></div><p class="lbl co-mt">${dl.weeks} of ~${dl.every} weeks</p>
     <p class="co-lead">${esc(dl.reasons[0] || '')}</p>${dl.reasons.length > 1 ? whyList(dl.reasons.slice(1)) : ''}
-    ${rk === 'now' || rk === 'off' || rk === 'soon' ? `<details class="co-more co-how"${rk === 'soon' ? '' : ' open'}><summary>${rk === 'off' ? 'How to take a week off' : 'How to deload'}</summary><p>${rk === 'off' ? HOW_DELOAD.off : HOW_DELOAD.deload}</p></details>` : ''}</section>`;
+    ${deloadBtns(dl, 'co-dl')}
+    ${rk === 'now' || rk === 'off' || rk === 'soon' || rk === 'ask' ? `<details class="co-more co-how"${rk === 'soon' || rk === 'ask' ? '' : ' open'}><summary>${rk === 'off' ? 'How to take a week off' : 'How to deload'}</summary><p>${rk === 'off' ? HOW_DELOAD.off : HOW_DELOAD.deload}</p></details>` : ''}</section>`;
   const split = `<section class="card rv co-split"><div class="card-h"><span class="lbl">Your split${sp ? ' · ' + esc(sp.name) : ''}</span>${pill(SPLIT_ST[sc.status])}</div>
     ${sc.status !== 'none' ? `<p class="muted co-sub">${sc.weeks ? plural(sc.weeks, 'week') : 'Under a week'} on it · ${plural(sc.sessions, 'session')} · ${sc.perWeek} a week lately</p>` : ''}
     <p class="co-lead">${esc(sc.reasons[0] || '')}</p>
@@ -1400,9 +1403,28 @@ function exNext(ex) {
   return `<p class="co-nx"><span class="lbl">Coach · next time</span><b>${tgtText(g, ex.kind === 'bw')}</b> · ${plural(g.sets, 'set')}<small>${WHY[g.why]}</small></p>`;
 }
 /* in a live session: why today's targets are lighter, or that a lift follows a goal's block */
+/* deloads are the lifter's call: start one (due or not), skip one that's due, or end one at any time */
+function deloadSet(on, skip) {
+  S.profile.deload = on || skip ? { on: on || null, skip: skip || null } : null;
+  queue('p', 200); buzz(); render(false);
+}
+const deloadOn = () => coachOn() && coach().deload.chosen === true;
+/* the buttons for the deload, wherever it's shown: due, a question; running, End; otherwise, start one */
+function deloadBtns(d, cls = '') {
+  if (!coachOn() || d.kind === 'week-off' && d.status === 'now') return '';
+  const b = (act, t, k = 'sm') => `<button class="btn ${k}" data-act="${act}">${roll(t)}</button>`;
+  if (d.status === 'ask') return `<div class="btns ${cls}">${b('deload-skip', 'Skip this one', 'sm ghost')}${b('deload-start', 'Start deload')}</div>`;
+  if (d.chosen) return `<div class="btns ${cls}">${b('deload-end', 'End deload', 'sm line')}</div>`;
+  return cls === 'co-dl' ? `<div class="btns ${cls}">${b('deload-start', 'Start a deload week', 'sm ghost')}</div>` : '';
+}
+/* in a live session: a Deload switch on the date line, pressed while a deload runs */
+const deloadTog = s => s.endedAt || !coachOn() ? '' : (on => `<button class="dl-tog${on ? ' on' : ''}" data-act="${on ? 'deload-end' : 'deload-start'}" aria-pressed="${on}" title="${on ? 'End the deload' : 'Start a deload week'}"><i></i>Deload</button>`)(deloadOn());
 function sessCoachBand(s) {
   if (s.endedAt || !coachOn()) return '';
   const a = coach(), mood = coachMood(a), goal = a.goals.find(g => g.plan && g.status !== 'ready' && g.status !== 'no-data' && s.items.some(it => it.exId === g.goal.exId));
+  const d = a.deload;
+  if (d.status === 'ask') return `<div class="co-band co-ask rv"><span class="co-pill warn">Deload due</span><span>${esc(d.reasons[0] || 'A lighter week is due.')} Go lighter this week?</span>${deloadBtns(d)}</div>`;
+  if (d.chosen && mood) return `<div class="co-band co-ask rv"><span class="co-pill warn">${mood.t}</span><span>${mood.b}</span>${deloadBtns(d)}</div>`;
   if (mood) return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill warn">${mood.t}</span><span>${mood.b}</span>${ICON.coach}</button>`;
   if (goal) { const ex = exOf(goal.goal.exId); return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill good">Goal</span><span>${esc(ex ? ex.name : 'This lift')} follows your ${fmtW(goal.goal.kg)} ${unit()} plan: ${esc(goal.plan.name)}, week ${goal.plan.weekNo} of 4.</span>${ICON.coach}</button>`; }
   return '';
@@ -1654,7 +1676,7 @@ const WIDGETS = {
       const goal = !g ? 'Set a goal' : g.status === 'no-data' ? `<b>${esc(exOf(g.goal.exId)?.name || 'Lift')} ${fmtW(g.goal.kg)}</b> · log it to start` : `<b>${esc(exOf(g.goal.exId)?.name || 'Lift')} ${fmtW(g.goal.kg)}</b> · ${Math.round(g.progress * 100)}%${g.status === 'ready' ? ' · test it' : g.eta && g.eta.likely ? ` · ${when2(g.eta.likely)}` : ''}`;
       const rows = row(c === 'rest' ? 'After' : 'Next', next, 'plan')
         + row('Week', `<b>${wk} of ${tgt}</b><span class="co-wbar" aria-hidden="true"><i style="width:${Math.min(100, Math.round(wk / tgt * 100))}%"></i></span>`, 'plan')
-        + row('Recovery', ['soon', 'now', 'off'].includes(dk) ? `<b class="co-warn">${REC[dk][0]}</b>` : `${a.deload.weeks} of ~${a.deload.every} weeks`, 'recovery')
+        + row('Recovery', ['soon', 'now', 'ask', 'off'].includes(dk) ? `<b class="co-warn">${REC[dk][0]}</b>` : `${a.deload.weeks} of ~${a.deload.every} weeks`, 'recovery')
         + row('Goal', goal, 'goals');
       const more = list ? `<div class="co-wn"><span class="lbl">Targets · ${esc(day.type || 'next session')} · ${unit()}</span>${tg.slice(0, 4).map(t => `<span><b>${esc(t.e.name)}</b><i class="co-wt">${short(t)} <small>× ${t.g.sets}</small></i></span>`).join('')}</div>` : '';
       return wHead('Coach', when, open) + `<div class="co-wc"><b class="co-call-t co-${c}">${callTitle(r, c)}</b><span class="muted co-wwhy">${esc(callReason(r))}</span></div><div class="co-wrows">${rows}</div>${more}`; }
@@ -1830,7 +1852,7 @@ function vSession() {
     <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80"${ro ? ' readonly' : ''}>
     ${ro && S.lbCtx === s.id ? `<button class="btn line sm s-edit" data-act="sess-edit">${ICON.pen}Edit</button>` : ''}
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
-  <div class="s-meta lbl rv">${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</div>${sessCoachBand(s)}
+  <div class="s-meta lbl rv"><span>${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</span>${live ? deloadTog(s) : ''}</div>${sessCoachBand(s)}
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
     <div class="bignum" id="sint" style="margin-top:10px">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
@@ -2105,7 +2127,7 @@ function transport(s) {
   return `<div class="transport">${locked(s) ? '' : `<button class="tb" data-act="link-toggle" aria-label="Link sets into a superset, giant set or drop set" title="Link sets">${ICON.link}</button><span class="tdiv"></span>`}
   <div class="tsum" id="tsum" data-act="rest-tap"></div>
   <span id="trest" hidden style="display:flex;gap:2px"><button class="tb" data-act="rest-add" data-d="-15" aria-label="15 seconds less">−15</button><button class="tb" data-act="rest-add" data-d="15" aria-label="15 seconds more">+15</button></span>
-  ${live ? `<button class="tfin" data-act="finish"><i></i>Finish</button>` : `<button class="tfin" data-act="back">Done</button>`}</div>`;
+  ${live ? `<button class="tfin" data-act="finish"><i></i>Finish</button>` : `<button class="tfin" data-act="back">Done</button>`}${live ? '<i class="tprog" aria-hidden="true"></i>' : ''}</div>`;
 }
 function previewGroup(s, ids) { const m = []; s.items.forEach((it, ii) => it.sets.forEach((st, si) => { if (ids.includes(st.id)) m.push({ it, st, ii, si }); })); m.sort((a, b) => a.ii - b.ii || a.si - b.si); return classify(m); }
 /* typing a weight or reps saves at once; the numbers worked out from it (intensity, records) follow when typing pauses */
@@ -2611,7 +2633,7 @@ const HOW = `<div class="sh-h"><h3>How the numbers work</h3>${xBtn()}</div><div 
     <p><b>Records (PRs).</b> A weight PR is heavier than anything you’ve lifted on that exercise. A rep PR is more reps than you’ve ever done at that weight or heavier. Heavier and more reps than your record set is both. Each set is judged as you type it, against everything before it, earlier sets that day included; an exercise’s first session sets the baseline. For bodyweight moves the weight is the added load.</p>
     <p><b>Next-set targets.</b> From your last two sessions of the exercise. With a rep range in your split (say 8–12), keep the weight and add reps until every set reaches the top, then add about 2.5% (at least 2.5 kg or 5 lb) and go back to the bottom; fall under the range twice and it drops 5%. Without a range: if your top set went at least as well as the time before, add weight and keep the reps; if it slipped, or your later sets fell short, hold the weight. Bodyweight moves add reps.</p>
     <p><b>Coach: today’s call.</b> <i>Rest</i> after more training days in a row than your split plans (2–4 without a split, by experience), or when your split has a rest day next. <i>Go easy</i> (about 10% lighter, a set fewer) when this week’s sets are 50% above your usual week, when two main lifts have come in 5% under their recent best two sessions running, when yesterday gave today’s muscles 6+ sets, or after two weeks away.</p>
-    <p><b>Coach: deloads and weeks off.</b> A lighter week about every 10 weeks for beginners, 6 for intermediates and 5 for advanced lifters, counted from your last break (6+ days off) or lighter week; sooner if half your main lifts stall (3 sessions over 10+ days without beating their best by 1%) or two keep falling. A full week off after 16 weeks without a break, or if lifts are still stuck after a recent deload. A main lift is one trained 4+ times in 6 weeks.</p>
+    <p><b>Coach: deloads and weeks off.</b> A lighter week about every 10 weeks for beginners, 6 for intermediates and 5 for advanced lifters, counted from your last break (6+ days off) or lighter week; sooner if half your main lifts stall (3 sessions over 10+ days without beating their best by 1%) or two keep falling. A full week off after 16 weeks without a break, or if lifts are still stuck after a recent deload. A main lift is one trained 4+ times in 6 weeks. A deload is your call: the coach asks when one is due, and you can start one, skip it (asked again in a week) or end it at any time, also with the <b>Deload</b> switch in a live session.</p>
     <p><b>Coach: your split.</b> Give a split 6 to 8 weeks. Time to change when, at the rate you actually train, a 4+ day split hits major muscles less than once a week, or when half your main lifts have stalled after 8+ weeks outside a deload. Worth a tweak after 16 weeks with fewer than half your lifts still climbing, or when it skips a major muscle.</p>
     <p><b>Coach: goals.</b> Your current max is the best estimate from your last three sessions of the lift (sets of 1–12 reps), or a one-rep max you saved in the last 6 weeks, eased off after 3+ weeks away. A realistic pace blends your own 12-week trend with typical gains for your level (about 1%, 0.5% or 0.2% a week for beginner, intermediate and advanced), at most twice the typical rate, slowing as the months go on. The likely date uses that pace; the range uses 1.5× and 0.6× of it. The plan runs 4-week blocks of three building weeks and a deload: Build (4×6 at 72.5–77.5% of your max) while the goal is over 10% away, Strength (5×3–4 at 80–85%) within 10%, Peak (heavy doubles and singles, then a test) within 3%.</p>
     <p><b>Linked sets.</b> Link two or more sets and Synergym names the structure: two exercises make a superset, three or more a giant set. On one exercise, falling weight is a drop set, the same weight a rest-pause set, anything else a pyramid. Rest starts after the last set of a group.</p>
@@ -3126,7 +3148,7 @@ function toggleDone(setId) {
   oneRmNote(s, f.it, st);
 }
 let AC = null;
-function startRest() { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume && AC.resume(); } catch {} S.rest = { end: Date.now() + S.profile.rest * 1000, beeped: false }; tick(); }
+function startRest() { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume && AC.resume(); } catch {} S.rest = { end: Date.now() + S.profile.rest * 1000, len: S.profile.rest * 1000, beeped: false }; tick(); }
 function beep() { if (!S.profile.sound || !AC) return; try { const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime; o.frequency.value = 880; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.25, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + .4); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + .45); } catch {} }
 /* a set counts once it has reps; a ticked set takes the numbers it was hinted with */
 const logged = s => s.items.some(it => it.sets.some(st => setLogged(st) || (st.done && (+st.pr > 0 || +st.pt > 0))));
@@ -3951,7 +3973,11 @@ const ACT = {
   'link-do': () => { const s = cur(); if (!s || !S.link || S.link.size < 2) return; const g = sid(); for (const it of s.items) for (const st of it.sets) if (S.link.has(st.id)) st.g = g; cleanGroups(s);
     const t = previewGroup(s, [...S.link]).type; S.link = null; queue('s:' + s.id, 0); render(false); toast(t + ' linked'); },
   unlink: el => { const s = cur(); if (!s) return; for (const it of s.items) for (const st of it.sets) if (st.g === el.dataset.g) st.g = null; queue('s:' + s.id, 300); render(false); },
-  'rest-add': el => { if (S.rest) { S.rest.end += (+el.dataset.d) * 1000; tick(); } },
+  'rest-add': el => { if (S.rest) { S.rest.end += (+el.dataset.d) * 1000; S.rest.len = Math.max(1000, (S.rest.len || 0) + (+el.dataset.d) * 1000); tick(); } },
+  /* deloads: the lifter's call. Skipped or ended, a due one is asked about again in a week */
+  'deload-start': () => { deloadSet(Date.now(), null); toast('Deload week started: targets about 10% lighter, half the sets'); },
+  'deload-skip': () => { deloadSet(null, Date.now() + DELOAD_DAYS * 864e5); toast('Deload skipped. The coach asks again next week'); },
+  'deload-end': () => { deloadSet(null, Date.now() + DELOAD_DAYS * 864e5); toast('Deload ended: back to full targets'); },
   'rest-tap': () => { if (S.rest) { S.rest = null; tick(); toast('Rest skipped'); } },
   'new-split': () => splitRoom() && menuSheet('New split', [{ label: 'Blank split', hint: '3 empty days', fn: newSplit }, ...TEMPLATES.map(t => ({ label: t.name, hint: plural(t.days, 'day') + ' a week', fn: () => { const sp = splitFromTemplate(t); go('split', sp.id); toast('Template added. Make it yours.'); } }))]),
   'open-split': el => go('split', el.dataset.id),
@@ -4100,15 +4126,28 @@ function tick() {
   const now = Date.now();
   const nd = $('[data-now="t"]'); if (nd) { const t = fmtTime(now); if (nd.textContent !== t) nd.textContent = t; }
   const s = cur(), ts = $('#tsum'); if (!s || !ts || S.view !== 'session') return;
-  const tr = $('#trest');
+  const tr = $('#trest'), pg = $('.tprog');
   if (S.rest && !s.endedAt) {
     const left = S.rest.end - now;
     /* the "go" shows for a moment, then clears, unless a new rest has started in the meantime */
     if (left <= 0 && !S.rest.beeped) { const r = S.rest; r.beeped = true; beep(); try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch {} setTimeout(() => { if (S.rest === r) { S.rest = null; tick(); } }, 2200); }
-    ts.className = 'tsum rest'; ts.title = 'Tap to skip rest'; ts.innerHTML = `<small>${left > 0 ? 'rest' : 'go'}</small>${mmss(left)}`; if (tr) tr.hidden = false;
+    ts._mode = 'rest'; ts.className = 'tsum rest'; ts.title = 'Tap to skip rest'; ts.innerHTML = `<small>${left > 0 ? 'rest' : 'go'}</small>${mmss(left)}`; if (tr) tr.hidden = false;
+    /* the line along the bar empties with the rest, a second at a time, gliding between seconds */
+    if (pg) {
+      const sc = `scaleX(${Math.max(0, Math.min(1, left / (S.rest.len || S.profile.rest * 1000))).toFixed(4)})`;
+      /* a new rest starts full at once; only the countdown glides */
+      if (!pg.classList.contains('on')) { pg.style.transition = 'none'; pg.style.transform = sc; void pg.offsetWidth; pg.style.transition = ''; pg.classList.add('on'); }
+      else pg.style.transform = sc;
+    }
   } else {
-    const a = S.A?.sess.get(s.id), was = ts._sum; ts.className = 'tsum'; ts.innerHTML = a ? (a.sets && a.ct ? `${plural(a.sets, 'set')} · ${fmtMin(a.ct)}` : sessSum(a)) : ''; ts._sum = ts.innerHTML; if (tr) tr.hidden = true;
-    if (was && was !== ts._sum && !calm()) { ts.classList.remove('a-bump'); void ts.offsetWidth; ts.classList.add('a-bump'); }
+    if (pg) pg.classList.remove('on');
+    const a = S.A?.sess.get(s.id), sum = a ? (a.sets && a.ct ? `${plural(a.sets, 'set')} · ${fmtMin(a.ct)}` : sessSum(a)) : '';
+    /* when it started (and, once over, ended), over its sets and volume */
+    if (ts._mode !== 'sum') { ts._mode = 'sum'; ts.className = 'tsum'; ts.title = ''; ts._sum = null;
+      ts.innerHTML = `<span class="tl">${s.endedAt ? `<time>${fmtTime(s.startedAt)}</time> – <time>${fmtTime(s.endedAt)}</time>` : `<i></i>started <time>${fmtTime(s.startedAt)}</time>`}</span><b class="tv"></b>`; }
+    const tv = ts.querySelector('.tv'), was = ts._sum;
+    if (tv && sum !== was) { tv.innerHTML = sum; ts._sum = sum; if (was && !calm()) { tv.classList.remove('a-bump'); void tv.offsetWidth; tv.classList.add('a-bump'); } }
+    if (tr) tr.hidden = true;
   }
 }
 setInterval(() => { if (S.rest || $('[data-now="t"]')) tick(); }, 1000);
@@ -4501,7 +4540,7 @@ function boot() {
   SW = swipeRows({ enabled: () => coarse.matches && S.loaded && $('#sheet').hidden, buzz, reduced });
   dockDrag($('#nav'), { enabled: () => phoneDash() && S.loaded && $('#sheet').hidden, onPick: el => go(el.dataset.v), buzz });
   /* the dock steps aside while you scroll down a page; buttons press like keys and leave a drop of ink */
-  DOCK = dockAutoHide({ nav: $('#nav'), enabled: () => matchMedia('(max-width:59.99rem)').matches && S.loaded && $('#sheet').hidden && S.view !== 'session', reduced });
+  DOCK = dockAutoHide({ enabled: () => matchMedia('(max-width:59.99rem)').matches && S.loaded && $('#sheet').hidden && !S.link && !$('.transport.ed-bar') });
   tactile({ reduced });
   /* every switch can be slid along too */
   segDrag({ buzz });

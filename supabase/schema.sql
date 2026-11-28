@@ -51,6 +51,9 @@ alter table public.profiles add column if not exists lift_goals jsonb check (lif
 alter table public.profiles add column if not exists coach_on boolean not null default true;
 -- The day weeks start on, as in JavaScript's Date.getDay(): 1 Monday (the default), 0 Sunday, 6 Saturday.
 alter table public.profiles add column if not exists week_start smallint not null default 1 check (week_start in (0, 1, 6));
+-- Deloads are the lifter's call (0.2.5): { on: when a deload week they started began (ms), skip: until when a due
+-- deload is skipped (ms) }. The coach asks when one is due and applies it only once started.
+alter table public.profiles add column if not exists deload jsonb check (deload is null or (jsonb_typeof(deload) = 'object' and pg_column_size(deload) <= 256));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
@@ -370,7 +373,7 @@ begin
       display_name = coalesce(r.display_name, t.display_name), experience = coalesce(r.experience, t.experience),
       goal = coalesce(r.goal, t.goal), theme = r.theme, muscles = r.muscles, widgets = r.widgets,
       rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive, lift_goals = r.lift_goals, coach_on = coalesce(r.coach_on, t.coach_on),
-      week_start = coalesce(r.week_start, t.week_start)
+      week_start = coalesce(r.week_start, t.week_start), deload = r.deload
     from jsonb_populate_record(null::public.profiles, p->'profile') r
     where t.id = uid;
   end if;

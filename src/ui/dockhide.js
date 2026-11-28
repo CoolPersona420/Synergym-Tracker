@@ -1,52 +1,41 @@
-/* The phone dock follows your scrolling, the way a browser's own toolbar does: scrolling down slides it away a little
-   at a time, and any scroll up pulls it back straight away (a bit faster than you scroll). When you stop, it settles
-   all the way in or out with a soft ease, and after a moment's pause it comes back by itself. It stays put at the top
-   and the end of a page, while a sheet is open, in a session (which has its own bar) and on a computer, where the
-   dock is a side rail.
-   The offset is the dock's own `translate`, written once per scroll event with no transition (so it tracks the page
-   exactly); only the settle animates. body.dock-away marks it fully hidden, and takes away its taps. */
-export function dockAutoHide({ nav, enabled, reduced }) {
-  let y0 = scrollY, off = 0, H = 0, dir = 0, live = false, endT = 0, idleT = 0, easeT = 0;
-  /* how far the dock has to travel to be out of sight: from the top of its highest visible part (the + and its
-     label sit above the pill) to below the screen's bottom edge */
-  const measure = () => {
+/* The phone dock, and the session bar in a session, step aside while you scroll down a page and come back the moment
+   you scroll up. They also come back when you stop scrolling for a moment, at the top and the end of a page, and on
+   every page change. Nothing hides while a sheet is open, while linking sets or editing a past session (those bars
+   are what you're doing), or on a computer.
+   Only the state is set here (body.dock-away, and --dock-h, how far down is out of sight); the CSS slides the bars
+   with `translate` transitions, which the browser runs on its compositor, so they stay smooth however busy the page
+   is. A turn of direction mid-slide reverses from wherever the bar is. */
+export function dockAutoHide({ enabled }) {
+  let y0 = scrollY, run = 0, idle = 0, away = false;
+  const root = document.documentElement, body = document.body;
+  /* from the top of the highest bar part on screen (the + and its label sit above the dock) to below the bottom */
+  const reach = () => {
     let top = Infinity;
-    for (const el of [nav, ...nav.querySelectorAll('.ring,.nl')]) {
+    for (const el of document.querySelectorAll('#nav, #nav .ring, #nav .nl, .transport')) {
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || +cs.opacity === 0) continue;
       const r = el.getBoundingClientRect();
-      if (r.height && getComputedStyle(el).opacity !== '0') top = Math.min(top, r.top);
+      if (r.height && r.top < innerHeight) top = Math.min(top, r.top);
     }
-    H = top === Infinity ? 0 : Math.ceil(innerHeight - top + 16);
+    return top === Infinity ? 0 : Math.ceil(innerHeight - top + 18);
   };
-  const paint = () => {
-    nav.style.translate = off ? `0 ${off.toFixed(1)}px` : '';
-    const away = H > 0 && off >= H - 1;
-    if (document.body.classList.contains('dock-away') !== away) document.body.classList.toggle('dock-away', away);
+  const set = a => {
+    if (a === away) return;
+    if (a) { const h = reach(); if (!h) return; root.style.setProperty('--dock-h', h + 'px'); }
+    away = a; body.classList.toggle('dock-away', a);
   };
-  /* glide to a position: a soft deceleration, no bounce */
-  const glide = (to, ms = 340) => {
-    live = false; off = to; clearTimeout(easeT);
-    if (reduced) { nav.style.transition = ''; return paint(); }
-    nav.style.transition = `translate ${ms}ms cubic-bezier(.22,.8,.24,1)`;
-    paint();
-    easeT = setTimeout(() => { if (!live) nav.style.transition = ''; }, ms + 60);
-  };
-  const show = ms => { clearTimeout(endT); clearTimeout(idleT); if (off) glide(0, ms); };
-  const settle = () => glide(dir < 0 || off < H * 0.4 ? 0 : H, 300);
-
+  const show = () => { run = 0; clearTimeout(idle); set(false); };
   addEventListener('scroll', () => {
     const y = scrollY, dy = y - y0; y0 = y;
     if (!enabled()) return show();
-    const end = document.documentElement.scrollHeight - innerHeight;
-    if (y < 56 || y > end - 32) return show(260);
+    if (y < 56 || y > root.scrollHeight - innerHeight - 32) return show();
     if (!dy) return;
-    if (!live) { if (!off) measure(); if (!H) return; live = true; clearTimeout(easeT); nav.style.transition = 'none'; }
-    dir = Math.sign(dy);
-    off = Math.min(H, Math.max(0, off + (dy < 0 ? dy * 1.6 : dy)));
-    paint();
-    clearTimeout(endT); endT = setTimeout(settle, 130);
-    clearTimeout(idleT); idleT = setTimeout(() => show(), 1400);
+    /* a run of scrolling one way: 24px down hides, 6px up is enough to bring them back */
+    run = Math.sign(dy) === Math.sign(run) ? run + dy : dy;
+    if (run > 24) set(true); else if (run < -6) set(false);
+    clearTimeout(idle); idle = setTimeout(show, 1400);
   }, { passive: true });
-  /* a key press into the dock (Tab) brings it back */
-  addEventListener('focusin', e => { if (e.target.closest && e.target.closest('.nav')) show(); });
+  /* a key press into a bar (Tab) brings it back */
+  addEventListener('focusin', e => { if (e.target.closest && e.target.closest('.nav,.transport')) show(); });
   return { show };
 }
