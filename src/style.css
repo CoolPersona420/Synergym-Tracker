@@ -2625,12 +2625,14 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 :root[data-theme="kanagawa"],:root[data-theme="lotus"]{--brush:var(--orb-solid)}
 .h1,.ttl-c,.s-name,.s-name::placeholder,.sp-name,textarea.sp-name,.auth-box h2,.ob h1,.co-tt,.display .g-name{color:var(--brush)}
 
-/* ---------- a session's intensity heats up as it nears 100: the number and its dot go from ink towards the theme's
-   brush colour (red by default), by --heat (0 to 1, set from the score). On opening it warms as the number counts up,
-   and it moves smoothly when a logged set changes the score ---------- */
+/* ---------- a session's intensity turns green as it nears 100: the number and its dot go from ink to green by --heat
+   (0 to 1, set from the score), a deeper green on light themes and a brighter one on dark. On opening it greens as
+   the number counts up, and it moves smoothly when a logged set changes the score ---------- */
 @property --heat{syntax:"<number>";inherits:true;initial-value:0}
-#sint .n{color:var(--ink);color:color-mix(in oklab,var(--brush) calc(var(--heat) * 100%),var(--ink))}
-#sint .dot{background:var(--ink);background:color-mix(in oklab,var(--brush) calc(var(--heat) * 100%),var(--ink))}
+:root{--int-hot:#15964A}
+html.is-dark{--int-hot:#3DD68C}
+#sint .n{color:var(--ink);color:color-mix(in oklch,var(--int-hot) calc(var(--heat) * 100%),var(--ink))}
+#sint .dot{background:var(--ink);background:color-mix(in oklch,var(--int-hot) calc(var(--heat) * 100%),var(--ink))}
 #sint{transition:--heat .7s var(--ease);animation:heat-in 1.1s cubic-bezier(.33,1,.68,1) backwards}
 @keyframes heat-in{from{--heat:0}}
 @media (prefers-reduced-motion:reduce){#sint{animation:none;transition:none}}

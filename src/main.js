@@ -1161,8 +1161,8 @@ function doneLines(done, nx, hi) {
   return [good, say(pick(['Workout done.', 'That’s a wrap.'], 7))];
 }
 
-/* how hot a session's intensity reads, 0 to 1: nothing under 50, warming through moderate and hard, full at 100.
-   The number and its dot are painted from ink towards the theme's brush colour by this much (style.css: #sint) */
+/* how far a session's intensity has turned, 0 to 1: nothing under 50, building through moderate and hard, full at 100.
+   The number and its dot are painted from ink to green by this much (style.css: #sint) */
 const heatOf = v => (Math.min(1, Math.max(0, ((+v || 0) - 50) / 50)) ** 1.3).toFixed(3);
 
 /* ---------- Home ---------- */
