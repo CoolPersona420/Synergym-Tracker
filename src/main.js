@@ -2752,11 +2752,12 @@ const SEARCH_ICON = '<svg class="ico q-ico" viewBox="0 0 24 24" aria-hidden="tru
 /* exercise picker (session / split) */
 function openPicker(mode, extra = {}) {
   S.pk = { mode, m: '', q: '', added: 0, ...extra };
-  const title = mode === 'session' ? 'Add exercise' : mode === 'replace' ? `Replace ${esc(extra.name)}` : `Add to ${dayLabel(S.splits.get(extra.split)?.days, extra.day)}`;
+  const title = mode === 'session' ? 'Add exercise' : mode === 'replace' || mode === 'sp-replace' ? `Replace ${esc(extra.name)}` : `Add to ${dayLabel(S.splits.get(extra.split)?.days, extra.day)}`;
   /* the title, search and muscle chips stay pinned while the list scrolls under them; the chips step aside while
      you type (a search looks through every muscle), and the keyboard's Search/Enter key takes the top match */
   openSheet(`<div class="pk-top"><div class="sh-h"><h3>${title}</h3>${xBtn()}</div>
   ${mode === 'replace' ? `<p class="muted pk-note">Keeps its place and its ${plural(extra.n, 'set')}. Hints come from the new exercise’s last time.</p>` : ''}
+  ${mode === 'sp-replace' ? `<p class="muted pk-note">Keeps its place in the day${extra.cardio ? '' : `, its ${plural(extra.n, 'set')} of ${esc(extra.reps || 'its reps')}`} and any link. The coach sets its targets from the new exercise’s history.</p>` : ''}
   <div class="q-wrap">${SEARCH_ICON}<input class="search" id="pkq" type="search" placeholder="Search your exercises" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" maxlength="60" aria-controls="pkl">
   <button class="q-x" data-act="pk-clear" aria-label="Clear search" hidden>${ICON.x}</button></div>
   <div class="hscroll" id="pkm"></div></div><div id="pkl" class="pk-list" aria-live="polite"></div>`, r => {
@@ -2778,21 +2779,21 @@ function hitName(name, ql) {
   return i < 0 ? esc(name) : `${esc(name.slice(0, i))}<mark>${esc(name.slice(i, i + ql.length))}</mark>${esc(name.slice(i + ql.length))}`;
 }
 function pickerList() {
-  const q = S.pk.q.trim(), ql = q.toLowerCase(), rp = S.pk.mode === 'replace' ? S.pk : null;
+  const q = S.pk.q.trim(), ql = q.toLowerCase(), rp = S.pk.mode === 'replace' || S.pk.mode === 'sp-replace' ? S.pk : null, inDay = S.pk.mode === 'sp-replace';
   /* a replacement is the same sort as what it replaces: a lift for a lift, cardio for cardio */
   const m = rp && rp.cardio ? 'Cardio' : q ? '' : S.pk.m, fits = e => !rp || (isCardio(e) === rp.cardio && e.id !== rp.exId);
   /* Cardio sits next to All: what's in the library, then the built-in kinds not added yet */
   $('#pkm').hidden = !!(rp && rp.cardio) || !!q;
   const qx = $('#sheet-body .q-x'); if (qx) qx.hidden = !S.pk.q;
   $('#pkm').innerHTML = rp && rp.cardio ? '' : ['', ...(rp ? [] : ['Cardio']), ...muscles().filter(x => x !== 'Cardio')].map(x => `<button class="chip${m === x ? ' on' : ''}" data-act="pk-m" data-m="${esc(x)}">${esc(x || 'All')}</button>`).join('');
-  const uses = id => S.A.ex.get(id)?.n || S.A.cr.ex.get(id)?.n || 0, sid0 = S.pk.mode === 'session' || rp ? S.arg : null;
-  const inSess = rp ? new Set(cur()?.items.map(x => x.exId)) : null;
+  const uses = id => S.A.ex.get(id)?.n || S.A.cr.ex.get(id)?.n || 0, sid0 = S.pk.mode === 'session' || S.pk.mode === 'replace' ? S.arg : null;
+  const inSess = !rp ? null : inDay ? new Set((S.splits.get(rp.split)?.days[rp.day]?.exercises || []).map(x => x.exId)) : new Set(cur()?.items.map(x => x.exId));
   const lib = S.library.filter(e => !e.archived && fits(e) && (!m || (m === 'Cardio' ? isCardio(e) || e.muscle === 'Cardio' : e.muscle === m)) && (!ql || e.name.toLowerCase().includes(ql)))
     .sort((a, b) => (ql ? hitRank(a.name, ql) - hitRank(b.name, ql) : 0) || uses(b.id) - uses(a.id) || a.name.localeCompare(b.name));
   const kinds = m === 'Cardio' || (ql && (!rp || rp.cardio)) ? CARDIO.filter(c => (!ql || c.name.toLowerCase().includes(ql)) && !S.library.some(e => isCardio(e) && !e.archived && e.name.toLowerCase() === c.name.toLowerCase())) : [];
   const exact = q && S.library.some(e => e.name.toLowerCase() === ql);
   const row = e => {
-    const here = inSess && inSess.has(e.id) ? ' · in this session' : '';
+    const here = inSess && inSess.has(e.id) ? (inDay ? ' · in this day' : ' · in this session') : '';
     if (isCardio(e)) { const b = lastBoutFor(e.id, sid0), du = cMeasure(e).du;
       return `<button class="pk" data-act="pk-pick" data-id="${e.id}"><span class="pk-t"><span class="n">${hitName(e.name, ql)}</span>${e.isDefault ? '' : '<span class="badge acc">custom</span>'}<span class="sub">Cardio${here}</span></span><span class="last">${b ? `${fmtDur(b.t)}${b.d ? ` · ${fmtDist(b.d, du)} ${du}` : ''}` : ''}</span></button>`; }
     const last = lastSetsFor(e.id, sid0);
@@ -2823,6 +2824,15 @@ function picked(ex) {
   else if (S.pk.mode === 'replace') {
     if (isCardio(ex) !== S.pk.cardio) return toast(S.pk.cardio ? 'Cardio swaps for cardio' : 'A lift swaps for a lift, not cardio');
     closeSheet(); replaceItem(S.pk.item, ex.id);
+  }
+  else if (S.pk.mode === 'sp-replace') {
+    if (isCardio(ex) !== S.pk.cardio) return toast(S.pk.cardio ? 'Cardio swaps for cardio' : 'A lift swaps for a lift, not cardio');
+    const sp = S.splits.get(S.pk.split), d = sp && sp.days[S.pk.day], x = d && d.exercises.find(y => y.id === S.pk.x);
+    closeSheet(); if (!x) return;
+    const was = { exId: x.exId, name: x.name, muscle: x.muscle, kind: x.kind };
+    Object.assign(x, { exId: ex.id, name: ex.name, muscle: ex.muscle, kind: isCardio(ex) ? 'c' : ex.kind });
+    touchSplit(sp, 0); render(false);
+    toast(`${was.name} replaced with ${ex.name}`, { label: 'Undo', fn: () => { Object.assign(x, was); touchSplit(sp, 0); render(false); } });
   }
   else if (S.pk.mode === 'split') {
     const sp = S.splits.get(S.pk.split), d = sp && sp.days[S.pk.day]; if (!d) return closeSheet();
@@ -3708,7 +3718,7 @@ function tidySplitGroups(d, g, before) { if (!g || before < 2) return; const lef
 function dexMenu(di, xi) {
   const sp = curSplit(), d = sp && sp.days[di], x = d && d.exercises[xi]; if (!x) return;
   const mv = k => { const j = xi + k; if (j < 0 || j >= d.exercises.length) return; [d.exercises[xi], d.exercises[j]] = [d.exercises[j], d.exercises[xi]]; touchSplit(sp, 300); render(false); };
-  const items = [];
+  const items = [{ label: 'Replace exercise', hint: x.kind === 'c' ? 'same spot, same minutes' : 'same spot, sets and reps', fn: () => openPicker('sp-replace', { split: sp.id, day: di, x: x.id, exId: x.exId, name: x.name, muscle: x.muscle, cardio: x.kind === 'c', n: x.sets, reps: x.reps }) }];
   if (xi > 0) items.push({ label: 'Move up', fn: () => mv(-1) });
   if (xi < d.exercises.length - 1) items.push({ label: 'Move down', fn: () => mv(1) });
   for (let k = 0; k < sp.days.length; k++) if (k !== di && !isRestDay(sp.days[k])) items.push({ label: `Copy to day ${k + 1}`, hint: sp.days[k].type, fn: () => { sp.days[k].exercises.push({ ...clone(x), id: sid() }); touchSplit(sp, 300); render(false); toast(`Copied to day ${k + 1}`); } });
@@ -3921,7 +3931,7 @@ const ACT = {
   'c-m': el => cardioMetric(el.dataset.item, el.dataset.k),
   /* effort: tap a step; tapping the one set clears it */
   'c-eff': el => { const s = cur(), x = s && findSet(s, el.dataset.set); if (!x) return; const v = +el.dataset.v; x.st.e = x.st.e === v ? null : v; queue('s:' + s.id, 300); buzz(8); render(false); },
-  'pk-new': () => { const q = S.pk.q.trim(), pk = { ...S.pk }; closeSheet(); newExercise({ name: q, muscle: pk.m || (pk.mode === 'replace' ? (pk.cardio ? 'Cardio' : pk.muscle) : '') }, ex => { S.pk = pk; picked(ex); if (pk.mode === 'split') openPicker('split', { split: pk.split, day: pk.day }); }); },
+  'pk-new': () => { const q = S.pk.q.trim(), pk = { ...S.pk }; closeSheet(); newExercise({ name: q, muscle: pk.m || (pk.mode === 'replace' || pk.mode === 'sp-replace' ? (pk.cardio ? 'Cardio' : pk.muscle) : '') }, ex => { S.pk = pk; picked(ex); if (pk.mode === 'split') openPicker('split', { split: pk.split, day: pk.day }); }); },
   'add-set': el => addSet(el.dataset.item),
   'add-drop': el => addDrop(el.dataset.set),
   done: el => toggleDone(el.dataset.set),

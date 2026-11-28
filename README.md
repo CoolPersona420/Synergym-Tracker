@@ -84,7 +84,8 @@ Want your own copy? See [Deploy](#deploy-about-10-minutes) and [Local developmen
 - **Intensity and records:** every set and session gets an intensity score against your best; each
   exercise has a 1RM: the higher of one you set by hand and your best set's
   estimate, so it updates itself when a set beats it (and follows a corrected set back down).
-- **Splits:** weekly plans with days, exercises, sets and reps and linked groups; start from a template,
+- **Splits:** weekly plans with days, exercises, sets and reps and linked groups (an exercise's **⋯ › Replace
+  exercise** swaps it for another in the same place, keeping its sets, reps and link); start from a template,
   reorder days, and share by @username (an invitation, with an optional message, that the other person accepts,
   saving a copy to their splits, or declines; the sender sees each answer) or by link. Home suggests the next day, or
   pick one from Up next.

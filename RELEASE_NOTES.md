@@ -33,6 +33,8 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
   and in an exercise's recent sets; search “deload” to list them.
 - **A clearer session bar:** when the session started (start and end once it's over) over its sets and volume, a red
   Finish button, and a line that empties as your rest runs down. It slides away while you scroll, like the dock.
+- **Replace an exercise in a split:** an exercise's ⋯ menu in a split day has **Replace exercise**. The picker lists
+  the same muscle first, and the new exercise takes its place with its sets, reps and any link; Undo puts it back.
 - **Simpler words, one title face:** Home greets you in two short lines, and every page title (Home, Logbook,
   Exercises, Splits, Settings, a session, the login) is set in the same soft italic.
 
