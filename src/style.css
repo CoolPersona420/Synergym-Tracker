@@ -2534,12 +2534,11 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 .co-dl{justify-content:flex-start;margin-top:var(--s-1)}
 @media (prefers-reduced-motion:reduce){.dl-tog,.dl-tog i::after{transition:none}}
 
-/* ---------- the special font beyond Home's title: a session's name and its intensity, in the soft italic ---------- */
+/* ---------- the special font beyond Home's title: a session's name, in the soft italic. Its intensity stays a number,
+   in the same condensed figures as every other big number ---------- */
 .s-name{font-family:var(--font-serif);font-style:italic;font-weight:600;text-transform:none;letter-spacing:-.02em;font-size:2.2rem;line-height:1.1;
   font-variation-settings:"SOFT" 100,"WONK" 1,"opsz" 144}
 .s-name::placeholder{color:var(--ink);opacity:1}
-.s-hero .bignum .n{font-family:var(--font-serif);font-style:italic;font-weight:600;letter-spacing:-.03em;line-height:.85;padding-right:.06em;
-  font-variation-settings:"SOFT" 100,"WONK" 0,"opsz" 144;font-variant-numeric:lining-nums proportional-nums}
 
 /* ---------- a session done in a deload week: its status, beside its name ---------- */
 .st-dl{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;vertical-align:2px;
@@ -2594,14 +2593,14 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 .save-opts .opt span{font-size:.86rem;line-height:1.45}
 .save-opts .opt.on{border-color:var(--ink);box-shadow:var(--key-soft)}
 
-/* ---------- the title face: Synergym Brush, drawn for the app (tools/brush-font): a loaded sumi brush, heavy on the
-   downstrokes, lighter going up, sharp where it turns, running dry as it lifts. On every page title, the Home greeting,
-   session and split names, the login and onboarding headings, the Coach title and a session's intensity. The ink and
-   its dry streaks are in the letters themselves, so there is no mask or filter. It's slanted already, so it's never
-   made italic on top; strokes lean past the letters, so lines get room on the right ---------- */
+/* ---------- the title face: Synergym Brush, drawn for the app (tools/brush-font): punk brush lettering, painted fast
+   with a hard-pressed bristle brush whose strokes splinter into prongs. On every page title, the Home greeting,
+   session and split names, the login and onboarding headings and the Coach title. The rough ink is in the letters
+   themselves, so there is no mask or filter. It's slanted already, so it's never made italic on top; prongs reach past
+   the letters, so lines get room on the right ---------- */
 @font-face{font-family:"Synergym Brush";src:url("/fonts/synergym-brush.woff2") format("woff2");font-display:swap}
 :root{--font-title:"Synergym Brush","Fraunces",Georgia,serif}
-.h1,.ttl-c,.s-name,.sp-name,.auth-box h2,.ob h1,.co-tt,.display,.display em,.auth-box h2 em,.ob h1 em,.s-hero .bignum .n{
+.h1,.ttl-c,.s-name,.sp-name,.auth-box h2,.ob h1,.co-tt,.display,.display em,.auth-box h2 em,.ob h1 em{
   font-family:var(--font-title);font-style:normal;font-weight:400;font-variation-settings:normal;letter-spacing:0;text-transform:none}
 .h1,.ob h1,.auth-box h2,.sp-name{font-size:clamp(2.35rem,9.8vw,3.2rem);line-height:1.12}
 .ttl-c,.co-tt{font-size:1.7rem;line-height:1.15}
@@ -2610,4 +2609,3 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 @media (max-width:47.99rem){.hero .display{font-size:clamp(1.8rem,8vw,2.35rem)}}
 .display em{font-size:1em}
 .display .ln{padding:0 .3em .16em .12em;margin:0 0 -.08em -.12em}
-.s-hero .bignum .n{line-height:.95;padding:0 .14em 0 .04em;font-size:clamp(4.6rem,20vw,7.6rem)}

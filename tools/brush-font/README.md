@@ -1,14 +1,14 @@
 # Synergym Brush
 
-The app's title font, drawn from scratch with code rather than by hand.
+The app's title font: punk brush lettering, drawn from scratch with code rather than by hand.
 
-- `brush.py` is the brush. It turns a pen path into a painted stroke: a soft, slightly flattened tip that presses
-  heavy on downstrokes and lighter going up, lands and lifts with a taper, and wobbles a little in its load. On a
-  word's last letter the stroke sweeps on and runs dry into bristle streaks.
-- `glyphs.py` holds the letters as pen paths: a–z, A–Z, 0–9 and common punctuation. Lowercase letters join at the
-  same height, so a word paints as one line.
-- `build.py` paints every glyph, leans it, and writes `public/fonts/synergym-brush.woff2`. A `calt` feature swaps
-  in the tailed form of a letter when it ends a word.
+- `brush.py` is the brush: a row of bristles held at an angle. Each bristle has its own width and wander and decides
+  for itself when to land and when to let go, so stroke ends splinter into prongs, starts get thin lead-in spikes,
+  and a fast stroke can skip, leaving a dry streak.
+- `glyphs.py` holds the letters as brush paths: a–z, A–Z, 0–9 and common punctuation, printed rather than joined,
+  each stroke in the order and direction a hand would paint it (the end is where it splinters).
+- `build.py` paints every glyph twice with a slightly different hand, sets each a touch off true, leans it, and writes
+  `public/fonts/synergym-brush.woff2`. A `calt` feature alternates the two paintings as you type.
 
 Rebuild after changing a letter or the brush:
 
