@@ -289,3 +289,30 @@ test('the Coach card on Home: the call, then next, week, recovery and goal, each
   await expect(page).toHaveURL(/\/coach\/goals$/);
   await expect(page.locator('.co-goal')).toContainText('110');
 });
+
+test('sessions done in a deload week carry a Deload status: in the Logbook, on the session, and found by searching', async ({ page }, info) => {
+  const h = benchHistory(), bench = h.exercises[0];
+  const old = session(30, [{ id: 'o1', exId: bench.id, sets: sets(80, 5) }]);
+  const live = { id: crypto.randomUUID(), name: 'Push', started_at: new Date(Date.now() - 30 * 6e4).toISOString(), ended_at: null, items: [{ id: 'L1', exId: bench.id, sets: sets(70, 5) }] };
+  const fake = new FakeSupabase({ exercises: h.exercises, sessions: [...h.sessions, old, live], profile: { deload: { on: Date.now() - 3600e3, skip: null, past: [] } } });
+  await login(page, fake, 'A');
+  await page.goto('/session/' + live.id);
+  await expect(page.locator('.dl-tog')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('.tfin[data-act="finish"]').click();
+  await expect.poll(() => fake.sessions.find(x => x.id === live.id)?.ended_at).toBeTruthy();
+  await page.goto('/session/' + live.id);
+  await expect(page.locator('.s-meta .st-dl')).toHaveText('Deload');
+  await page.goto('/history');
+  await expect(page.locator('#view .row[data-act="open"]').first().locator('.st-dl')).toHaveText('Deload');
+  await expect(page.locator('#view .row[data-act="open"] .st-dl')).toHaveCount(1);
+  /* ended, the week is kept, so the mark stays */
+  await page.goto('/coach');
+  if (info.project.name === 'phone') await page.locator('.co-tabs [data-t="recovery"]').click();
+  await page.locator('.co-rec [data-act="deload-end"]').click();
+  await expect.poll(() => (fake.profiles[0].deload?.past || []).length).toBe(1);
+  await page.goto('/history');
+  await expect(page.locator('#view .row[data-act="open"] .st-dl')).toHaveCount(1);
+  await page.locator('#view .hsearch input.search').fill('deload');
+  if (await page.locator('#sheet').isVisible()) await page.keyboard.press('Escape');
+  await expect(page.locator('#view .row[data-act="open"]')).toHaveCount(1);
+});

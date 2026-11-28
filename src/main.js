@@ -12,7 +12,7 @@ import { installHow } from './lib/install.js';
 import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays, cleanKind } from './lib/sanitize.js';
 import { CARDIO, METRICS, howOf, defaultMetrics, parseTime, fmtDur, fmtMin, distUnit, fmtDist, parseDist, pace, fmtPace, effortInt, effortWord, scanCardio, CARDIO_LABEL } from './lib/cardio.js';
-import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
+import { DEFAULT_PROFILE, profFromDb, profToDb, deloadWeeks, inDeload } from './lib/profile.js';
 import { parseImport, SPLIT_MAX } from './lib/importer.js';
 import { ICON, brand, lockup, big, disp, countUp } from './ui/brand.js';
 import { THEMES, themePref, isDark, applyTheme, markDark, themePicker } from './ui/themes.js';
@@ -1405,9 +1405,15 @@ function exNext(ex) {
 /* in a live session: why today's targets are lighter, or that a lift follows a goal's block */
 /* deloads are the lifter's call: start one (due or not), skip one that's due, or end one at any time */
 function deloadSet(on, skip) {
-  S.profile.deload = on || skip ? { on: on || null, skip: skip || null } : null;
+  /* the week that's ending (ended now, or its 7 days run out) goes into the history, so its sessions stay marked */
+  const now = Date.now(), d = S.profile.deload || {}, past = (d.past || []).slice();
+  if (d.on && d.on !== on) past.push([d.on, Math.min(now, d.on + DELOAD_DAYS * 864e5)]);
+  S.profile.deload = on || skip || past.length ? { on: on || null, skip: skip || null, past: past.slice(-40) } : null;
   queue('p', 200); buzz(); render(false);
 }
+/* sessions done in a deload week carry a Deload status: in the Logbook, on the session and in an exercise's history */
+const isDeloadSess = s => !!S.profile.deload && inDeload(deloadWeeks(S.profile.deload, Date.now(), DELOAD_DAYS), s);
+const dlTag = s => isDeloadSess(s) ? '<span class="st-dl">Deload</span>' : '';
 const deloadOn = () => coachOn() && coach().deload.chosen === true;
 /* the buttons for the deload, wherever it's shown: due, a question; running, End; otherwise, start one */
 function deloadBtns(d, cls = '') {
@@ -1839,7 +1845,7 @@ function rowSession(s) {
   const a = S.A.sess.get(s.id) || { ex: 0, sets: 0, vol: 0, prs: [], int: 0 };
   const sp = splitOf(s.splitId);
   return `<button class="row" data-act="open" data-id="${s.id}"><span class="tri"></span>
-  <span class="row-m"><span class="t">${esc(sessName(s))}</span><span class="sub">${fmtDate(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${sessSum(a)}${a.prs.length ? ` · <em class="pr">${a.prs.length} PR</em>` : ''}</span></span>
+  <span class="row-m"><span class="t">${esc(sessName(s))}${dlTag(s)}</span><span class="sub">${fmtDate(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${sessSum(a)}${a.prs.length ? ` · <em class="pr">${a.prs.length} PR</em>` : ''}</span></span>
   <span class="row-r"><span class="d">${!a.int && a.ct ? Math.round(a.ct / 60) : Math.round(a.int)}</span><span class="ichip${s.endedAt ? (a.int >= 75 ? ' hot' : '') : ' hot'}">${s.endedAt ? (!a.int && a.ct ? 'MIN' : tierShort(a.int)) : 'LIVE'}</span></span></button>`;
 }
 
@@ -1852,7 +1858,7 @@ function vSession() {
     <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80"${ro ? ' readonly' : ''}>
     ${ro && S.lbCtx === s.id ? `<button class="btn line sm s-edit" data-act="sess-edit">${ICON.pen}Edit</button>` : ''}
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
-  <div class="s-meta lbl rv"><span>${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</span>${live ? deloadTog(s) : ''}</div>${sessCoachBand(s)}
+  <div class="s-meta lbl rv"><span>${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</span>${live ? deloadTog(s) : dlTag(s)}</div>${sessCoachBand(s)}
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
     <div class="bignum" id="sint" style="margin-top:10px">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
@@ -2207,7 +2213,7 @@ let hShown = H_PAGE, hKey = '';
 function historyList() {
   const q = S.q.trim().toLowerCase(), f = S.hf, on = hfOn(f); let list = sorted();
   const key = q + '|' + JSON.stringify(f); if (key !== hKey) { hKey = key; hShown = H_PAGE; }
-  if (q) list = list.filter(s => sessName(s).toLowerCase().includes(q) || s.items.some(it => (exOf(it.exId)?.name || '').toLowerCase().includes(q) || itemTags(it).some(t => t.toLowerCase().includes(q))) || (s.notes || '').toLowerCase().includes(q));
+  if (q) list = list.filter(s => sessName(s).toLowerCase().includes(q) || s.items.some(it => (exOf(it.exId)?.name || '').toLowerCase().includes(q) || itemTags(it).some(t => t.toLowerCase().includes(q))) || (s.notes || '').toLowerCase().includes(q) || ('deload'.startsWith(q) && q.length >= 3 && isDeloadSess(s)));
   if (on) list = list.filter(s => hfMatch(s, f));
   if (!list.length) return `<div class="empty"><b>${q || on ? 'No sessions match.' : 'Nothing logged yet.'}</b>${on ? 'Try fewer filters, or a wider date range.' : q ? 'Try an exercise name, like “squat”.' : 'Your sessions will collect here, grouped by month.'}</div>`;
   /* months are totalled over everything that matched, so a month split across pages still shows its whole count */
@@ -2346,7 +2352,7 @@ function vExercise() {
     ${exGoalCard(ex)}
     <div class="kv span rv"><div><span class="lbl">Sessions</span><div class="term">${x ? x.n : 0}</div></div><div><span class="lbl">Volume</span><div class="term">${fmtVol(x ? x.vol : 0)}</div></div><div><span class="lbl">PRs</span><div class="term">${S.A.rec.events.filter(e => e.exId === ex.id).length}</div></div><div><span class="lbl">Last</span><div class="term">${x ? fmtDate(x.last) : '—'}</div></div></div>
     <section class="card span rv"><div class="card-h"><span class="lbl">Recent sets${lf ? ` · ${esc(lf)}` : ''}</span>${labelUse().ex(ex.id).length ? `<button class="btn ghost sm" data-act="tags" data-id="${ex.id}">${roll('Edit tags')}</button>` : ''}</div>${labelFilter(ex, lf)}
-    ${hist.length ? hist.map(h => `<button class="hist-s" data-act="open" data-id="${h.s.id}" style="width:100%"><span class="term">${fmtDate(h.s.startedAt)}</span><span class="sl">${itemTags(h.it).length ? `<span class="hs-t">${tagChips(h.it)}</span>` : ''}${h.sets.map(st => `${fmtW(+st.w || 0)}×${st.r}`).join(' · ')}</span></button>`).join('') : `<div class="empty">No sets logged for this exercise yet.</div>`}</section>
+    ${hist.length ? hist.map(h => `<button class="hist-s" data-act="open" data-id="${h.s.id}" style="width:100%"><span class="term">${fmtDate(h.s.startedAt)}${dlTag(h.s)}</span><span class="sl">${itemTags(h.it).length ? `<span class="hs-t">${tagChips(h.it)}</span>` : ''}${h.sets.map(st => `${fmtW(+st.w || 0)}×${st.r}`).join(' · ')}</span></button>`).join('') : `<div class="empty">No sets logged for this exercise yet.</div>`}</section>
   </div>`;
 }
 /* a cardio exercise: its records (longest, farthest, fastest), minutes per session, totals and recent bouts */

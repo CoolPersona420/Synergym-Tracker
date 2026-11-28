@@ -52,8 +52,11 @@ alter table public.profiles add column if not exists coach_on boolean not null d
 -- The day weeks start on, as in JavaScript's Date.getDay(): 1 Monday (the default), 0 Sunday, 6 Saturday.
 alter table public.profiles add column if not exists week_start smallint not null default 1 check (week_start in (0, 1, 6));
 -- Deloads are the lifter's call (0.2.5): { on: when a deload week they started began (ms), skip: until when a due
--- deload is skipped (ms) }. The coach asks when one is due and applies it only once started.
-alter table public.profiles add column if not exists deload jsonb check (deload is null or (jsonb_typeof(deload) = 'object' and pg_column_size(deload) <= 256));
+-- deload is skipped (ms), past }. The coach asks when one is due and applies it only once started.
+alter table public.profiles add column if not exists deload jsonb;
+-- with past: the deload weeks before the current one, [[start, end], …] in ms, at most 40, so their sessions stay marked
+alter table public.profiles drop constraint if exists profiles_deload_check;
+alter table public.profiles add constraint profiles_deload_check check (deload is null or (jsonb_typeof(deload) = 'object' and pg_column_size(deload) <= 2048));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (

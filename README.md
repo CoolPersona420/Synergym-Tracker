@@ -275,7 +275,8 @@ every coach hint goes, sessions show plain next-set suggestions, and goals are k
   (on Coach › Recovery and in a live session) and nothing changes until they **Start deload**. **Skip this one**
   asks again a week later; a running deload ends after 7 days or with **End deload** at any time, and the
   **Deload** switch on a live session's date line starts or stops one there, due or not (saved in
-  `profiles.deload`). During a deload every target is about 10% lighter with half the sets. After a lighter week,
+  `profiles.deload`, with past deload weeks so their sessions stay marked **Deload** in the Logbook, on the session
+  and in an exercise's recent sets). During a deload every target is about 10% lighter with half the sets. After a lighter week,
   stalls are ignored for two weeks while lifts bounce back. A week off that's due leads today's call (**Week
   off**, a rest day), and a started deload turns a training day into **Deload** (an easy one).
 - **The split.** Give a split 6–8 weeks. Time to change when, at the rate you actually train, a 4+ day split

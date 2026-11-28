@@ -2568,3 +2568,10 @@ body::after{animation:none;opacity:.055;
 .s-name::placeholder{color:var(--ink);opacity:1}
 .s-hero .bignum .n{font-family:var(--font-serif);font-style:italic;font-weight:600;letter-spacing:-.03em;line-height:.85;padding-right:.06em;
   font-variation-settings:"SOFT" 100,"WONK" 0,"opsz" 144;font-variant-numeric:lining-nums proportional-nums}
+
+/* ---------- a session done in a deload week: its status, beside its name ---------- */
+.st-dl{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;vertical-align:2px;
+  font-family:var(--font-mono);font-size:9.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;line-height:1.5;
+  color:var(--ink-2);background:color-mix(in srgb,var(--heat-ink) 12%,var(--surface-2));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 10%,transparent)}
+.hist-s .term .st-dl{margin-left:6px;vertical-align:1px}
+.s-meta > .st-dl{margin-left:0}
