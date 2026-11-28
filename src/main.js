@@ -1161,9 +1161,25 @@ function doneLines(done, nx, hi) {
   return [good, say(pick(['Workout done.', 'That’s a wrap.'], 7))];
 }
 
-/* how far a session's intensity has turned, 0 to 1: nothing under 50, building through moderate and hard, full at 100.
-   The number and its dot are painted from ink to green by this much (style.css: #sint) */
-const heatOf = v => (Math.min(1, Math.max(0, ((+v || 0) - 50) / 50)) ** 1.3).toFixed(3);
+/* the session's intensity meter: a row of segments rising left to right, lit up to the score. The lit part goes from
+   ink to green the closer the score is to 100 (nothing at 40 or under, full green at 100); the number stays ink.
+   Opening a session sweeps the segments on one by one after the page slides in (style.css: .imeter) */
+const METER_N = 24;
+const heatOf = v => Math.min(1, Math.max(0, ((+v || 0) - 40) / 60)) ** 1.1;
+function meterBars(v) {
+  return Array.from({ length: METER_N }, (_, k) => {
+    const at = (k + .5) / METER_N * 100, on = at <= v;
+    return `<i${on ? ' class="on"' : ''} style="--h:${(34 + 66 * k / (METER_N - 1)).toFixed(1)}%;--d:${on ? Math.round(260 + 900 * (at / v) ** 1.15) : 0}ms"></i>`;
+  }).join('');
+}
+const meterHTML = v => `<div class="imeter" id="smeter" aria-hidden="true" style="--c:${Math.round(heatOf(v) * 100)}%"><div class="im-bars">${meterBars(v)}</div>
+  <div class="im-scale"><span>Easy</span><b style="left:60%"></b><b style="left:75%"></b><b style="left:88%"></b><span>Max</span></div></div>`;
+/* a logged set moves the score: the segments light or go out in place and the colour follows, so the change fades */
+function setMeter(v) {
+  const m = $('#smeter'); if (!m) return;
+  m.style.setProperty('--c', Math.round(heatOf(v) * 100) + '%');
+  [...m.querySelector('.im-bars').children].forEach((el, k) => el.classList.toggle('on', (k + .5) / METER_N * 100 <= v));
+}
 
 /* ---------- Home ---------- */
 function vToday() {
@@ -1851,7 +1867,7 @@ function vSession() {
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
   <div class="s-meta lbl rv"><span>${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</span>${live || ed ? deloadTog(s) : dlTag(s)}</div>${sessCoachBand(s)}
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
-    <div class="bignum" id="sint" style="margin-top:10px;--heat:${heatOf(a.int)}">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
+    <div class="s-int"><div class="bignum" id="sint">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>${meterHTML(a.int)}</div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
     <button class="fab magnet" data-act="add-ex" aria-label="Add exercise"><span class="fab-l" aria-hidden="true">Add exercise</span>${ICON.plus}</button></section>
   <div class="wave rv" id="wave">${wave(s)}</div>
@@ -2133,7 +2149,7 @@ const liveSoon = () => { clearTimeout(liveT); liveT = setTimeout(liveRefresh, 12
 function liveRefresh() {
   clearTimeout(liveT);
   const s = cur(); if (!s || S.view !== 'session') return; compute(); const a = S.A.sess.get(s.id);
-  const si = $('#sint'); if (si) { si.style.setProperty('--heat', heatOf(a.int)); const n = si.querySelector('.n'); if (n) { n.textContent = Math.round(a.int); rollTo(n, Math.round(a.int), 'sint:' + S.arg); } }
+  const si = $('#sint'); if (si) { setMeter(a.int); const n = si.querySelector('.n'); if (n) { n.textContent = Math.round(a.int); rollTo(n, Math.round(a.int), 'sint:' + S.arg); } }
   const t = $('#stier'); if (t) t.innerHTML = tierText(a);
   const w = $('#wave'); if (w) w.innerHTML = wave(s);
   const sp = $('#strip'); if (sp) sp.innerHTML = stripHTML(a);

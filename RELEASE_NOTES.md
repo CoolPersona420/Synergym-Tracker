@@ -24,8 +24,8 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 - **Home paints only your name:** the words around it are set like the app's own headings, in condensed capitals.
 - **Today's plan, tidied:** the day's numbers sit clear of the session in progress, and each reads as a number and
   its label. Pulling the panel down past open no longer pulls it away from the top of the screen.
-- **Session intensity turns green:** it keeps the condensed figures, and its colour goes from ink to green the
-  closer it gets to 100, counting up and greening together.
+- **Session intensity, as a meter:** the number stays in plain ink beside a meter of rising segments lit up to the
+  score, greener the closer it is to 100. Every time you open a session the segments sweep on as the number counts.
 - **A body font to match:** the rest of the app is set in Zen Kaku Gothic New, a calm Japanese gothic that lets the
   brush titles lead.
 - **Numbers stay crisp:** weights, reps and scores keep their condensed figures; small labels stay monospaced.
