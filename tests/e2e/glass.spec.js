@@ -9,7 +9,8 @@ const look = page => page.evaluate(() => {
   const p = document.createElement('i'); p.style.background = 'var(--surface)'; document.body.append(p);
   const surface = getComputedStyle(p).backgroundColor; p.remove();
   const ring = getComputedStyle(document.querySelector('.nav-train .ring'));
-  p.style.background = 'var(--solid)'; document.body.append(p);
+  /* the Start colour: the theme's solid, or its standout colour where it has one */
+  p.style.background = 'var(--ring)'; document.body.append(p);
   const solid = getComputedStyle(p).backgroundColor; p.remove();
   return { bg: cs.backgroundColor, surface, img: cs.backgroundImage, shadow: cs.boxShadow, ring: ring.boxShadow,
     ringBg: ring.backgroundColor, solid, pill: getComputedStyle(document.querySelector('.nav'), '::before').boxShadow };

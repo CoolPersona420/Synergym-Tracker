@@ -158,9 +158,6 @@
   --heat0:#2A3629; --heat-ink:#F15A30;
   --hero-bg:#253122; --hero-deep:#0E130D; --hero-ink:#F6ECCB; --hero-ink-2:#B6BFC1; --hero-accent:#F15A30; --hero-line:rgba(246,236,203,.12);
   --orb-solid:#F15A30; --orb-glass:rgba(246,236,203,.12); --orb-ink:#161D15; color-scheme:dark}
-/* Wada themes: the Start button is the one standout on every screen, in the combination's brightest colour */
-:root[data-theme^="wada-"] .nav-train .ring,:root[data-theme^="wada-"] .nav-train .nl{background:var(--orb-solid);color:var(--orb-ink)}
-:root[data-theme^="wada-"] .nav-train.live .ring::after{background:var(--orb-ink);box-shadow:0 0 0 2px var(--orb-solid)}
 
 /* ---------- base ---------- */
 *{box-sizing:border-box}
@@ -2399,3 +2396,124 @@ html.kb-open .sheet .sp{max-height:calc(var(--vv-h,100vh) - var(--s-1))}
 .nav-badge{animation:pop-on .5s var(--spring)}
 @media (prefers-reduced-motion:reduce){.a-in,.chk.a-pop,.tsum.a-bump,.nav-badge{animation:none}}
 html.lite .a-in,html.lite .chk.a-pop,html.lite .tsum.a-bump,html.lite .nav-badge{animation:none}
+
+/* =====================================================================================================================
+   Revamp · "Ukiyo"
+   Real-life references: ukiyo-e woodblock prints (Hokusai's Great Wave, and the Kanagawa palette drawn from it),
+   washi paper and sumi ink. Buttons press like real keys and spring back, and a tap leaves a drop of ink that spreads.
+   Spacing and type follow the golden ratio (1 : 1.618); the login box sits on the golden section, Home's greeting
+   fills the top third and the widgets start on the third line.
+   ===================================================================================================================== */
+
+/* ---------- the dock steps aside while you scroll down (src/ui/dockhide.js) ---------- */
+@media (max-width:59.99rem){
+  body.dock-away .nav{transform:translateY(calc(100% + 28px + env(safe-area-inset-bottom,0px)));opacity:0;pointer-events:none;
+    transition:transform .42s cubic-bezier(.4,0,.6,1),opacity .28s var(--ease)}
+  body:not(.dock-away):not(.in-session):not(.in-full) .nav{transition:transform .62s var(--spring),opacity .3s var(--ease),visibility 0s}
+}
+@media (prefers-reduced-motion:reduce){body.dock-away .nav{transition:opacity .2s}}
+
+/* ---------- tactile buttons: a raised key that sinks when pressed and springs back ---------- */
+:root{
+  --key:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -2px 0 rgba(0,0,0,.2),0 1px 2px rgba(0,0,0,.1),0 .5rem 1rem -.55rem rgba(0,0,0,.42);
+  --key-soft:inset 0 1px 0 rgba(255,255,255,.1),inset 0 -1px 0 rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --key-down:inset 0 2px 6px rgba(0,0,0,.3),0 0 0 rgba(0,0,0,0);
+}
+.btn{transition:transform .6s var(--spring),box-shadow .35s var(--ease),background-color .25s,color .25s,filter .2s}
+.btn:not(.line):not(.ghost){box-shadow:var(--key)}
+.btn.ghost{box-shadow:var(--key-soft)}
+.btn.line{box-shadow:inset 0 0 0 1px var(--line),0 1px 2px rgba(0,0,0,.05)}
+.btn:active{transform:translateY(1px) scale(.965);transition:transform .08s ease-out,box-shadow .08s ease-out}
+.btn:not(.line):active{box-shadow:var(--key-down)}
+@media (hover:hover){.btn:not([disabled]):hover{transform:translateY(-1px);filter:brightness(1.06)}.btn:not([disabled]):active{transform:translateY(1px) scale(.965)}}
+.chip{transition:transform .5s var(--spring),background .3s var(--ease),color .3s,box-shadow .3s}
+.chip:active{transform:scale(.93);transition-duration:.08s}
+.chip.on{box-shadow:var(--key)}
+.opt:active,.theme-card:active,.st-day:active{transform:scale(.97);transition:transform .08s ease-out}
+.fab{box-shadow:var(--key),var(--shadow);transition:transform .6s var(--spring),box-shadow .3s var(--ease)}
+.fab:active{transform:scale(.92);box-shadow:var(--key-down);transition-duration:.08s}
+.nav-i:active{transform:scale(.86);transition:transform .08s ease-out}
+.nav-train .ring{transition:transform .6s var(--spring)}
+.nav-train:active .ring{transform:scale(.88);transition-duration:.08s}
+/* the drop of ink (src/ui/tactile.js): it spreads from your finger and fades, like sumi on washi */
+@property --drop{syntax:'<length>';inherits:false;initial-value:0px}
+@property --drop-a{syntax:'<percentage>';inherits:false;initial-value:0%}
+.btn.ink,.chip.ink,.opt.ink,.fab.ink{background-image:radial-gradient(circle at var(--ix,50%) var(--iy,50%),color-mix(in srgb,currentColor var(--drop-a),transparent) calc(var(--drop) - 18px),transparent var(--drop));
+  animation:ink .75s cubic-bezier(.2,.7,.3,1) both}
+@keyframes ink{0%{--drop:0px;--drop-a:24%}55%{--drop-a:18%}100%{--drop:calc(var(--ir,140px) + 20px);--drop-a:0%}}
+
+/* ---------- type: an even rhythm ---------- */
+body{line-height:1.6}
+p,li,.sub,.empty,.msg{text-wrap:pretty}
+h1,h2,h3,.display,.sh-h h3,.sg-h{text-wrap:balance}
+.lbl{letter-spacing:.1em}
+/* numbers line up: every digit the same width */
+input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-numeric:tabular-nums}
+.card p,.sheet p{max-width:65ch}
+/* the main title: the condensed display face, with its last line in Fraunces at its softest and most hand-drawn,
+   like a brush line under a woodblock title */
+.display em{font-family:var(--font-serif);font-style:italic;font-weight:600;text-transform:none;letter-spacing:-.015em;
+  font-variation-settings:"SOFT" 100,"WONK" 1,"opsz" 144;font-size:1.14em;line-height:.9;color:var(--hero-accent)}
+.display em,.display .ln>span:has(em) .w{transform:none}
+.display .ln:has(em){padding-right:.2em;padding-bottom:.14em}
+.auth-box h2 em,.ob h1 em{font-family:var(--font-serif);font-style:italic;font-weight:600;text-transform:none;font-variation-settings:"SOFT" 100,"WONK" 1,"opsz" 144;letter-spacing:-.015em}
+
+/* ---------- placement: golden section and thirds ---------- */
+/* the login box sits on the golden section: the space above it to the space below is 1 : 1.618 */
+.auth{grid-template-rows:1fr auto 1.618fr;place-items:start center}
+.auth > .auth-main{grid-row:2}
+
+/* ---------- washi paper: a still, fibrous grain instead of flickering film ---------- */
+body::after{animation:none;opacity:.055;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='3' stitchTiles='stitch' result='a'/><feTurbulence type='fractalNoise' baseFrequency='.045 .16' numOctaves='2' seed='7' stitchTiles='stitch' result='b'/><feBlend in='a' in2='b' mode='soft-light'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+:root.is-dark body::after{opacity:.05}
+
+/* ---------- Hokusai: the Great Wave, through the Kanagawa palette ---------- */
+:root[data-theme="kanagawa"]{
+  --bg:#1F1F28; --page:#1F1F28; --surface:#2A2A37; --surface-2:#363646; --field:#252531; --line:#3D3D52;
+  --ink:#DCD7BA; --ink-2:#C8C093; --muted:#9C9A8C;
+  --accent:#E9737F; --on-accent:#1F1F28; --solid:#DCD7BA; --solid-ink:#1F1F28;
+  --good:#98BB6C; --bad:#FF5D62; --glass:rgba(31,31,40,.74); --shadow:0 .618rem 1.618rem rgba(0,0,0,.4);
+  --heat0:#2A2A37; --heat-ink:#7E9CD8;
+  --hero-bg:linear-gradient(160deg,#223249 0%,#1F1F28 100%); --hero-deep:#16161D; --hero-ink:#DCD7BA; --hero-ink-2:#A6A69C; --hero-accent:#7E9CD8; --hero-line:rgba(220,215,186,.12);
+  --orb-solid:#E46876; --orb-glass:rgba(220,215,186,.12); --orb-ink:#1F1F28; color-scheme:dark}
+:root[data-theme="lotus"]{
+  --bg:#F2ECBC; --page:#F2ECBC; --surface:#F8F4D8; --surface-2:#E7DBA0; --field:#F5F0CC; --line:#DCD3A4;
+  --ink:#43436C; --ink-2:#545464; --muted:#67645A;
+  --accent:#B83A4D; --on-accent:#FFF8E8; --solid:#43436C; --solid-ink:#F2ECBC;
+  --good:#52703A; --bad:#A8303F; --glass:rgba(242,236,188,.76); --shadow:0 .618rem 1.618rem rgba(67,67,108,.1);
+  --heat0:#E7DBA0; --heat-ink:#4D699B;
+  --hero-bg:#223249; --hero-deep:#16213A; --hero-ink:#F2ECBC; --hero-ink-2:#C9C3A0; --hero-accent:#E46876; --hero-line:rgba(242,236,188,.14);
+  --orb-solid:#C84053; --orb-glass:rgba(67,67,108,.2); --orb-ink:#FFF8E8; color-scheme:light}
+
+/* ---------- the Start button is the one standout on every screen: themes that set --orb-ink give it their
+   brightest colour; the rest keep their solid ---------- */
+:root{--ring:var(--solid);--ring-ink:var(--solid-ink)}
+:root[data-theme^="wada-"],:root[data-theme="kanagawa"],:root[data-theme="lotus"]{--ring:var(--orb-solid);--ring-ink:var(--orb-ink)}
+.nav-train .ring,.nav-train .nl{background:var(--ring);color:var(--ring-ink)}
+.nav-train.live .ring::after{background:var(--ring-ink);box-shadow:0 0 0 2px var(--ring)}
+
+/* ---------- Auto, Mono Light and Mono Dark: the default, refined. Black and white warmed a touch towards paper and
+   sumi ink, and the wolf's red eyes as the one standout (the Start button) ---------- */
+:root:not([data-theme]),:root[data-theme="light"]{
+  --bg:#EEEDE9; --page:#EEEDE9; --surface:#FBFAF7; --surface-2:#E4E2DC; --field:#F4F3EF; --line:#D9D6CF;
+  --ink:#0E0E0F; --ink-2:#44423E; --muted:#66635D;
+  --accent:#0E0E0F; --on-accent:#FFFFFF; --solid:#0E0E0F; --solid-ink:#FFFFFF;
+  --glass:rgba(238,237,233,.72); --heat0:#E2E0DA; --heat-ink:#0E0E0F;
+  --orb-solid:#D9241A; --orb-ink:#FFFFFF; --ring:var(--orb-solid); --ring-ink:var(--orb-ink)}
+@media (prefers-color-scheme: dark){:root:not([data-theme]){
+  --bg:#080808; --page:#080808; --surface:#161616; --surface-2:#222222; --field:#1B1B1B; --line:#2C2C2C;
+  --ink:#F3F1EC; --ink-2:#B8B5AE; --muted:#88857F;
+  --accent:#F3F1EC; --on-accent:#000000; --solid:#F3F1EC; --solid-ink:#000000;
+  --glass:rgba(8,8,8,.7); --heat0:#1F1F1F; --heat-ink:#F3F1EC;
+  --orb-solid:#E8261A; --orb-ink:#FFFFFF; --ring:var(--orb-solid); --ring-ink:var(--orb-ink)}}
+:root[data-theme="dark"]{
+  --bg:#080808; --page:#080808; --surface:#161616; --surface-2:#222222; --field:#1B1B1B; --line:#2C2C2C;
+  --ink:#F3F1EC; --ink-2:#B8B5AE; --muted:#88857F;
+  --accent:#F3F1EC; --on-accent:#000000; --solid:#F3F1EC; --solid-ink:#000000;
+  --glass:rgba(8,8,8,.7); --heat0:#1F1F1F; --heat-ink:#F3F1EC;
+  --orb-solid:#E8261A; --orb-ink:#FFFFFF; --ring:var(--orb-solid); --ring-ink:var(--orb-ink)}
+
+/* ---------- the wolf always stands out from what's behind it: light on dark, dark on light, its eyes red ---------- */
+.wolf-t .w-body{fill:var(--ink);stroke:var(--ink)}
+:root.is-dark .lockup .wolf{filter:drop-shadow(0 0 1.2rem color-mix(in srgb,var(--ink) 14%,transparent))}

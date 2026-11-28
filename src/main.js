@@ -24,6 +24,8 @@ import { edgeBack } from './ui/edgeback.js';
 import { topPanel } from './ui/toppanel.js';
 import { swipeRows } from './ui/swiperow.js';
 import { dockDrag } from './ui/dockdrag.js';
+import { dockAutoHide } from './ui/dockhide.js';
+import { tactile } from './ui/tactile.js';
 import { segDrag } from './ui/segdrag.js';
 import { reorderDrag } from './ui/reorder.js';
 import { PLATES, BARS, platesFor, sideText } from './lib/plates.js';
@@ -777,6 +779,7 @@ function render(enter) {
   document.body.classList.toggle('in-session', app && S.view === 'session');
   document.body.classList.toggle('on-prefs', app && (S.view === 'prefs' || S.view === 'guide'));
   document.body.classList.toggle('in-full', app && (S.view === 'widget' || S.view === 'coach'));
+  DOCK && DOCK.show();
   if (enter) {
     const hr = S.view === 'today' && S.homeRestore;
     if (hr) { const d = $('#dash', v); if (d) d.scrollLeft = hr.x; scrollTo(0, hr.y); S.homeRestore = null; } else scrollTo(0, 0);
@@ -1257,7 +1260,7 @@ function nextBlock(nx, done, a) {
   <div class="btns"><button class="btn line" data-act="ts-go" data-to="split" data-id="${nx.sp.id}">Open split</button>${rest && !a && !done.length ? `<button class="btn line" data-act="ts-go" data-to="unrest">Undo rest day</button>` : ''}${canStart ? `<button class="btn" data-act="ts-go" data-to="start" data-sp="${nx.sp.id}" data-day="${nx.i}">Start ${dayLabel(nx.sp.days, nx.i)}</button>` : ''}</div>`;
 }
 /* the panel itself; pulling it down only starts from the top of Home */
-let TP = null, SW = null;
+let TP = null, SW = null, DOCK = null;
 function todayPanel() {
   TP = topPanel({
     content: todayContent, hintText: todayHint, reduced, buzz,
@@ -3835,7 +3838,10 @@ function changeUsername(intro = false) {
 /* ================= event wiring ================= */
 const ACT = {
   /* the Logbook tab opens on Calendar or List, whichever was used last */
-  nav: el => go(el.dataset.v === 'history' && el.classList.contains('nav-i') ? lbMode() : el.dataset.v),
+  /* the tab you're already on, tapped again: back to the top of its page, smoothly */
+  nav: el => (el.classList.contains('nav-i') && el.classList.contains('on') && scrollY > 0
+    ? scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })
+    : go(el.dataset.v === 'history' && el.classList.contains('nav-i') ? lbMode() : el.dataset.v)),
   'lb-mode': el => { const v = el.dataset.v; if (S.view !== v) { buzz(6); go(v, null, { replace: true }); } },
   'goal-new': el => goalSheet(el.dataset.id || null),
   'coach-switch': () => { S.profile.coachOn = !coachOn(); queue('p', 0); render(false); toast(coachOn() ? 'Coach on. Its card is back on Home.' : 'Coach off. Switch it back on in Settings any time.'); },
@@ -4494,6 +4500,9 @@ function boot() {
   todayPanel();
   SW = swipeRows({ enabled: () => coarse.matches && S.loaded && $('#sheet').hidden, buzz, reduced });
   dockDrag($('#nav'), { enabled: () => phoneDash() && S.loaded && $('#sheet').hidden, onPick: el => go(el.dataset.v), buzz });
+  /* the dock steps aside while you scroll down a page; buttons press like keys and leave a drop of ink */
+  DOCK = dockAutoHide({ enabled: () => matchMedia('(max-width:59.99rem)').matches && S.loaded && $('#sheet').hidden && S.view !== 'session', reduced });
+  tactile({ reduced });
   /* every switch can be slid along too */
   segDrag({ buzz });
   reorderDrag({ onMove: moveIn, enabled: () => !S.link && !S.spLink, buzz, reduced });

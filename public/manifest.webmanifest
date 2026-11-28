@@ -10,8 +10,8 @@
     "standalone"
   ],
   "orientation": "portrait",
-  "background_color": "#050505",
-  "theme_color": "#050505",
+  "background_color": "#080808",
+  "theme_color": "#080808",
   "categories": [
     "health",
     "fitness",

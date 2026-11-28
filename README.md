@@ -4,9 +4,9 @@ A lifting log for phone and desktop: log sessions as you train, see how hard eac
 was, follow a training split, and watch your progress add up. Live at
 <https://synergym-tracker-log.vercel.app>.
 
-**Version 0.3.0, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.2.5, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.3.0-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.2.5-alpha`) and shows in Settings › About with the build it came from.
 
 ## What it does
 
@@ -85,14 +85,16 @@ The version lives in `package.json` (`0.3.0-alpha`) and shows in Settings › Ab
 - **Editing or deleting a session:** swipe its row left in the Logbook (List or a day in the Calendar) for Edit and Delete (both beside
   the row on hover on a computer). Delete is also in any session's ⋯ menu; a live session has **Discard session** under its notes. It always
   asks first.
-- **Themes:** Auto (follows the device) plus ten named palettes. Every theme has the same glass finish:
+- **Themes:** Auto (follows the device), ten named palettes, six from Sanzo Wada's *Dictionary of Color Combinations*
+  and two from Hokusai's *Great Wave* (Great Wave and Lotus). Every theme has the same glass finish:
   light catches the top edge of cards, the dock and the + button, and pools softly up from the bottom of cards.
   Only light is added, so each theme keeps its own colours.
 - **Week start:** weeks start on Monday, Sunday or Saturday (**Settings › Training**), for the weekly
   target, streaks, charts and the today panel.
 - **Phone app:** install it to the Home Screen (the login page's **Install the app** shows how on each device, or opens the browser's own install prompt). It opens without a connection and never zooms. A floating icon dock
   holds the five tabs (Home, Splits, Exercises, Logbook, Settings), with the + session button beside it; tap a tab, or
-  press and slide along the dock, as on iPhone. Every switch in the app (Units, Week starts on, the Logbook's
+  press and slide along the dock, as on iPhone. It slides away while you scroll down a page and comes back when you
+  scroll up or stop; tapping the tab you're on glides back to the top. Every switch in the app (Units, Week starts on, the Logbook's
   Calendar | List, the Coach tabs and more) slides the same way. On Settings the + steps aside and the dock stretches
   into its place, all of it moving by transform so it stays smooth while the phone is busy. Pages change with a slide
   between tabs and a rise for everything opened on top (a widget, the Coach, an exercise), whose sections then come in
@@ -198,7 +200,7 @@ without minifying (`npx vite build --minify false && npx vite preview`) and reco
 | `src/main.js` | app state, screens, actions, saving and sync |
 | `src/lib/` | logic with no UI: the coach, progress suggestions, plates, bodyweight and weekly summary, data cleaning, import parsing, profile mapping, offline storage and sync, error reports and stats |
 | `public/sw.js` | the service worker: the offline app shell |
-| `src/ui/` | brand and icons, themes, the login and open splashes, the user guide, and the gestures: sliding along the dock (`dockdrag.js`) and along switches (`segdrag.js`), swiping rows (`swiperow.js`), the iPhone edge-swipe back (`edgeback.js`), the pull-down today panel (`toppanel.js`) and the rubber-band page (`rubber.js`) |
+| `src/ui/` | brand and icons, themes, the login and open splashes, the user guide, and the gestures: sliding along the dock (`dockdrag.js`) and hiding it while you scroll (`dockhide.js`), the ink-drop button press (`tactile.js`) and along switches (`segdrag.js`), swiping rows (`swiperow.js`), the iPhone edge-swipe back (`edgeback.js`), the pull-down today panel (`toppanel.js`) and the rubber-band page (`rubber.js`) |
 | `src/data/` | starter split templates |
 
 ## Offline mode (phone app)

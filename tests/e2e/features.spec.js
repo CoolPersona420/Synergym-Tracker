@@ -150,13 +150,13 @@ test('Ocean is retired: it is gone from the theme picker, and someone who had it
   expect(await page.evaluate(() => { try { return localStorage.getItem('sg-theme'); } catch { return 'x'; } })).toBeNull();
   await page.goto('/settings');
   await expect(page.locator('[data-act="d-theme"][data-t="ocean"]')).toHaveCount(0);
-  await expect(page.locator('[data-act="d-theme"]')).toHaveCount(17);
+  await expect(page.locator('[data-act="d-theme"]')).toHaveCount(19);
   await expect(page.locator('[data-act="d-theme"][data-t="auto"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('every theme paints its page background on one fixed layer, so the safe areas and scroll bounce match it', async ({ page }) => {
   await login(page, new FakeSupabase(benchHistory()), 'A');
-  const themes = ['light', 'dark', 'solarized-light', 'solarized-dark', 'gruvbox-light', 'gruvbox-dark', 'nord', 'dracula', 'sage', 'volt', 'wada-indigo', 'wada-ivory', 'wada-tyrian', 'wada-glaucous', 'wada-naples', 'wada-olive'];
+  const themes = ['light', 'dark', 'solarized-light', 'solarized-dark', 'gruvbox-light', 'gruvbox-dark', 'nord', 'dracula', 'sage', 'volt', 'wada-indigo', 'wada-ivory', 'wada-tyrian', 'wada-glaucous', 'wada-naples', 'wada-olive', 'kanagawa', 'lotus'];
   for (const t of themes) {
     const r = await page.evaluate(t => {
       document.documentElement.setAttribute('data-theme', t);

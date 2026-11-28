@@ -10,16 +10,22 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
-## 0.3.0-alpha · 28 November 2026
+## 0.2.5-alpha · 28 November 2026
 
-**Colours from a 1933 classic**
+**Revamp: Japanese art, tactile buttons, more room to scroll**
 
-- **Six Wada themes:** Indigo, Ivory, Tyrian, Glaucous, Naples and Slate Olive, each built from a combination in Sanzo
-  Wada's *A Dictionary of Color Combinations* (1933). Pick one in Settings › Appearance.
-- **One standout per screen:** in these themes the Start button carries the palette's brightest colour, and everything
-  else stays calm.
-- **Light and dark pairs:** the sun and moon switch flips each between its light and dark version: Indigo and Ivory,
-  Tyrian and Glaucous, Slate Olive and Naples.
+- **Themes from Japanese art:** Great Wave and Lotus from Hokusai's *The Great Wave off Kanagawa*, and six palettes
+  from Sanzo Wada's *A Dictionary of Color Combinations* (1933): Indigo, Ivory, Tyrian, Glaucous, Naples and Slate
+  Olive. Settings › Appearance, grouped by artwork. Auto and Mono are warmer too: paper and sumi tones, with the
+  wolf's red for the Start button.
+- **More room while you scroll:** on a phone the dock slides away as you scroll down a page and comes back when you
+  scroll up or stop. Tap the tab you're on to glide back to the top.
+- **Buttons you can feel:** they sink when pressed and spring back, and leave a drop of ink where you touched.
+- **Calmer type:** the main title ends in a soft, hand-drawn italic; numbers line up in columns; headings and text wrap
+  evenly; a still paper grain replaces the flickering film grain.
+- **Balanced layout:** the login box sits on the golden section (1 : 1.618 above and below), and each screen has one
+  standout colour, the Start button.
+- **The wolf stands out:** light on every dark background, dark on light ones.
 
 ---
 
