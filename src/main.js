@@ -2,7 +2,7 @@ import { makeClient } from './lib/sb.js';
 import { findTypos } from './lib/typos.js';
 import { readSnap, writeSnap, clearSnaps } from './lib/snapcache.js';
 import './style.css';
-import { analyse, readiness, withBreak, prescribe, parseRange, goalPlan, DELOAD_DAYS } from './lib/coach.js';
+import { analyse, readiness, withBreak, prescribe, parseRange, goalPlan } from './lib/coach.js';
 import { suggestNext } from './lib/progress.js';
 import * as ldb from './lib/localdb.js';
 import { planSync } from './lib/sync.js';
@@ -12,7 +12,7 @@ import { installHow } from './lib/install.js';
 import { $, $$, esc, uuid, sid, pad, sleep, clone, fmtDate, fmtTime, mmss, dayKey, plural, weekStart, shiftWeek, setWeekStart, weekStartDay, roll, toast } from './lib/util.js';
 import { num, cleanSession, cleanDays, cleanKind } from './lib/sanitize.js';
 import { CARDIO, METRICS, howOf, defaultMetrics, parseTime, fmtDur, fmtMin, distUnit, fmtDist, parseDist, pace, fmtPace, effortInt, effortWord, scanCardio, CARDIO_LABEL } from './lib/cardio.js';
-import { DEFAULT_PROFILE, profFromDb, profToDb, deloadWeeks, inDeload } from './lib/profile.js';
+import { DEFAULT_PROFILE, profFromDb, profToDb } from './lib/profile.js';
 import { parseImport, SPLIT_MAX } from './lib/importer.js';
 import { ICON, brand, lockup, big, disp, countUp } from './ui/brand.js';
 import { THEMES, themePref, isDark, applyTheme, markDark, themePicker, themeList } from './ui/themes.js';
@@ -100,8 +100,8 @@ function flipTheme() {
 /* ================= db mapping ================= */
 const exFromDb = r => ({ id: r.id, name: r.name, muscle: r.muscle, kind: cleanKind(r.kind), archived: !!r.archived, isDefault: !!r.is_default, oneRm: r.one_rm != null ? +r.one_rm : null, oneRmAt: r.one_rm_at ? Date.parse(r.one_rm_at) : null, note: typeof r.note === 'string' ? r.note : '' });
 const exToDb = e => ({ id: e.id, user_id: S.user.id, name: e.name.trim(), muscle: e.muscle, kind: e.kind, archived: !!e.archived, is_default: !!e.isDefault, one_rm: e.oneRm > 0 ? Math.round(e.oneRm * 100) / 100 : null, one_rm_at: e.oneRm > 0 && e.oneRmAt ? new Date(e.oneRmAt).toISOString() : null, note: (e.note || '').trim().slice(0, 200) || null });
-const sessFromDb = r => cleanSession({ id: r.id, name: r.name, startedAt: Date.parse(r.started_at), endedAt: r.ended_at ? Date.parse(r.ended_at) : null, notes: r.notes, items: r.items, splitId: r.split_id, splitDay: r.split_day });
-const sessToDb = s => ({ id: s.id, user_id: S.user.id, name: s.name, started_at: new Date(s.startedAt).toISOString(), ended_at: s.endedAt ? new Date(s.endedAt).toISOString() : null, notes: s.notes || '', items: s.items, split_id: s.splitId || null, split_day: s.splitDay ?? null, updated_at: new Date().toISOString() });
+const sessFromDb = r => cleanSession({ id: r.id, name: r.name, startedAt: Date.parse(r.started_at), endedAt: r.ended_at ? Date.parse(r.ended_at) : null, notes: r.notes, items: r.items, splitId: r.split_id, splitDay: r.split_day, deload: r.deload });
+const sessToDb = s => ({ id: s.id, user_id: S.user.id, name: s.name, started_at: new Date(s.startedAt).toISOString(), ended_at: s.endedAt ? new Date(s.endedAt).toISOString() : null, notes: s.notes || '', items: s.items, split_id: s.splitId || null, split_day: s.splitDay ?? null, deload: !!s.deload, updated_at: new Date().toISOString() });
 const splitFromDb = r => ({ id: r.id, name: r.name, description: r.description || '', days: cleanDays(r.days), shareToken: r.share_token || null, copiedFrom: r.copied_from || null, updatedAt: Date.parse(r.updated_at) || 0 });
 const splitToDb = p => ({ id: p.id, user_id: S.user.id, name: p.name.trim() || 'Untitled split', description: p.description || '', days: p.days, share_token: p.shareToken, copied_from: p.copiedFrom, updated_at: new Date().toISOString() });
 
@@ -519,7 +519,7 @@ const loadStep = () => unit() === 'lb' ? 5 : 2.5;
 const snapW = kg => fromU(Math.round(toU(kg) / loadStep()) * loadStep());
 /* what the split planned for an exercise in a session started from a split day */
 const dayPlan = (s, exId) => { const sp = s.splitId && S.splits.get(s.splitId), d = sp && sp.days[s.splitDay]; return d ? d.exercises.find(x => x.exId === exId) || null : null; };
-const suggestFor = (s, it) => { const x = dayPlan(s, it.exId); return planFor(it.exId, { reps: x ? x.reps : null, sets: x ? x.sets : it.sets.length || 3, excludeSid: s.id }); };
+const suggestFor = (s, it) => { const x = dayPlan(s, it.exId); return planFor(it.exId, { reps: x ? x.reps : null, sets: x ? x.sets : it.sets.length || 3, excludeSid: s.id, deload: !!s.deload }); };
 
 /* the one close button: every sheet, the today panel, the Coach and full-screen widgets show this ✕, top right */
 const xBtn = (act = 'close', label = 'Close', cls = '') => `<button class="xbtn${cls}" data-act="${act}" aria-label="${label}">${ICON.x}</button>`;
@@ -534,7 +534,7 @@ const CO = { a: null, k: null };
 const coachOn = () => S.profile.coachOn !== false;
 function coach() {
   const now = Date.now(), p = S.profile;
-  const k = [DATA_REV, dayKey(now), p.exp, p.target, bwNow(), p.unit, JSON.stringify(p.liftGoals || []), (p.restDays || []).slice(-1)[0] || '', JSON.stringify(p.deload || null)].join('|');
+  const k = [DATA_REV, dayKey(now), p.exp, p.target, bwNow(), p.unit, JSON.stringify(p.liftGoals || []), (p.restDays || []).slice(-1)[0] || ''].join('|');
   if (CO.a && CO.k === k && CO.s === S.sessions && CO.l === S.library && CO.p === S.splits) return CO.a;
   const exMap = new Map(S.library.map(e => [e.id, e]));
   const log = [...S.sessions.values()].filter(s => s.endedAt).sort((a, b) => a.startedAt - b.startedAt).map(s => ({ id: s.id, t: s.startedAt, splitId: s.splitId, splitDay: s.splitDay,
@@ -544,8 +544,7 @@ function coach() {
   const nx = nextSplitDay(), last = log[log.length - 1], sp = nx ? nx.sp : (last && last.splitId && S.splits.get(last.splitId)) || null, day = nx && nx.sp.days[nx.i];
   const ctx = { now, exp: p.exp, target: p.target, round: snapW, split: sp && { id: sp.id, name: sp.name, days: sp.days }, lastSplitDay: last && sp && last.splitId === sp.id ? last.splitDay : null,
     nextMuscles: day ? [...new Set(day.exercises.filter(x => x.kind !== 'c').map(x => x.muscle))] : [], muscleOf: id => exMap.get(id)?.muscle,
-    goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)), savedOf: id => savedOrm(id),
-    deloadChoice: p.deload ? { on: p.deload.on, skipUntil: p.deload.skip } : null };
+    goals: (p.liftGoals || []).filter(g => exMap.has(g.exId)), savedOf: id => savedOrm(id) };
   const a = analyse(log, ctx);
   /* trained today: the call is for tomorrow morning */
   if (doneToday().length) { const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(8, 0, 0, 0); a.next = { ...withBreak(readiness(log, a.series, { ...ctx, now: t.getTime() }), a.deload), when: 'tomorrow' }; }
@@ -555,13 +554,13 @@ function coach() {
   return a;
 }
 /* the coach's target for an exercise next time: weight, reps and sets. A goal on the lift sets its work; an easy
-   day or a deload week lightens everything. */
-function planFor(key, { reps = null, sets = 3, excludeSid = null } = {}) {
+   day lightens everything, and so does a session the lifter switched to Deload. */
+function planFor(key, { reps = null, sets = 3, excludeSid = null, deload = false } = {}) {
   const ex = exOf(key); if (!ex || isCardio(ex)) return null;
   if (!coachOn()) { const p = suggestNext(historyFor(key, excludeSid), { bw: ex.kind === 'bw', step: fromU(loadStep()), round: snapW }); return p && { ...p, sets }; }
   const a = coach(), g = a.goals.find(x => x.goal.exId === key && x.plan && x.status !== 'ready' && x.status !== 'no-data');
   return prescribe(historyFor(key, excludeSid), { range: parseRange(reps), sets, bw: ex.kind === 'bw', step: fromU(loadStep()), round: snapW,
-    call: a.ready.call === 'train' ? 'train' : 'easy', deload: a.deload.status === 'now', goalWeek: g ? g.plan.week : null, e1: g ? g.cur : 0 });
+    call: a.ready.call === 'train' ? 'train' : 'easy', deload: deload || a.deload.status === 'now', goalWeek: g ? g.plan.week : null, e1: g ? g.cur : 0 });
 }
 const bwNow = () => { const l = S.profile.bwLog; return l && l.length ? l[l.length - 1].kg : S.profile.bw; };
 const isRestDay = d => d.rest || /^rest$/i.test(d.type.trim());
@@ -1281,7 +1280,7 @@ const WHY = { load: 'Last time went well: add weight.', 'range-up': 'Every set r
   repeat: 'Last time slipped: match it before moving on.', consolidate: 'Later sets fell short: own this weight first.', reset: 'Too heavy twice running: 5% lighter, build back up.',
   easy: 'Easy day: about 10% lighter, one set fewer.', deload: 'Deload: about 10% lighter, half the sets.', goal: 'This week of your goal block.' };
 const WHY_SHORT = { load: 'add weight', 'range-up': 'top of the range: add weight', reps: 'one more rep', repeat: 'match last time', consolidate: 'own this weight first', reset: 'too heavy twice: 5% lighter', easy: 'easy day: lighter', deload: 'deload: lighter, fewer sets', goal: 'goal block' };
-const REC = { ok: ['On track', 'good'], soon: ['Deload next week', 'warn'], now: ['Deload week', 'warn'], ask: ['Deload due', 'warn'], skipped: ['Deload skipped', 'good'], off: ['Take a week off', 'warn'], rested: ['Rested', 'good'] };
+const REC = { ok: ['On track', 'good'], soon: ['Deload next week', 'warn'], now: ['Deload now', 'warn'], ask: ['Deload due', 'warn'], off: ['Take a week off', 'warn'], rested: ['Rested', 'good'] };
 const recKey = d => d.status === 'now' && d.kind === 'week-off' ? 'off' : d.status;
 const SPLIT_ST = { keep: ['Keep it', 'good'], consider: ['Worth a tweak', 'warn'], change: ['Time to change', 'warn'], none: ['No split', ''] };
 const GOAL_ST = { ready: ['Ready to test', 'good'], 'on-track': ['On track', 'good'], behind: ['Behind the deadline', 'warn'], stalled: ['Stalled', 'warn'], long: ['Long-term', ''], 'no-data': ['No data yet', ''] };
@@ -1307,7 +1306,7 @@ function dayTargets(d) {
 }
 /* what's lightening today's targets, if anything: a deload week, then an easy or rest call */
 function coachMood(a) {
-  if (a.deload.status === 'now') return { k: 'deload', t: a.deload.kind === 'week-off' ? 'Week off due' : 'Deload week', b: a.deload.chosen ? `Day ${Math.min(DELOAD_DAYS, a.deload.day)} of ${DELOAD_DAYS}: targets about 10% lighter with half the sets.` : 'Targets are about 10% lighter with half the sets.' };
+  if (a.deload.status === 'now') return { k: 'deload', t: a.deload.kind === 'week-off' ? 'Week off due' : 'Deload week', b: 'Targets are about 10% lighter with half the sets.' };
   if (a.ready.call !== 'train') return { k: 'easy', t: a.ready.call === 'rest' ? 'Rest was the call' : 'Easy day', b: 'Targets are about 10% lighter, one set fewer.' };
   return null;
 }
@@ -1359,7 +1358,7 @@ function coachRecovery(a, nx) {
   const rec = `<section class="card rv co-rec"><div class="card-h"><span class="lbl">Lighter weeks</span>${pill(REC[rk])}</div>
     <div class="co-meter" role="img" aria-label="${dl.weeks} of about ${dl.every} weeks"><i style="width:${pct}%"></i></div><p class="lbl co-mt">${dl.weeks} of ~${dl.every} weeks</p>
     <p class="co-lead">${esc(dl.reasons[0] || '')}</p>${dl.reasons.length > 1 ? whyList(dl.reasons.slice(1)) : ''}
-    ${deloadBtns(dl, 'co-dl')}
+    ${rk === 'ask' ? '<p class="muted co-dl">It’s your call, one session at a time: switch on <b>Deload</b> in a session to make it lighter.</p>' : ''}
     ${rk === 'now' || rk === 'off' || rk === 'soon' || rk === 'ask' ? `<details class="co-more co-how"${rk === 'soon' || rk === 'ask' ? '' : ' open'}><summary>${rk === 'off' ? 'How to take a week off' : 'How to deload'}</summary><p>${rk === 'off' ? HOW_DELOAD.off : HOW_DELOAD.deload}</p></details>` : ''}</section>`;
   const split = `<section class="card rv co-split"><div class="card-h"><span class="lbl">Your split${sp ? ' · ' + esc(sp.name) : ''}</span>${pill(SPLIT_ST[sc.status])}</div>
     ${sc.status !== 'none' ? `<p class="muted co-sub">${sc.weeks ? plural(sc.weeks, 'week') : 'Under a week'} on it · ${plural(sc.sessions, 'session')} · ${sc.perWeek} a week lately</p>` : ''}
@@ -1403,34 +1402,20 @@ function exNext(ex) {
   return `<p class="co-nx"><span class="lbl">Coach · next time</span><b>${tgtText(g, ex.kind === 'bw')}</b> · ${plural(g.sets, 'set')}<small>${WHY[g.why]}</small></p>`;
 }
 /* in a live session: why today's targets are lighter, or that a lift follows a goal's block */
-/* deloads are the lifter's call: start one (due or not), skip one that's due, or end one at any time */
-function deloadSet(on, skip) {
-  /* the week that's ending (ended now, or its 7 days run out) goes into the history, so its sessions stay marked */
-  const now = Date.now(), d = S.profile.deload || {}, past = (d.past || []).slice();
-  if (d.on && d.on !== on) past.push([d.on, Math.min(now, d.on + DELOAD_DAYS * 864e5)]);
-  S.profile.deload = on || skip || past.length ? { on: on || null, skip: skip || null, past: past.slice(-40) } : null;
-  queue('p', 200); buzz(); render(false);
-}
-/* sessions done in a deload week carry a Deload status: in the Logbook, on the session and in an exercise's history */
-const isDeloadSess = s => !!S.profile.deload && inDeload(deloadWeeks(S.profile.deload, Date.now(), DELOAD_DAYS), s);
-const dlTag = s => isDeloadSess(s) ? '<span class="st-dl">Deload</span>' : '';
-const deloadOn = () => coachOn() && coach().deload.chosen === true;
-/* the buttons for the deload, wherever it's shown: due, a question; running, End; otherwise, start one */
-function deloadBtns(d, cls = '') {
-  if (!coachOn() || d.kind === 'week-off' && d.status === 'now') return '';
-  const b = (act, t, k = 'sm') => `<button class="btn ${k}" data-act="${act}">${roll(t)}</button>`;
-  if (d.status === 'ask') return `<div class="btns ${cls}">${b('deload-skip', 'Skip this one', 'sm ghost')}${b('deload-start', 'Start deload')}</div>`;
-  if (d.chosen) return `<div class="btns ${cls}">${b('deload-end', 'End deload', 'sm line')}</div>`;
-  return cls === 'co-dl' ? `<div class="btns ${cls}">${b('deload-start', 'Start a deload week', 'sm ghost')}</div>` : '';
-}
-/* in a live session: a Deload switch on the date line, pressed while a deload runs */
-const deloadTog = s => s.endedAt || !coachOn() ? '' : (on => `<button class="dl-tog${on ? ' on' : ''}" data-act="${on ? 'deload-end' : 'deload-start'}" aria-pressed="${on}" title="${on ? 'End the deload' : 'Start a deload week'}"><i></i>Deload</button>`)(deloadOn());
+/* a deload is per session, and the lifter's call: the Deload switch in a session makes that session lighter (about
+   10% off, half the sets) and marks it, in the Logbook, its calendar, on the session and in an exercise's history */
+const dlTag = s => s.deload ? '<span class="st-dl">Deload</span>' : '';
+/* the switch: on a live session's date line, and on a past session while editing it */
+const deloadTog = s => `<button class="dl-tog${s.deload ? ' on' : ''}" data-act="deload-tog" data-id="${s.id}" aria-pressed="${!!s.deload}" title="${s.deload ? 'Back to full targets' : 'Make this a deload session'}"><i></i>Deload</button>`;
+/* banners closed with Dismiss, for this visit */
+const BAND_OFF = new Set();
+const dismissBtn = s => `<button class="btn sm ghost" data-act="band-dismiss" data-id="${s.id}">${roll('Dismiss')}</button>`;
 function sessCoachBand(s) {
   if (s.endedAt || !coachOn()) return '';
   const a = coach(), mood = coachMood(a), goal = a.goals.find(g => g.plan && g.status !== 'ready' && g.status !== 'no-data' && s.items.some(it => it.exId === g.goal.exId));
-  const d = a.deload;
-  if (d.status === 'ask') return `<div class="co-band co-ask rv"><span class="co-pill warn">Deload due</span><span>${esc(d.reasons[0] || 'A lighter week is due.')} Go lighter this week?</span>${deloadBtns(d)}</div>`;
-  if (d.chosen && mood) return `<div class="co-band co-ask rv"><span class="co-pill warn">${mood.t}</span><span>${mood.b}</span>${deloadBtns(d)}</div>`;
+  const d = a.deload, off = BAND_OFF.has(s.id);
+  if (s.deload) return off ? '' : `<div class="co-band co-ask rv"><span class="co-pill warn">Deload session</span><span>Targets about 10% lighter with half the sets.</span><div class="btns">${dismissBtn(s)}</div></div>`;
+  if (d.status === 'ask' && !off) return `<div class="co-band co-ask rv"><span class="co-pill warn">Deload due</span><span>${esc(d.reasons[0] || 'A lighter session is due.')} Make this a deload session?</span><div class="btns">${dismissBtn(s)}<button class="btn sm" data-act="deload-tog" data-id="${s.id}">${roll('Deload this session')}</button></div></div>`;
   if (mood) return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill warn">${mood.t}</span><span>${mood.b}</span>${ICON.coach}</button>`;
   if (goal) { const ex = exOf(goal.goal.exId); return `<button class="co-band rv" data-act="nav" data-v="coach"><span class="co-pill good">Goal</span><span>${esc(ex ? ex.name : 'This lift')} follows your ${fmtW(goal.goal.kg)} ${unit()} plan: ${esc(goal.plan.name)}, week ${goal.plan.weekNo} of 4.</span>${ICON.coach}</button>`; }
   return '';
@@ -1858,7 +1843,7 @@ function vSession() {
     <input class="s-name" data-f="sname" value="${esc(s.name || '')}" placeholder="${esc(sessName({ ...s, name: null }))}" aria-label="Session name" maxlength="80"${ro ? ' readonly' : ''}>
     ${ro && S.lbCtx === s.id ? `<button class="btn line sm s-edit" data-act="sess-edit">${ICON.pen}Edit</button>` : ''}
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
-  <div class="s-meta lbl rv"><span>${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</span>${live ? deloadTog(s) : dlTag(s)}</div>${sessCoachBand(s)}
+  <div class="s-meta lbl rv"><span>${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</span>${live || ed ? deloadTog(s) : dlTag(s)}</div>${sessCoachBand(s)}
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
     <div class="bignum" id="sint" style="margin-top:10px">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
@@ -2213,7 +2198,7 @@ let hShown = H_PAGE, hKey = '';
 function historyList() {
   const q = S.q.trim().toLowerCase(), f = S.hf, on = hfOn(f); let list = sorted();
   const key = q + '|' + JSON.stringify(f); if (key !== hKey) { hKey = key; hShown = H_PAGE; }
-  if (q) list = list.filter(s => sessName(s).toLowerCase().includes(q) || s.items.some(it => (exOf(it.exId)?.name || '').toLowerCase().includes(q) || itemTags(it).some(t => t.toLowerCase().includes(q))) || (s.notes || '').toLowerCase().includes(q) || ('deload'.startsWith(q) && q.length >= 3 && isDeloadSess(s)));
+  if (q) list = list.filter(s => sessName(s).toLowerCase().includes(q) || s.items.some(it => (exOf(it.exId)?.name || '').toLowerCase().includes(q) || itemTags(it).some(t => t.toLowerCase().includes(q))) || (s.notes || '').toLowerCase().includes(q) || ('deload'.startsWith(q) && q.length >= 3 && !!s.deload));
   if (on) list = list.filter(s => hfMatch(s, f));
   if (!list.length) return `<div class="empty"><b>${q || on ? 'No sessions match.' : 'Nothing logged yet.'}</b>${on ? 'Try fewer filters, or a wider date range.' : q ? 'Try an exercise name, like “squat”.' : 'Your sessions will collect here, grouped by month.'}</div>`;
   /* months are totalled over everything that matched, so a month split across pages still shows its whole count */
@@ -2639,7 +2624,7 @@ const HOW = `<div class="sh-h"><h3>How the numbers work</h3>${xBtn()}</div><div 
     <p><b>Records (PRs).</b> A weight PR is heavier than anything you’ve lifted on that exercise. A rep PR is more reps than you’ve ever done at that weight or heavier. Heavier and more reps than your record set is both. Each set is judged as you type it, against everything before it, earlier sets that day included; an exercise’s first session sets the baseline. For bodyweight moves the weight is the added load.</p>
     <p><b>Next-set targets.</b> From your last two sessions of the exercise. With a rep range in your split (say 8–12), keep the weight and add reps until every set reaches the top, then add about 2.5% (at least 2.5 kg or 5 lb) and go back to the bottom; fall under the range twice and it drops 5%. Without a range: if your top set went at least as well as the time before, add weight and keep the reps; if it slipped, or your later sets fell short, hold the weight. Bodyweight moves add reps.</p>
     <p><b>Coach: today’s call.</b> <i>Rest</i> after more training days in a row than your split plans (2–4 without a split, by experience), or when your split has a rest day next. <i>Go easy</i> (about 10% lighter, a set fewer) when this week’s sets are 50% above your usual week, when two main lifts have come in 5% under their recent best two sessions running, when yesterday gave today’s muscles 6+ sets, or after two weeks away.</p>
-    <p><b>Coach: deloads and weeks off.</b> A lighter week about every 10 weeks for beginners, 6 for intermediates and 5 for advanced lifters, counted from your last break (6+ days off) or lighter week; sooner if half your main lifts stall (3 sessions over 10+ days without beating their best by 1%) or two keep falling. A full week off after 16 weeks without a break, or if lifts are still stuck after a recent deload. A main lift is one trained 4+ times in 6 weeks. A deload is your call: the coach asks when one is due, and you can start one, skip it (asked again in a week) or end it at any time, also with the <b>Deload</b> switch in a live session.</p>
+    <p><b>Coach: deloads and weeks off.</b> A lighter week about every 10 weeks for beginners, 6 for intermediates and 5 for advanced lifters, counted from your last break (6+ days off) or lighter week; sooner if half your main lifts stall (3 sessions over 10+ days without beating their best by 1%) or two keep falling. A full week off after 16 weeks without a break, or if lifts are still stuck after a recent deload. A main lift is one trained 4+ times in 6 weeks. A deload is your call, one session at a time: the coach asks when one is due, and the <b>Deload</b> switch in a session makes that session lighter (about 10% off, half the sets) and marks it Deload. Switch it on in each session you want to be one.</p>
     <p><b>Coach: your split.</b> Give a split 6 to 8 weeks. Time to change when, at the rate you actually train, a 4+ day split hits major muscles less than once a week, or when half your main lifts have stalled after 8+ weeks outside a deload. Worth a tweak after 16 weeks with fewer than half your lifts still climbing, or when it skips a major muscle.</p>
     <p><b>Coach: goals.</b> Your current max is the best estimate from your last three sessions of the lift (sets of 1–12 reps), or a one-rep max you saved in the last 6 weeks, eased off after 3+ weeks away. A realistic pace blends your own 12-week trend with typical gains for your level (about 1%, 0.5% or 0.2% a week for beginner, intermediate and advanced), at most twice the typical rate, slowing as the months go on. The likely date uses that pace; the range uses 1.5× and 0.6× of it. The plan runs 4-week blocks of three building weeks and a deload: Build (4×6 at 72.5–77.5% of your max) while the goal is over 10% away, Strength (5×3–4 at 80–85%) within 10%, Peak (heavy doubles and singles, then a test) within 3%.</p>
     <p><b>Linked sets.</b> Link two or more sets and Synergym names the structure: two exercises make a superset, three or more a giant set. On one exercise, falling weight is a drop set, the same weight a rest-pause set, anything else a pyramid. Rest starts after the last set of a group.</p>
@@ -3374,7 +3359,7 @@ function vLogbook() {
    its volume (or its cardio time), two at most; a phone shows only the shade (style.css hides these there) */
 function lbChips(k) {
   const list = sessOn(k), out = list.slice(0, 2).map(s => { const a = S.A?.sess.get(s.id), sub = a ? (a.sets ? fmtVol(a.vol) : a.ct ? fmtMin(a.ct) : '') : '';
-    return `<span class="lb-ev" aria-hidden="true">${esc(sessName(s))}${sub ? `<small>${sub}</small>` : ''}</span>`; });
+    return `<span class="lb-ev${s.deload ? ' dl' : ''}" aria-hidden="true">${esc(sessName(s))}${sub || s.deload ? `<small>${[s.deload ? 'Deload' : '', sub].filter(Boolean).join(' · ')}</small>` : ''}</span>`; });
   if (list.length > 2) out.push(`<span class="lb-ev more" aria-hidden="true">+${list.length - 2} more</span>`);
   return out.join('');
 }
@@ -3397,10 +3382,10 @@ function lbMonth(L) {
   let n = 0, rest = 0, cells = '';
   for (let i = 0; i < lead; i++) cells += '<i class="lb-pad"></i>';
   for (let d = 1; d <= days; d++) {
-    const dt = new Date(y, mo, d), k = dayKey(dt), fut = dt.getTime() > now, v = di.get(k), cnt = sessOn(k).length;
+    const dt = new Date(y, mo, d), k = dayKey(dt), fut = dt.getTime() > now, v = di.get(k), on = sessOn(k), cnt = on.length, dl = on.some(s => s.deload);
     n += cnt; if (rd.has(k)) rest++;
     const c = fut ? 'fut' : v != null ? (v >= 85 ? 'l4' : v >= 72 ? 'l3' : v >= 55 ? 'l2' : 'l1') : cnt ? 'l1' : rd.has(k) ? 'rd' : '';
-    cells += `<button class="lb-d ${c}${k === tk ? ' today' : ''}${k === L.k ? ' sel' : ''}" data-act="lb-pick" data-k="${k}"${fut ? ' disabled' : ''} aria-label="${dayName(dt)} ${d} ${MONTHS[mo]}${cnt ? ', ' + plural(cnt, 'session') : rd.has(k) ? ', rest day' : ''}"${k === L.k ? ' aria-pressed="true"' : ''}><span>${d}</span>${cnt > 1 ? '<i class="lb-two"></i>' : ''}${cnt ? lbChips(k) : ''}</button>`;
+    cells += `<button class="lb-d ${c}${dl ? ' dl' : ''}${k === tk ? ' today' : ''}${k === L.k ? ' sel' : ''}" data-act="lb-pick" data-k="${k}"${fut ? ' disabled' : ''} aria-label="${dayName(dt)} ${d} ${MONTHS[mo]}${cnt ? ', ' + plural(cnt, 'session') + (dl ? ', deload' : '') : rd.has(k) ? ', rest day' : ''}"${k === L.k ? ' aria-pressed="true"' : ''}><span>${d}</span>${cnt > 1 ? '<i class="lb-two"></i>' : ''}${cnt ? lbChips(k) : ''}</button>`;
   }
   const head = Array.from({ length: 7 }, (_, i) => DAYS[(w0 + i) % 7].slice(0, 1)).map(x => `<span class="lbl">${x}</span>`).join('');
   const first = sorted().length ? monthOf(sorted()[sorted().length - 1].startedAt) : L.m, canBack = L.m > Math.min(first, monthOf(now) - 1), canFwd = L.m < monthOf(now);
@@ -3410,7 +3395,7 @@ function lbMonth(L) {
   <div class="lb-wk">${head}</div><div class="lb-grid">${cells}</div>${LB_KEY}`;
 }
 /* what the calendar's marks mean, in the heat map's words: shade is effort, stripes are rest, the ring is today */
-const LB_KEY = `<div class="lb-key" aria-hidden="true"><span class="lb-scale"><span class="lbl">less</span>${[1, 2, 3, 4].map(i => `<i class="lb-sw l${i}"></i>`).join('')}<span class="lbl">more intense</span></span><span class="lbl"><i class="rd-key"></i>rest</span><span class="lbl"><i class="td-key"></i>today</span></div>`;
+const LB_KEY = `<div class="lb-key" aria-hidden="true"><span class="lb-scale"><span class="lbl">less</span>${[1, 2, 3, 4].map(i => `<i class="lb-sw l${i}"></i>`).join('')}<span class="lbl">more intense</span></span><span class="lbl"><i class="rd-key"></i>rest</span><span class="lbl"><i class="dl-key"></i>deload</span><span class="lbl"><i class="td-key"></i>today</span></div>`;
 function lbDay(k) {
   const t0 = dayStart(k), list = [...S.sessions.values()].filter(s => dayKey(s.startedAt) === k).sort((a, b) => a.startedAt - b.startedAt);
   const rest = (S.profile.restDays || []).includes(k), today = k === dayKey(Date.now()), dt = new Date(t0), full = list.filter(s => s.endedAt).length >= DAY_MAX;
@@ -3982,10 +3967,10 @@ const ACT = {
   'rest-add': el => { if (S.rest) { S.rest.end += (+el.dataset.d) * 1000; S.rest.len = Math.max(1000, (S.rest.len || 0) + (+el.dataset.d) * 1000); tick(); } },
   /* the theme popup: every theme with its colours, the one in use in view */
   'th-pop': el => { openSheet(`<div class="sh-h"><h3>Theme</h3>${xBtn()}</div>${themeList(el.dataset.pick)}`); const on = $('#sheet-body .th-o.on'); if (on) on.scrollIntoView({ block: 'center' }); },
-  /* deloads: the lifter's call. Skipped or ended, a due one is asked about again in a week */
-  'deload-start': () => { deloadSet(Date.now(), null); toast('Deload week started: targets about 10% lighter, half the sets'); },
-  'deload-skip': () => { deloadSet(null, Date.now() + DELOAD_DAYS * 864e5); toast('Deload skipped. The coach asks again next week'); },
-  'deload-end': () => { deloadSet(null, Date.now() + DELOAD_DAYS * 864e5); toast('Deload ended: back to full targets'); },
+  /* a deload is per session: the switch makes this session one (lighter targets, and marked), or back */
+  'deload-tog': el => { const s = S.sessions.get(el.dataset.id); if (!s) return; if (s.deload) delete s.deload; else s.deload = true;
+    queue('s:' + s.id, 0); buzz(); render(false); toast(s.deload ? 'Deload session: targets about 10% lighter, half the sets' : 'Back to full targets'); },
+  'band-dismiss': el => { BAND_OFF.add(el.dataset.id); render(false); },
   'rest-tap': () => { if (S.rest) { S.rest = null; tick(); toast('Rest skipped'); } },
   'new-split': () => splitRoom() && menuSheet('New split', [{ label: 'Blank split', hint: '3 empty days', fn: newSplit }, ...TEMPLATES.map(t => ({ label: t.name, hint: plural(t.days, 'day') + ' a week', fn: () => { const sp = splitFromTemplate(t); go('split', sp.id); toast('Template added. Make it yours.'); } }))]),
   'open-split': el => go('split', el.dataset.id),

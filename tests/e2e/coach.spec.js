@@ -50,70 +50,60 @@ test('after a run of training days the coach says rest, and one tap makes it a r
   await expect.poll(() => (fake.profiles[0].rest_days || []).length).toBe(1);
 });
 
-test('when lifts stall a deload is due, but it is the lifter’s call: asked, started, then ended at any time', async ({ page }, info) => {
+test('when lifts stall a deload is due, but it is the lifter’s call, one session at a time: asked, switched on, dismissed, switched off', async ({ page }, info) => {
   const h = benchHistory(), bench = h.exercises[0], squat = { id: crypto.randomUUID(), name: 'Back Squat', muscle: 'Quads', kind: 'w' };
   const flat = Array.from({ length: 9 }, (_, i) => session(41 - i * 5, [{ id: 'b' + i, exId: bench.id, sets: sets(80, 5) }, { id: 's' + i, exId: squat.id, sets: sets(100, 5) }]));
   const fake = new FakeSupabase({ exercises: [bench, squat], sessions: flat });
   await login(page, fake, 'A');
   await page.goto('/coach');
-  /* on a phone the Recovery tab is flagged, and opens on a tap; a computer shows it beside the plan */
   if (info.project.name === 'phone') { await expect(page.locator('.co-tabs [data-t="recovery"] .co-dot')).toBeVisible(); await page.locator('.co-tabs [data-t="recovery"]').click(); }
   await expect(page.locator('.co-rec .co-pill')).toHaveText('Deload due');
   await expect(page.locator('.co-rec')).toContainText('2 of your 2 main lifts have stalled');
-  await expect(page.locator('.co-rec [data-act="deload-start"]')).toBeVisible();
-  await expect(page.locator('.co-rec [data-act="deload-skip"]')).toBeVisible();
+  await expect(page.locator('.co-rec .co-dl')).toContainText('switch on Deload in a session');
   await page.goto('/');
   await page.locator('[data-act="start-menu"]:visible').first().click();
   await page.click('[data-st-foot="0"]');
   await page.click('[data-act="add-ex"]');
   await page.locator('[data-act="pk-pick"]', { hasText: 'Bench Press' }).click();
-  /* not started: full targets, and the session asks */
+  /* not switched on: full targets, and the session asks */
   await expect(page.locator('.ex .sugg')).not.toContainText('deload');
   await expect(page.locator('.co-band')).toContainText('Deload due');
   await expect(page.locator('.dl-tog')).toHaveAttribute('aria-pressed', 'false');
-  await page.locator('.co-band [data-act="deload-start"]').click();
-  /* started: lighter, fewer sets, the switch on, and the choice saved */
+  await page.locator('.co-band [data-act="deload-tog"]').click();
+  /* this session is a deload: lighter, fewer sets, the switch on, saved on the session */
   await expect(page.locator('.ex .sugg')).toContainText('deload');
   await expect(page.locator('.ex .sugg')).toContainText('72.5×5');
-  await expect(page.locator('.co-band')).toContainText('Day 1 of 7');
+  await expect(page.locator('.co-band')).toContainText('Deload session');
   await expect(page.locator('.dl-tog')).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(() => fake.profiles[0].deload?.on > 0).toBe(true);
-  /* ended at any time, from the switch */
+  const live = () => fake.sessions.find(x => !x.ended_at);
+  await expect.poll(() => live()?.deload).toBe(true);
+  /* the banner has Dismiss, not End */
+  await expect(page.locator('.co-band [data-act="deload-end"]')).toHaveCount(0);
+  await page.locator('.co-band [data-act="band-dismiss"]').click();
+  await expect(page.locator('.co-band')).toHaveCount(0);
+  await expect(page.locator('.dl-tog')).toHaveAttribute('aria-pressed', 'true');
+  /* the switch turns it off again, at any time */
   await page.locator('.dl-tog').click();
   await expect(page.locator('.ex .sugg')).not.toContainText('deload');
-  await expect(page.locator('.dl-tog')).toHaveAttribute('aria-pressed', 'false');
-  await expect.poll(() => fake.profiles[0].deload?.on ?? null).toBe(null);
-  await expect(page.locator('.co-band')).toHaveCount(0);
+  await expect.poll(() => live()?.deload).toBe(false);
 });
 
-test('a due deload can be skipped: no lighter targets, and the coach asks again in a week', async ({ page }, info) => {
-  const h = benchHistory(), bench = h.exercises[0], squat = { id: crypto.randomUUID(), name: 'Back Squat', muscle: 'Quads', kind: 'w' };
-  const flat = Array.from({ length: 9 }, (_, i) => session(41 - i * 5, [{ id: 'b' + i, exId: bench.id, sets: sets(80, 5) }, { id: 's' + i, exId: squat.id, sets: sets(100, 5) }]));
-  const fake = new FakeSupabase({ exercises: [bench, squat], sessions: flat });
-  await login(page, fake, 'A');
-  await page.locator('[data-act="start-menu"]:visible').first().click();
-  await page.click('[data-st-foot="0"]');
-  await page.locator('.co-band [data-act="deload-skip"]').click();
-  await expect(page.locator('#toast')).toContainText('asks again next week');
-  await expect(page.locator('.co-band')).toHaveCount(0);
-  await expect.poll(() => fake.profiles[0].deload?.skip > Date.now() + 6 * 864e5).toBe(true);
-  await page.goto('/coach');
-  if (info.project.name === 'phone') await page.locator('.co-tabs [data-t="recovery"]').click();
-  await expect(page.locator('.co-rec .co-pill')).toHaveText('Deload skipped');
-});
-
-test('a deload can be started from a session when none is due, with the Deload switch', async ({ page }) => {
-  const fake = new FakeSupabase(benchHistory());
+test('a deload is per session: yesterday’s deload session leaves today’s full, until switched on here too', async ({ page }) => {
+  const h = benchHistory(), bench = h.exercises[0];
+  const yday = { ...session(1, [{ id: 'y1', exId: bench.id, sets: sets(70, 5) }]), deload: true };
+  const fake = new FakeSupabase({ exercises: h.exercises, sessions: [...h.sessions, yday] });
   await login(page, fake, 'A');
   await page.locator('[data-act="start-menu"]:visible').first().click();
   await page.click('[data-st-foot="0"]');
   await page.click('[data-act="add-ex"]');
   await page.locator('[data-act="pk-pick"]', { hasText: 'Bench Press' }).click();
+  await expect(page.locator('.dl-tog')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.ex .sugg')).not.toContainText('deload');
   await page.locator('.dl-tog').click();
   await expect(page.locator('.dl-tog')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.ex .sugg')).toContainText('deload');
-  await expect(page.locator('.co-band')).toContainText('Deload week');
+  await expect(page.locator('.co-band')).toContainText('Deload session');
+  await expect.poll(() => fake.sessions.find(x => !x.ended_at)?.deload).toBe(true);
 });
 
 test('a squat goal: realistic date, milestones and this week’s block, which then sets the session target', async ({ page }) => {
@@ -290,29 +280,20 @@ test('the Coach card on Home: the call, then next, week, recovery and goal, each
   await expect(page.locator('.co-goal')).toContainText('110');
 });
 
-test('sessions done in a deload week carry a Deload status: in the Logbook, on the session, and found by searching', async ({ page }, info) => {
+test('a deload session carries a Deload status: in the Logbook, its calendar day, on the session, and found by searching', async ({ page }, info) => {
   const h = benchHistory(), bench = h.exercises[0];
-  const old = session(30, [{ id: 'o1', exId: bench.id, sets: sets(80, 5) }]);
-  const live = { id: crypto.randomUUID(), name: 'Push', started_at: new Date(Date.now() - 30 * 6e4).toISOString(), ended_at: null, items: [{ id: 'L1', exId: bench.id, sets: sets(70, 5) }] };
-  const fake = new FakeSupabase({ exercises: h.exercises, sessions: [...h.sessions, old, live], profile: { deload: { on: Date.now() - 3600e3, skip: null, past: [] } } });
+  const dl = { ...session(2, [{ id: 'd1', exId: bench.id, sets: sets(70, 5) }]), deload: true };
+  const fake = new FakeSupabase({ exercises: h.exercises, sessions: [...h.sessions, dl] });
   await login(page, fake, 'A');
-  await page.goto('/session/' + live.id);
-  await expect(page.locator('.dl-tog')).toHaveAttribute('aria-pressed', 'true');
-  await page.locator('.tfin[data-act="finish"]').click();
-  await expect.poll(() => fake.sessions.find(x => x.id === live.id)?.ended_at).toBeTruthy();
-  await page.goto('/session/' + live.id);
-  await expect(page.locator('.s-meta .st-dl')).toHaveText('Deload');
-  await page.goto('/history');
-  await expect(page.locator('#view .row[data-act="open"]').first().locator('.st-dl')).toHaveText('Deload');
-  await expect(page.locator('#view .row[data-act="open"] .st-dl')).toHaveCount(1);
-  /* ended, the week is kept, so the mark stays */
-  await page.goto('/coach');
-  if (info.project.name === 'phone') await page.locator('.co-tabs [data-t="recovery"]').click();
-  await page.locator('.co-rec [data-act="deload-end"]').click();
-  await expect.poll(() => (fake.profiles[0].deload?.past || []).length).toBe(1);
   await page.goto('/history');
   await expect(page.locator('#view .row[data-act="open"] .st-dl')).toHaveCount(1);
+  await expect(page.locator('#view .row[data-act="open"]', { has: page.locator('.st-dl') })).toContainText(new Date(dl.started_at).getDate() + '.');
   await page.locator('#view .hsearch input.search').fill('deload');
   if (await page.locator('#sheet').isVisible()) await page.keyboard.press('Escape');
   await expect(page.locator('#view .row[data-act="open"]')).toHaveCount(1);
+  await page.goto('/session/' + dl.id);
+  await expect(page.locator('.s-meta .st-dl')).toHaveText('Deload');
+  await page.goto('/logbook');
+  await expect(page.locator('.lb-d.dl')).toHaveCount(1);
+  await expect(page.locator('.lb-d.dl')).toHaveAttribute('aria-label', /deload/);
 });

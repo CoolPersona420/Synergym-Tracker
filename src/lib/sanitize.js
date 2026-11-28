@@ -41,7 +41,7 @@ export function cleanSession(o) {
   if (!o || typeof o !== 'object') return null;
   return { id: String(o.id), name: typeof o.name === 'string' && o.name ? o.name.slice(0, 80) : null, startedAt: num(o.startedAt) || Date.now(), endedAt: num(o.endedAt) || null,
     notes: typeof o.notes === 'string' ? o.notes.slice(0, 4000) : '', items: Array.isArray(o.items) ? o.items.slice(0, 60).map(cleanItem).filter(Boolean) : [],
-    splitId: o.splitId || null, splitDay: o.splitDay == null ? null : num(o.splitDay) };
+    splitId: o.splitId || null, splitDay: o.splitDay == null ? null : num(o.splitDay), ...(o.deload ? { deload: true } : {}) };
 }
 export function cleanDays(d) {
   if (!Array.isArray(d)) return [];

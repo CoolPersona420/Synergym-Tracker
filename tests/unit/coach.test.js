@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DAY, WEEK, e1rm, loadFor, parseRange, seriesByLift, currentE1rm, trend, stalled, falling, loadRatio, trainingStreak, splitRun,
-  readiness, lastBreak, deloadCheck, splitCheck, prescribe, goalPlan, phaseFor, analyse, withBreak, deloadChoice } from '../../src/lib/coach.js';
+  readiness, lastBreak, deloadCheck, splitCheck, prescribe, goalPlan, phaseFor, analyse, withBreak, deloadAsk } from '../../src/lib/coach.js';
 
 const NOW = new Date(2026, 9, 27, 18, 0).getTime();
 const snap = w => Math.round(w / 2.5) * 2.5;
@@ -228,18 +228,13 @@ test('a week off or deload that is due decides the day: the call never says trai
   assert.equal(withBreak(train, null), train);
 });
 
-test('deload is the lifter’s call: due is a question, skipped waits, started runs a week, a week off stays the coach’s', () => {
+test('deload is the lifter’s call: a due one is only a question, and never lightens the day by itself; a week off stays the coach’s', () => {
   const due = { status: 'now', kind: 'deload', weeks: 7, every: 6, reasons: ['7 weeks of hard training.'] };
-  assert.equal(deloadChoice(due, null, NOW).status, 'ask');
-  assert.equal(deloadChoice(due, { skipUntil: NOW + DAY }, NOW).status, 'skipped');
-  assert.equal(deloadChoice(due, { skipUntil: NOW - DAY }, NOW).status, 'ask');
-  const on = deloadChoice({ status: 'ok', kind: 'deload', weeks: 2, every: 6, reasons: [] }, { on: NOW - 2 * DAY }, NOW);
-  assert.equal(on.status, 'now'); assert.equal(on.chosen, true); assert.equal(on.day, 3);
-  assert.equal(deloadChoice(due, { on: NOW - 8 * DAY }, NOW).status, 'ask');
+  const asked = deloadAsk(due);
+  assert.equal(asked.status, 'ask'); assert.equal(asked.due, true);
+  assert.equal(withBreak({ call: 'train', reasons: [] }, asked).call, 'train');
+  assert.equal(deloadAsk({ status: 'soon', kind: 'deload' }).status, 'soon');
   const off = { status: 'now', kind: 'week-off', weeks: 17, every: 6, reasons: [] };
-  assert.equal(deloadChoice(off, null, NOW).status, 'now');
-  /* only a started deload lightens the day */
-  const r = { call: 'train', reasons: [] };
-  assert.equal(withBreak(r, deloadChoice(due, null, NOW)).call, 'train');
-  assert.equal(withBreak(r, deloadChoice(due, { on: NOW }, NOW)).call, 'easy');
+  assert.equal(deloadAsk(off).status, 'now');
+  assert.equal(withBreak({ call: 'train', reasons: [] }, deloadAsk(off)).call, 'rest');
 });

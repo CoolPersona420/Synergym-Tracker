@@ -6,7 +6,7 @@
    with `translate` transitions, which the browser runs on its compositor, so they stay smooth however busy the page
    is. A turn of direction mid-slide reverses from wherever the bar is. */
 export function dockAutoHide({ enabled }) {
-  let y0 = scrollY, run = 0, idle = 0, away = false;
+  let y0 = scrollY, run = 0, idle = 0, away = false, reachPx = 120;
   const root = document.documentElement, body = document.body;
   /* from the top of the highest bar part on screen (the + and its label sit above the dock) to below the bottom */
   const reach = () => {
@@ -19,22 +19,31 @@ export function dockAutoHide({ enabled }) {
     }
     return top === Infinity ? 0 : Math.ceil(innerHeight - top + 18);
   };
+  /* the top and the end of a page: near the end means within the bars' own height of it, so the last of the page is
+     never left without them. A phone can arrive at the end with no scroll event at the very bottom (its toolbar
+     resizing the screen, or the bounce), so this is checked again when scrolling settles, the screen resizes or a
+     finger lifts */
+  const atEdge = () => { const y = scrollY; return y < 56 || y + innerHeight >= root.scrollHeight - Math.max(64, reachPx); };
   const set = a => {
     if (a === away) return;
-    if (a) { const h = reach(); if (!h) return; root.style.setProperty('--dock-h', h + 'px'); }
+    if (a) { const h = reach(); if (!h) return; reachPx = h; root.style.setProperty('--dock-h', h + 'px'); }
     away = a; body.classList.toggle('dock-away', a);
   };
   const show = () => { run = 0; clearTimeout(idle); set(false); };
+  const recheck = () => { if (away && (!enabled() || atEdge())) show(); };
   addEventListener('scroll', () => {
     const y = scrollY, dy = y - y0; y0 = y;
-    if (!enabled()) return show();
-    if (y < 56 || y > root.scrollHeight - innerHeight - 32) return show();
+    if (!enabled() || atEdge()) return show();
     if (!dy) return;
     /* a run of scrolling one way: 24px down hides, 6px up is enough to bring them back */
     run = Math.sign(dy) === Math.sign(run) ? run + dy : dy;
     if (run > 24) set(true); else if (run < -6) set(false);
     clearTimeout(idle); idle = setTimeout(show, 1400);
   }, { passive: true });
+  addEventListener('scrollend', recheck);
+  addEventListener('touchend', () => setTimeout(recheck, 320), { passive: true });
+  addEventListener('resize', recheck);
+  if (window.visualViewport) visualViewport.addEventListener('resize', recheck);
   /* a key press into a bar (Tab) brings it back */
   addEventListener('focusin', e => { if (e.target.closest && e.target.closest('.nav,.transport')) show(); });
   return { show };

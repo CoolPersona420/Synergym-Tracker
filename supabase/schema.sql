@@ -51,12 +51,6 @@ alter table public.profiles add column if not exists lift_goals jsonb check (lif
 alter table public.profiles add column if not exists coach_on boolean not null default true;
 -- The day weeks start on, as in JavaScript's Date.getDay(): 1 Monday (the default), 0 Sunday, 6 Saturday.
 alter table public.profiles add column if not exists week_start smallint not null default 1 check (week_start in (0, 1, 6));
--- Deloads are the lifter's call (0.2.5): { on: when a deload week they started began (ms), skip: until when a due
--- deload is skipped (ms), past }. The coach asks when one is due and applies it only once started.
-alter table public.profiles add column if not exists deload jsonb;
--- with past: the deload weeks before the current one, [[start, end], …] in ms, at most 40, so their sessions stay marked
-alter table public.profiles drop constraint if exists profiles_deload_check;
-alter table public.profiles add constraint profiles_deload_check check (deload is null or (jsonb_typeof(deload) = 'object' and pg_column_size(deload) <= 2048));
 
 -- The starter list every new account receives (copied per user, then theirs to edit).
 create table if not exists public.default_exercises (
@@ -103,6 +97,9 @@ create table if not exists public.sessions (
   updated_at timestamptz not null default now()
 );
 create index if not exists sessions_user_started on public.sessions (user_id, started_at desc);
+-- A deload is per session and the lifter's call (0.2.5): switched on in a session, it lightens that session's targets
+-- and marks it Deload in the Logbook and its calendar.
+alter table public.sessions add column if not exists deload boolean not null default false;
 
 create table if not exists public.splits (
   id          uuid primary key default gen_random_uuid(),
@@ -362,9 +359,9 @@ begin
   insert into public.exercises (id, user_id, name, muscle, kind, archived, is_default, one_rm, one_rm_at, note, machines)
     select x.id, uid, x.name, x.muscle, x.kind, coalesce(x.archived, false), coalesce(x.is_default, false), x.one_rm, x.one_rm_at, x.note, x.machines
     from jsonb_to_recordset(p->'library') as x(id uuid, name text, muscle text, kind text, archived boolean, is_default boolean, one_rm numeric, one_rm_at timestamptz, note text, machines jsonb);
-  insert into public.sessions (id, user_id, name, started_at, ended_at, notes, items, split_id, split_day)
-    select x.id, uid, x.name, x.started_at, x.ended_at, coalesce(x.notes, ''), coalesce(x.items, '[]'), x.split_id, x.split_day
-    from jsonb_to_recordset(p->'sessions') as x(id uuid, name text, started_at timestamptz, ended_at timestamptz, notes text, items jsonb, split_id uuid, split_day int);
+  insert into public.sessions (id, user_id, name, started_at, ended_at, notes, items, split_id, split_day, deload)
+    select x.id, uid, x.name, x.started_at, x.ended_at, coalesce(x.notes, ''), coalesce(x.items, '[]'), x.split_id, x.split_day, coalesce(x.deload, false)
+    from jsonb_to_recordset(p->'sessions') as x(id uuid, name text, started_at timestamptz, ended_at timestamptz, notes text, items jsonb, split_id uuid, split_day int, deload boolean);
   insert into public.splits (id, user_id, name, description, days, copied_from)
     select x.id, uid, x.name, coalesce(x.description, ''), coalesce(x.days, '[]'), x.copied_from
     from jsonb_to_recordset(p->'splits') as x(id uuid, name text, description text, days jsonb, copied_from text);
@@ -376,7 +373,7 @@ begin
       display_name = coalesce(r.display_name, t.display_name), experience = coalesce(r.experience, t.experience),
       goal = coalesce(r.goal, t.goal), theme = r.theme, muscles = r.muscles, widgets = r.widgets,
       rest_days = r.rest_days, next_day = r.next_day, bw_log = r.bw_log, split_archive = r.split_archive, lift_goals = r.lift_goals, coach_on = coalesce(r.coach_on, t.coach_on),
-      week_start = coalesce(r.week_start, t.week_start), deload = r.deload
+      week_start = coalesce(r.week_start, t.week_start)
     from jsonb_populate_record(null::public.profiles, p->'profile') r
     where t.id = uid;
   end if;

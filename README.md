@@ -271,14 +271,12 @@ every coach hint goes, sessions show plain next-set suggestions, and goals are k
 - **Deloads and weeks off.** A lighter week about every 10, 6 or 5 weeks of hard training (beginner,
   intermediate, advanced), counted from the last break of 6+ days or the last lighter week, and straight
   away when half the main lifts stall or two keep falling. A full week off after 16 weeks without a break,
-  or when lifts stay stuck after a recent deload. A deload is the lifter's call: when one is due the coach asks
-  (on Coach › Recovery and in a live session) and nothing changes until they **Start deload**. **Skip this one**
-  asks again a week later; a running deload ends after 7 days or with **End deload** at any time, and the
-  **Deload** switch on a live session's date line starts or stops one there, due or not (saved in
-  `profiles.deload`, with past deload weeks so their sessions stay marked **Deload** in the Logbook, on the session
-  and in an exercise's recent sets). During a deload every target is about 10% lighter with half the sets. After a lighter week,
+  or when lifts stay stuck after a recent deload. A deload is the lifter's call, one session at a time: when one is due the coach asks
+  in a live session (**Deload this session** or **Dismiss**) and nothing changes until they say so. The **Deload**
+  switch on a session's date line makes that session a deload (`sessions.deload`), marked **Deload** in the Logbook
+  list and calendar, on the session and in an exercise's recent sets. In a deload session every target is about 10% lighter with half the sets. After a lighter week,
   stalls are ignored for two weeks while lifts bounce back. A week off that's due leads today's call (**Week
-  off**, a rest day), and a started deload turns a training day into **Deload** (an easy one).
+  off**, a rest day).
 - **The split.** Give a split 6–8 weeks. Time to change when, at the rate you actually train, a 4+ day split
   hits major muscles less than once a week, or when half the main lifts have stalled after 8+ weeks outside a
   deload; worth a tweak after 16 weeks with fewer than half still climbing, or if it skips a major muscle.

@@ -2589,3 +2589,9 @@ body::after{animation:none;opacity:.055;
 .display .ln{padding:0 .15em .12em 0;margin-bottom:-.06em}
 .display em{font-size:1.04em}
 .auth-box h2 em,.ob h1 em{font-weight:600}
+
+/* ---------- a deload day in the calendar: a dashed ring, lighter like the day was; on a computer its event says so ---------- */
+.lb-d.dl{outline:1.5px dashed color-mix(in srgb,var(--ink) 70%,transparent);outline-offset:2px}
+.lb-key .dl-key{display:inline-block;width:9px;height:9px;border-radius:3px;outline:1.5px dashed color-mix(in srgb,var(--ink) 70%,transparent);outline-offset:0;margin-right:6px;vertical-align:-1px}
+@media (min-width:60rem){.lb-d.dl{outline-offset:-3px}}
+.lb-ev.dl{background-image:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 10%,transparent) 0 1px,transparent 1px 5px)}
