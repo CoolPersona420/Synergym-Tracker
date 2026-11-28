@@ -2618,6 +2618,9 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 .display .g-name{font-family:var(--font-title);font-weight:400;font-size:1.05em;letter-spacing:0;line-height:.8;padding:0 .04em;
   text-transform:none}
 .display .ln:has(.g-name){overflow:visible}
+/* the greeting's enlarged words reach above their lines; it has nothing to tap, so taps pass through it to the date
+   above (which opens Today's plan) instead of landing on a word */
+.hero .display{pointer-events:none}
 /* the brush is painted in the theme's own colour: Auto and Mono in the wolf's red (the Start button's), the Wada and
    Hokusai themes in their seal colour, every other theme in its accent */
 :root{--brush:var(--accent)}
