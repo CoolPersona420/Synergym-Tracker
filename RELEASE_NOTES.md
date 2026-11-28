@@ -12,12 +12,13 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ## 0.2.6-alpha · 28 November 2026
 
-**Clearer saving when you edit a past session**
+**Clearer saving, and a finer grain**
 
 - **Plain choices:** saving an edited older session now asks in plain words, with the usual choice first: **Update
   Tuesday's session** (saves your changes to the session you opened), or **Log it as a new session today** (today
   gets a new session with these sets; Tuesday's stays as it was).
 - **No question when there isn't one:** a session from today, or one you didn't change, just saves.
+- **Fine grain:** the paper texture behind every page is replaced by a still, fine and even grain.
 
 ---
 
