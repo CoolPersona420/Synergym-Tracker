@@ -2488,7 +2488,9 @@ body::after{animation:none;opacity:.055;
    brightest colour; the rest keep their solid ---------- */
 :root{--ring:var(--solid);--ring-ink:var(--solid-ink)}
 :root[data-theme^="wada-"],:root[data-theme="kanagawa"],:root[data-theme="lotus"]{--ring:var(--orb-solid);--ring-ink:var(--orb-ink)}
-.nav-train .ring,.nav-train .nl{background:var(--ring);color:var(--ring-ink)}
+.nav-train .ring{background:var(--ring);color:var(--ring-ink)}
+/* on a phone the label floats beside the + as its own pill, in the same colour; wider, it's plain text in the bar */
+@media (max-width:47.99rem){.nav-train .nl{background:var(--ring);color:var(--ring-ink)}}
 .nav-train.live .ring::after{background:var(--ring-ink);box-shadow:0 0 0 2px var(--ring)}
 
 /* ---------- Auto, Mono Light and Mono Dark: the default, refined. Black and white warmed a touch towards paper and
