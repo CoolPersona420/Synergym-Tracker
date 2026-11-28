@@ -27,7 +27,7 @@ async function onboardOffline(page, name = 'Alex') {
   await page.click('[data-act="ob-pick"][data-k="goal"][data-v="strength"]');
   await page.click('[data-act="ob-next"]');
   await page.click('[data-act="ob-next"]');
-  await page.click('[data-act="ob-theme"][data-t="dark"]');
+  await page.click('[data-act="th-dd"]'); await page.click('[data-act="ob-theme"][data-t="dark"]');
   await page.click('[data-act="ob-finish"]');
   await page.waitForSelector('.tour');
   for (let i = 0; i < 4; i++) await page.click('#tour-next');

@@ -18,7 +18,7 @@ test('online onboarding: six steps, theme choice saved, then the tour', async ({
   await expect(page.locator('.opt.on')).toContainText('Upper / Lower');
   await page.click('[data-act="ob-next"]');
   await expect(page.locator('.ob-head .lbl')).toContainText('Step 6 of 6');
-  await page.click('[data-act="ob-theme"][data-t="volt"]');
+  await page.click('[data-act="th-dd"]'); await page.click('[data-act="ob-theme"][data-t="volt"]');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'volt');
   await page.click('[data-act="ob-finish"]');
   await expect(page.locator('.tour')).toBeVisible();
@@ -151,7 +151,7 @@ test('Ocean is retired: it is gone from the theme picker, and someone who had it
   await page.goto('/settings');
   await expect(page.locator('[data-act="d-theme"][data-t="ocean"]')).toHaveCount(0);
   await expect(page.locator('[data-act="d-theme"]')).toHaveCount(19);
-  await expect(page.locator('[data-act="d-theme"][data-t="auto"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-act="d-theme"][data-t="auto"]')).toHaveAttribute('aria-selected', 'true');
 });
 
 test('every theme paints its page background on one fixed layer, so the safe areas and scroll bounce match it', async ({ page }) => {
@@ -203,9 +203,9 @@ test('switching theme updates the dock at once: the dark marker follows the them
   await login(page, new FakeSupabase(benchHistory()), 'A');
   await page.goto('/settings'); await page.waitForTimeout(600);
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('is-dark'));
-  await page.click('[data-act="d-theme"][data-t="volt"]'); await expect.poll(dark).toBe(true);
-  await page.click('[data-act="d-theme"][data-t="light"]'); await expect.poll(dark).toBe(false);
-  await page.click('[data-act="d-theme"][data-t="nord"]'); await expect.poll(dark).toBe(true);
+  await page.click('[data-act="th-dd"]'); await page.click('[data-act="d-theme"][data-t="volt"]'); await expect.poll(dark).toBe(true);
+  await page.click('[data-act="th-dd"]'); await page.click('[data-act="d-theme"][data-t="light"]'); await expect.poll(dark).toBe(false);
+  await page.click('[data-act="th-dd"]'); await page.click('[data-act="d-theme"][data-t="nord"]'); await expect.poll(dark).toBe(true);
 });
 
 test('phone: the + minimizes before the dock stretches; back, the dock shrinks before the + returns', async ({ page }, info) => {

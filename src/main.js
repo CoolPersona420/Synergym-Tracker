@@ -2613,7 +2613,7 @@ function vPrefs() {
     row('Coach', `<button class="toggle${coachOn() ? ' on' : ''}" data-act="coach-switch" aria-pressed="${coachOn()}" aria-label="Coach"></button>`, 'Targets, today’s call, deloads, your split and goals') +
     (coachOn() ? link('Open the coach', 'data-act="nav" data-v="coach"') : ''),
     coachOn() ? 'On: the Coach card is on Home and the coach sets your targets.' : 'Off: the Coach card is hidden and sessions show plain next-set suggestions. Your goals are kept.')}
-  ${group('Appearance', `<div class="srow"><span class="k">Theme</span><span class="v">${esc((THEMES.find(t => t.id === themePref()) || THEMES[0]).name)}</span></div><div class="sg-pad">${themePicker()}</div>` + link('Home widgets', 'data-act="edit-home"', plural(homeWidgets().length, 'widget')))}
+  ${group('Appearance', `<div class="srow"><span class="k">Theme</span></div><div class="sg-pad">${themePicker()}</div>` + link('Home widgets', 'data-act="edit-home"', plural(homeWidgets().length, 'widget')))}
   ${S.local ? group('Account',
     `<div class="srow"><span class="k">Offline<small class="keep">Everything is saved on this phone only</small></span><span class="off-dot" aria-hidden="true"></span></div>` +
     link('Go online', 'data-act="go-online"', 'Sync to an account'),
@@ -2692,6 +2692,10 @@ function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.rem
   /* a drag the system interrupts (a call, a notification) settles back */
   sp.addEventListener('touchcancel', () => { if (y0 == null) return; y0 = null; sp.style.transition = 'transform .32s var(--ease)'; sp.style.transform = ''; });
 })();
+/* the theme dropdown closes on a tap outside it, or Escape */
+const thClose = () => { for (const d of $$('.th-dd.open')) { d.classList.remove('open'); d.querySelector('.th-list').hidden = true; d.querySelector('.th-cur').setAttribute('aria-expanded', 'false'); } };
+document.addEventListener('pointerdown', e => { if (!(e.target.closest && e.target.closest('.th-dd'))) thClose(); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('.th-dd.open')) thClose(); });
 document.addEventListener('keydown', e => {
   /* the update popup keeps the keyboard: nothing behind it, and it can't be closed */
   if ($('#upd')) { if (e.key === 'Tab' || e.key === 'Escape') { e.preventDefault(); $('#upd-go')?.focus(); } else if (!(e.key === 'Enter' || e.key === ' ') || document.activeElement?.id !== 'upd-go') e.preventDefault(); e.stopImmediatePropagation(); return; }
@@ -3980,6 +3984,9 @@ const ACT = {
     const t = previewGroup(s, [...S.link]).type; S.link = null; queue('s:' + s.id, 0); render(false); toast(t + ' linked'); },
   unlink: el => { const s = cur(); if (!s) return; for (const it of s.items) for (const st of it.sets) if (st.g === el.dataset.g) st.g = null; queue('s:' + s.id, 300); render(false); },
   'rest-add': el => { if (S.rest) { S.rest.end += (+el.dataset.d) * 1000; S.rest.len = Math.max(1000, (S.rest.len || 0) + (+el.dataset.d) * 1000); tick(); } },
+  /* the theme dropdown: open or close its list, showing the theme in use */
+  'th-dd': el => { const l = el.nextElementSibling, open = l.hidden; l.hidden = !open; el.setAttribute('aria-expanded', String(open)); el.closest('.th-dd').classList.toggle('open', open);
+    if (open) { const on = l.querySelector('.on'); if (on) l.scrollTop = on.offsetTop - l.clientHeight / 2 + on.offsetHeight / 2; } },
   /* deloads: the lifter's call. Skipped or ended, a due one is asked about again in a week */
   'deload-start': () => { deloadSet(Date.now(), null); toast('Deload week started: targets about 10% lighter, half the sets'); },
   'deload-skip': () => { deloadSet(null, Date.now() + DELOAD_DAYS * 864e5); toast('Deload skipped. The coach asks again next week'); },

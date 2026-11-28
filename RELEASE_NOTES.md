@@ -16,7 +16,7 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 - **Themes from Japanese art:** Great Wave and Lotus from Hokusai's *The Great Wave off Kanagawa*, and six palettes
   from Sanzo Wada's *A Dictionary of Color Combinations* (1933): Indigo, Ivory, Tyrian, Glaucous, Naples and Slate
-  Olive. Settings › Appearance, grouped by artwork. Auto and Mono are warmer too: paper and sumi tones, with the
+  Olive. Settings › Appearance has every theme in one dropdown, each with its colours. Auto and Mono are warmer too: paper and sumi tones, with the
   wolf's red for the Start button.
 - **More room while you scroll:** on a phone the dock slides away as you scroll down a page and comes back when you
   scroll up or stop. Tap the tab you're on to glide back to the top.

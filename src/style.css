@@ -811,18 +811,6 @@ body.bare #view{max-width:none;padding:0}
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;margin-left:calc(var(--gl) * -1);margin-right:calc(var(--gr) * -1);padding-left:var(--gl);padding-right:var(--gr);background:var(--bg)}
 
 /* ---------- theme picker ---------- */
-.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:var(--s-1)}
-.theme-card{display:flex;flex-direction:column;gap:var(--s-1);padding:var(--s-1);border-radius:var(--r-md);background:var(--surface-2);border:1.5px solid transparent;text-align:left;font-size:.82rem;font-weight:600;transition:transform .3s var(--ease),border-color .2s}
-.theme-card:hover{transform:translateY(-2px)}
-.theme-card.on{border-color:var(--accent)}
-.theme-card small{display:block;font-weight:400;color:var(--muted);font-size:.72rem}
-.themes-h{margin:var(--s0) 0 var(--s-1);font-size:.78rem;font-weight:600;color:var(--muted)}
-.themes-h i{font-family:var(--font-serif);font-weight:500}
-.tp{position:relative;height:3.6rem;border-radius:var(--r-sm);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(127,127,127,.25)}
-.tp b{position:absolute;left:8px;top:8px;width:55%;height:20px;border-radius:5px}
-.tp i{position:absolute;left:8px;bottom:8px;width:35%;height:5px;border-radius:3px}
-.tp u{position:absolute;right:8px;bottom:8px;width:16px;height:16px;border-radius:50%}
-.tp em{position:absolute;right:8px;top:8px;width:22px;height:22px;border-radius:6px}
 
 /* settings save bar */
 .savebar{position:sticky;bottom:calc(var(--s0) + env(safe-area-inset-bottom,0px));z-index:12;display:flex;align-items:center;gap:var(--s-1);margin-top:var(--s1);padding:var(--s-1) var(--s-1) var(--s-1) var(--s0);border-radius:999px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
@@ -945,8 +933,8 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-in-back}
 @keyframes vt-in-back{from{clip-path:inset(0 0 100% 0);transform:translateY(-5%)}to{clip-path:inset(0 0 0 0);transform:none}}
 
 /* press feedback, identical for touch and mouse */
-.iconbtn,.nav-i,.row,.opt,.theme-card{transition:transform .25s var(--ease),background .2s,color .3s,border-color .2s}
-.iconbtn:active,.nav-i:active,.opt:active,.theme-card:active{transform:scale(.94)}
+.iconbtn,.nav-i,.row,.opt{transition:transform .25s var(--ease),background .2s,color .3s,border-color .2s}
+.iconbtn:active,.nav-i:active,.opt:active{transform:scale(.94)}
 .row:active{transform:scale(.985)}
 .row:active .tri{transform:translateX(4px);border-left-color:var(--accent)}
 .nav-train:active .ring{transform:scale(.92)}
@@ -1036,7 +1024,6 @@ button,a,label,input,select,textarea,[data-act]{touch-action:manipulation}
 .me-t{display:flex;flex-direction:column;min-width:0}
 .me-t b{font-size:1.15rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .me-t span{font-size:.85rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sg .themes{grid-template-columns:repeat(auto-fill,minmax(7.5rem,1fr))}
 @media (max-width:47.99rem){
   .srow .k small{display:none}
   .srow .field{width:9.5rem}
@@ -1051,10 +1038,6 @@ button,a,label,input,select,textarea,[data-act]{touch-action:manipulation}
   /* it runs to the card's edges, but its tiles start and end in line with the rows above and below: snapping
      uses scroll-padding (padding alone is ignored, so the first tile was pulled to the edge), and a spacer
      stands in for end padding, which Safari leaves out of a scroller */
-  .sg .themes{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;margin:0 calc(var(--s0) * -1);padding:2px 0 2px var(--s0);scroll-padding-inline:var(--s0);gap:var(--s-1)}
-  .sg .themes::after{content:"";flex:0 0 calc(var(--s0) - var(--s-1))}
-  .sg .themes::-webkit-scrollbar{display:none}
-  .sg .theme-card{flex:0 0 7.6rem;scroll-snap-align:start}
   .savebar #savemsg{display:none}
   .savebar #discard-prefs{flex:1}
   .savebar #save-prefs{flex:1.618}
@@ -1132,7 +1115,7 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
 @media (max-width:47.99rem) and (hover:hover){.nav-train:hover .nl{opacity:1;transform:translate(0,-50%)}}
 
 /* springy, organic press feedback */
-.iconbtn,.nav-i,.opt,.theme-card,.chip,.seg button,.stepper button{transition:transform .45s var(--spring),background .2s,color .3s,border-color .2s}
+.iconbtn,.nav-i,.opt,.chip,.seg button,.stepper button{transition:transform .45s var(--spring),background .2s,color .3s,border-color .2s}
 .chip:active,.seg button:active,.stepper button:active{transform:scale(.92)}
 
 /* scroll-linked motion where the browser supports it (no JS, runs off the main thread) */
@@ -1245,7 +1228,7 @@ html[data-nav="back"]::view-transition-new(root){animation-name:vt-rise-back}
 .toggle.nt,.toggle.nt::after{transition:none!important}
 .pop-on{animation:pop-on .55s var(--spring)}
 @keyframes pop-on{from{transform:scale(.86)}}
-.chip,.daysel button,.theme-card,.opt{transition:background .35s var(--ease),color .35s,border-color .35s,transform .45s var(--spring)}
+.chip,.daysel button,.opt{transition:background .35s var(--ease),color .35s,border-color .35s,transform .45s var(--spring)}
 
 /* ---------- transitions: tabs slide sideways, widgets grow out of their card ---------- */
 html[data-nav="tab-fwd"]::view-transition-old(root){animation:tab-out-l .38s var(--ease) both}
@@ -1602,8 +1585,6 @@ textarea.sp-name{display:block;resize:none;overflow:hidden;color:inherit;overflo
 .tpl-days i{font-style:normal;font-size:.68rem;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
 .tpl-days{align-items:center}
 .tpl-days i.r{width:6px;height:6px;padding:0;border-radius:50%;background:var(--line)}
-.ob-themes .themes{grid-template-columns:repeat(auto-fill,minmax(9rem,1fr))}
-.ob-themes .theme-card{background:var(--surface)}
 .ob-nav .btn.lg{min-height:3.25rem}
 /* phones: Back and Continue sit on the bottom edge, always in reach */
 @media (max-width:47.99rem){
@@ -2456,7 +2437,7 @@ html.lite .a-in,html.lite .chk.a-pop,html.lite .tsum.a-bump,html.lite .nav-badge
 .chip{transition:transform .5s var(--spring),background .3s var(--ease),color .3s,box-shadow .3s}
 .chip:active{transform:scale(.93);transition-duration:.08s}
 .chip.on{box-shadow:var(--key)}
-.opt:active,.theme-card:active,.st-day:active{transform:scale(.97);transition:transform .08s ease-out}
+.opt:active,.st-day:active{transform:scale(.97);transition:transform .08s ease-out}
 .fab{box-shadow:var(--key),var(--shadow);transition:transform .6s var(--spring),box-shadow .3s var(--ease)}
 .fab:active{transform:scale(.92);box-shadow:var(--key-down);transition-duration:.08s}
 .nav-i:active{transform:scale(.86);transition:transform .08s ease-out}
@@ -2575,3 +2556,28 @@ body::after{animation:none;opacity:.055;
   color:var(--ink-2);background:color-mix(in srgb,var(--heat-ink) 12%,var(--surface-2));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 10%,transparent)}
 .hist-s .term .st-dl{margin-left:6px;vertical-align:1px}
 .s-meta > .st-dl{margin-left:0}
+
+/* ---------- the theme picker: one dropdown, every theme with its colours on the side ---------- */
+.th-dd{display:flex;flex-direction:column;gap:6px}
+.th-cur,.th-o{display:flex;align-items:center;gap:var(--s0);width:100%;text-align:left;color:var(--ink)}
+.th-cur{padding:.7rem .8rem .7rem 1rem;border-radius:var(--r-md);background:var(--surface-2);box-shadow:var(--key-soft),inset 0 0 0 1px var(--line);
+  transition:transform .5s var(--spring),box-shadow .3s var(--ease)}
+.th-cur:active{transform:scale(.98);transition-duration:.08s}
+.th-n{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;font-weight:700;font-size:.95rem;letter-spacing:-.01em}
+.th-n small{font-weight:400;font-size:.74rem;letter-spacing:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.th-sw{display:inline-flex;flex:none;padding-left:5px}
+.th-sw i{width:20px;height:20px;border-radius:50%;margin-left:-5px;box-shadow:0 0 0 2px var(--surface-2),inset 0 0 0 1px rgba(127,127,127,.25)}
+.th-ch{display:grid;place-items:center;flex:none;width:1.5rem;color:var(--muted)}
+.th-ch .ico{width:18px;height:18px;transition:transform .35s var(--ease)}
+.th-dd.open .th-ch .ico{transform:rotate(180deg)}
+.th-list{max-height:min(24rem,55vh);overflow-y:auto;overscroll-behavior:contain;padding:4px;border-radius:var(--r-md);background:var(--surface);
+  box-shadow:inset 0 0 0 1px var(--line);animation:th-in .28s var(--ease)}
+.th-o{padding:.55rem .6rem .55rem .75rem;border-radius:calc(var(--r-md) - 4px);transition:background .2s}
+.th-o + .th-o{margin-top:2px}
+.th-o .th-sw i{box-shadow:0 0 0 2px var(--surface),inset 0 0 0 1px rgba(127,127,127,.25)}
+.th-o:hover,.th-o:focus-visible{background:color-mix(in srgb,var(--surface-2) 70%,transparent)}
+.th-o.on{background:var(--surface-2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 14%,transparent)}
+.th-o.on .th-n{font-weight:800}
+@keyframes th-in{from{opacity:0;transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.th-list{animation:none}.th-ch .ico{transition:none}}
+.th-o.on .th-sw i{box-shadow:0 0 0 2px var(--surface-2),inset 0 0 0 1px rgba(127,127,127,.25)}
