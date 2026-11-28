@@ -16,7 +16,7 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 - **Themes from Japanese art:** Great Wave and Lotus from Hokusai's *The Great Wave off Kanagawa*, and six palettes
   from Sanzo Wada's *A Dictionary of Color Combinations* (1933): Indigo, Ivory, Tyrian, Glaucous, Naples and Slate
-  Olive. Settings › Appearance has every theme in one dropdown, each with its colours. Auto and Mono are warmer too: paper and sumi tones, with the
+  Olive. In Settings › Appearance, tap Theme for a popup of every theme, each with its colours. Auto and Mono are warmer too: paper and sumi tones, with the
   wolf's red for the Start button.
 - **More room while you scroll:** on a phone the dock slides away as you scroll down a page and comes back when you
   scroll up or stop. Tap the tab you're on to glide back to the top.
@@ -32,7 +32,8 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
   Logbook, on the session and in an exercise's recent sets; search “deload” to list them.
 - **A clearer session bar:** when the session started (start and end once it's over) over its sets and volume, a red
   Finish button, and a line that empties as your rest runs down. It slides away while you scroll, like the dock.
-- **Simpler words:** Home greets you in two short lines; the session's name and intensity use the soft italic.
+- **Simpler words, one title face:** Home greets you in two short lines, and every page title (Home, Logbook,
+  Exercises, Splits, Settings, a session, the login) is set in the same soft italic.
 
 ---
 

@@ -2557,8 +2557,7 @@ body::after{animation:none;opacity:.055;
 .hist-s .term .st-dl{margin-left:6px;vertical-align:1px}
 .s-meta > .st-dl{margin-left:0}
 
-/* ---------- the theme picker: one dropdown, every theme with its colours on the side ---------- */
-.th-dd{display:flex;flex-direction:column;gap:6px}
+/* ---------- the theme picker: a button that opens a popup of every theme, with its colours on the side ---------- */
 .th-cur,.th-o{display:flex;align-items:center;gap:var(--s0);width:100%;text-align:left;color:var(--ink)}
 .th-cur{padding:.7rem .8rem .7rem 1rem;border-radius:var(--r-md);background:var(--surface-2);box-shadow:var(--key-soft),inset 0 0 0 1px var(--line);
   transition:transform .5s var(--spring),box-shadow .3s var(--ease)}
@@ -2569,15 +2568,24 @@ body::after{animation:none;opacity:.055;
 .th-sw i{width:20px;height:20px;border-radius:50%;margin-left:-5px;box-shadow:0 0 0 2px var(--surface-2),inset 0 0 0 1px rgba(127,127,127,.25)}
 .th-ch{display:grid;place-items:center;flex:none;width:1.5rem;color:var(--muted)}
 .th-ch .ico{width:18px;height:18px;transition:transform .35s var(--ease)}
-.th-dd.open .th-ch .ico{transform:rotate(180deg)}
-.th-list{max-height:min(24rem,55vh);overflow-y:auto;overscroll-behavior:contain;padding:4px;border-radius:var(--r-md);background:var(--surface);
-  box-shadow:inset 0 0 0 1px var(--line);animation:th-in .28s var(--ease)}
+.th-list{display:flex;flex-direction:column;margin:0 calc(var(--s-1) * -1) var(--s-1)}
 .th-o{padding:.55rem .6rem .55rem .75rem;border-radius:calc(var(--r-md) - 4px);transition:background .2s}
 .th-o + .th-o{margin-top:2px}
-.th-o .th-sw i{box-shadow:0 0 0 2px var(--surface),inset 0 0 0 1px rgba(127,127,127,.25)}
+.th-o .th-sw i{box-shadow:0 0 0 2px var(--bg),inset 0 0 0 1px rgba(127,127,127,.25)}
 .th-o:hover,.th-o:focus-visible{background:color-mix(in srgb,var(--surface-2) 70%,transparent)}
 .th-o.on{background:var(--surface-2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 14%,transparent)}
 .th-o.on .th-n{font-weight:800}
-@keyframes th-in{from{opacity:0;transform:translateY(-4px)}}
-@media (prefers-reduced-motion:reduce){.th-list{animation:none}.th-ch .ico{transition:none}}
 .th-o.on .th-sw i{box-shadow:0 0 0 2px var(--surface-2),inset 0 0 0 1px rgba(127,127,127,.25)}
+
+/* ---------- one title face across the app: every page title in Fraunces at its softest. The Home greeting is a title
+   too: its hello upright, its sentence in the italic. The condensed face stays for numbers and the wordmark ---------- */
+:root{--title-v:"SOFT" 100,"WONK" 1,"opsz" 144}
+.h1,.ttl-c,.s-name,.auth-box h2,.ob h1{font-family:var(--font-serif);font-style:italic;font-weight:600;text-transform:none;letter-spacing:-.02em;font-variation-settings:var(--title-v)}
+.h1,.ob h1,.auth-box h2{font-size:clamp(2.3rem,9.5vw,3.2rem);line-height:1.02}
+.ttl-c{font-size:1.5rem;letter-spacing:-.01em}
+.ttl-c,body.scrolled header.top .ttl-c{transform:none}
+.display{font-family:var(--font-serif);font-weight:600;text-transform:none;letter-spacing:-.025em;line-height:1.02;font-variation-settings:"SOFT" 100,"WONK" 0,"opsz" 144}
+.display .ln>span,.display .w{transform:none!important}
+.display .ln{padding:0 .15em .12em 0;margin-bottom:-.06em}
+.display em{font-size:1.04em}
+.auth-box h2 em,.ob h1 em{font-weight:600}

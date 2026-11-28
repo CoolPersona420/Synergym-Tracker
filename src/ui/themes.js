@@ -40,13 +40,17 @@ export function applyTheme(t) {
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   for (const m of $$('meta[name="theme-color"]')) m.content = bg || (isDark() ? '#080808' : '#EEEDE9');
 }
-/* the theme picker: one dropdown, every theme in a single list with its colours on the side (page, card, ink,
-   accent). Picking one applies it at once. th-dd opens and closes the list (main.js). */
+/* the theme picker: a button with the theme in use and its colours, which opens a popup of every theme in one list,
+   each with its colours on the side (page, card, ink, accent). Picking one applies it and closes the popup. */
 const swatch = t => `<span class="th-sw" aria-hidden="true">${[t.c[0], t.c[1], t.c[2], t.c[3]].map(c => `<i style="background:${c}"></i>`).join('')}</span>`;
 const thName = t => `<span class="th-n">${t.name}<small>${t.note}</small></span>`;
 export const themePicker = (act = 'd-theme') => {
   const cur = THEMES.find(t => t.id === themePref()) || THEMES[0];
-  return `<div class="th-dd"><button class="th-cur" data-act="th-dd" aria-haspopup="listbox" aria-expanded="false" aria-label="Theme: ${cur.name}">${thName(cur)}${swatch(cur)}<span class="th-ch">${ICON.down}</span></button>
-  <div class="th-list" role="listbox" aria-label="Themes" hidden>${THEMES.map(t => `<button class="th-o${t.id === cur.id ? ' on' : ''}" role="option" aria-selected="${t.id === cur.id}" data-act="${act}" data-t="${t.id}">${thName(t)}${swatch(t)}</button>`).join('')}</div></div>`;
+  return `<button class="th-cur" data-act="th-pop" data-pick="${act}" aria-haspopup="dialog" aria-label="Theme: ${cur.name}. Change">${thName(cur)}${swatch(cur)}<span class="th-ch">${ICON.down}</span></button>`;
+};
+/* the popup's list; act is what a pick does (d-theme in Settings, ob-theme in onboarding) */
+export const themeList = (act = 'd-theme') => {
+  const cur = themePref();
+  return `<div class="th-list" role="listbox" aria-label="Themes">${THEMES.map(t => `<button class="th-o${t.id === cur ? ' on' : ''}" role="option" aria-selected="${t.id === cur}" data-act="${act}" data-t="${t.id}">${thName(t)}${swatch(t)}</button>`).join('')}</div>`;
 };
 export const themeBtn = () => `<button class="theme-btn" data-act="theme-flip" aria-label="Switch to ${isDark() ? 'light' : 'dark'} mode" title="Switch to ${isDark() ? 'light' : 'dark'} mode">${isDark() ? ICON.sun : ICON.moon}</button>`;

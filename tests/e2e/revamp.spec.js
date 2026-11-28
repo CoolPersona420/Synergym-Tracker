@@ -96,24 +96,27 @@ test('phone: in a session the bar slides away while scrolling down and comes bac
   await expect(page.locator('.transport .tfin')).toBeInViewport();
 });
 
-test('themes are one dropdown: every theme in a single list with its colours, no groups; picking one applies it and closes the list', async ({ page }) => {
+test('themes are a popup: every theme in a single list with its colours, no groups; picking one applies it and closes the popup', async ({ page }) => {
   await login(page, new FakeSupabase(), 'A');
   await page.goto('/settings');
-  const dd = page.locator('.th-dd');
-  await expect(dd.locator('.th-cur')).toContainText('Auto');
-  await expect(dd.locator('.th-list')).toBeHidden();
-  await dd.locator('.th-cur').click();
-  await expect(dd.locator('.th-list')).toBeVisible();
-  await expect(dd.locator('.th-o')).toHaveCount(19);
-  await expect(dd.locator('.th-o').first().locator('.th-sw i')).toHaveCount(4);
+  const btn = page.locator('.th-cur');
+  await expect(btn).toContainText('Auto');
+  await expect(btn.locator('.th-sw i')).toHaveCount(4);
+  await btn.click();
+  const pop = page.locator('#sheet');
+  await expect(pop.locator('h3')).toHaveText('Theme');
+  await expect(pop.locator('.th-o')).toHaveCount(19);
+  await expect(pop.locator('.th-o').first().locator('.th-sw i')).toHaveCount(4);
+  await expect(pop.locator('.th-o[data-t="auto"]')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.themes-h')).toHaveCount(0);
-  await dd.locator('.th-o[data-t="kanagawa"]').click();
+  await pop.locator('.th-o[data-t="kanagawa"]').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'kanagawa');
-  await expect(page.locator('.th-dd .th-list')).toBeHidden();
-  await expect(page.locator('.th-dd .th-cur')).toContainText('Great Wave');
-  /* a tap outside closes it */
-  await page.locator('.th-dd .th-cur').click();
-  await expect(page.locator('.th-dd .th-list')).toBeVisible();
-  await page.mouse.click(5, 5);
-  await expect(page.locator('.th-dd .th-list')).toBeHidden();
+  await expect(page.locator('#sheet')).toBeHidden();
+  await expect(page.locator('.th-cur')).toContainText('Great Wave');
+  /* closed without a pick: nothing changes */
+  await page.locator('.th-cur').click();
+  await expect(page.locator('#sheet .th-o[data-t="kanagawa"]')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sheet')).toBeHidden();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'kanagawa');
 });

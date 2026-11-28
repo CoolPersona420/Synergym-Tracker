@@ -15,7 +15,7 @@ import { CARDIO, METRICS, howOf, defaultMetrics, parseTime, fmtDur, fmtMin, dist
 import { DEFAULT_PROFILE, profFromDb, profToDb, deloadWeeks, inDeload } from './lib/profile.js';
 import { parseImport, SPLIT_MAX } from './lib/importer.js';
 import { ICON, brand, lockup, big, disp, countUp } from './ui/brand.js';
-import { THEMES, themePref, isDark, applyTheme, markDark, themePicker } from './ui/themes.js';
+import { THEMES, themePref, isDark, applyTheme, markDark, themePicker, themeList } from './ui/themes.js';
 import { SPL, QS, setSplashHooks, splashIn, splashOut, quickIn, quickOut } from './ui/splash.js';
 import { TEMPLATES, recommendTemplate } from './data/templates.js';
 import { guideSections, tourSlides } from './ui/guide.js';
@@ -2692,10 +2692,6 @@ function closeSheet() { for (const w of $$('.what-pick.open')) { w.classList.rem
   /* a drag the system interrupts (a call, a notification) settles back */
   sp.addEventListener('touchcancel', () => { if (y0 == null) return; y0 = null; sp.style.transition = 'transform .32s var(--ease)'; sp.style.transform = ''; });
 })();
-/* the theme dropdown closes on a tap outside it, or Escape */
-const thClose = () => { for (const d of $$('.th-dd.open')) { d.classList.remove('open'); d.querySelector('.th-list').hidden = true; d.querySelector('.th-cur').setAttribute('aria-expanded', 'false'); } };
-document.addEventListener('pointerdown', e => { if (!(e.target.closest && e.target.closest('.th-dd'))) thClose(); }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('.th-dd.open')) thClose(); });
 document.addEventListener('keydown', e => {
   /* the update popup keeps the keyboard: nothing behind it, and it can't be closed */
   if ($('#upd')) { if (e.key === 'Tab' || e.key === 'Escape') { e.preventDefault(); $('#upd-go')?.focus(); } else if (!(e.key === 'Enter' || e.key === ' ') || document.activeElement?.id !== 'upd-go') e.preventDefault(); e.stopImmediatePropagation(); return; }
@@ -3984,9 +3980,8 @@ const ACT = {
     const t = previewGroup(s, [...S.link]).type; S.link = null; queue('s:' + s.id, 0); render(false); toast(t + ' linked'); },
   unlink: el => { const s = cur(); if (!s) return; for (const it of s.items) for (const st of it.sets) if (st.g === el.dataset.g) st.g = null; queue('s:' + s.id, 300); render(false); },
   'rest-add': el => { if (S.rest) { S.rest.end += (+el.dataset.d) * 1000; S.rest.len = Math.max(1000, (S.rest.len || 0) + (+el.dataset.d) * 1000); tick(); } },
-  /* the theme dropdown: open or close its list, showing the theme in use */
-  'th-dd': el => { const l = el.nextElementSibling, open = l.hidden; l.hidden = !open; el.setAttribute('aria-expanded', String(open)); el.closest('.th-dd').classList.toggle('open', open);
-    if (open) { const on = l.querySelector('.on'); if (on) l.scrollTop = on.offsetTop - l.clientHeight / 2 + on.offsetHeight / 2; } },
+  /* the theme popup: every theme with its colours, the one in use in view */
+  'th-pop': el => { openSheet(`<div class="sh-h"><h3>Theme</h3>${xBtn()}</div>${themeList(el.dataset.pick)}`); const on = $('#sheet-body .th-o.on'); if (on) on.scrollIntoView({ block: 'center' }); },
   /* deloads: the lifter's call. Skipped or ended, a due one is asked about again in a week */
   'deload-start': () => { deloadSet(Date.now(), null); toast('Deload week started: targets about 10% lighter, half the sets'); },
   'deload-skip': () => { deloadSet(null, Date.now() + DELOAD_DAYS * 864e5); toast('Deload skipped. The coach asks again next week'); },
@@ -4050,7 +4045,7 @@ const ACT = {
     openSheet(`<div class="sh-h"><h3>${h.title}</h3>${xBtn()}</div><ol class="ins-steps" data-how="${h.key}">${h.steps.map(t => `<li><span>${t}</span></li>`).join('')}</ol>${h.note ? `<p class="ins-note">${h.note}</p>` : ''}<button class="btn lg wide" data-act="close">Got it</button>`);
   },
   'theme-flip': flipTheme,
-  'd-theme': el => { const t = el.dataset.t; applyTheme(t); S.profile.theme = t; queue('p', 300); render(false); },
+  'd-theme': el => { const t = el.dataset.t; applyTheme(t); S.profile.theme = t; queue('p', 300); if (el.closest('#sheet')) closeSheet(); render(false); },
   'd-set': el => { S.profile[el.dataset.k] = el.dataset.v; queue('p', 300); render(false); },
   'd-week': el => { S.profile.weekStart = +el.dataset.v; setWeekStart(S.profile.weekStart); queue('p', 300); render(false); },
   'd-step': el => { const k = el.dataset.k, d = +el.dataset.d, p = S.profile; p[k] = k === 'target' ? Math.min(7, Math.max(1, p.target + d)) : Math.min(600, Math.max(15, p.rest + d)); queue('p', 600); render(false); },
@@ -4058,7 +4053,7 @@ const ACT = {
   resend: async () => { if (!S.pendingEmail) return; const { error } = await sb.auth.resend({ type: 'signup', email: S.pendingEmail, options: { emailRedirectTo: location.origin } }); S.authMsg = error ? { text: authErr(error), err: true } : { text: 'Sent again. It can take a minute to arrive.', err: false }; render(false); },
   'ob-unit': el => { S.ob.unit = S.profile.unit = el.dataset.u; render(false); },
   'ob-pick': el => { const k = el.dataset.k, v = el.dataset.v; S.ob[k] = k === 'days' ? +v : v; S.authMsg = null; buzz(); render(false); },
-  'ob-theme': el => { S.ob.theme = el.dataset.t; applyTheme(el.dataset.t); buzz(); render(false); },
+  'ob-theme': el => { S.ob.theme = el.dataset.t; applyTheme(el.dataset.t); buzz(); if (el.closest('#sheet')) closeSheet(); render(false); },
   'ob-back': () => { S.ob.step = Math.max(2, S.ob.step - 1); S.authMsg = null; render(true); },
   'ob-next': () => {
     const o = S.ob, bad = t => { S.authMsg = { text: t, err: true }; render(false); };
