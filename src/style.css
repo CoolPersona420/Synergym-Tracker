@@ -11,7 +11,7 @@
   --t-xs:.69rem; --t-sm:.786rem; --t0:1rem; --t1:1.272rem; --t2:1.618rem; --t3:2.618rem; --t4:4.236rem; --t5:6.854rem;
   --r-sm:.618rem; --r-md:1rem; --r-lg:1.618rem;
   --gl:max(1rem,env(safe-area-inset-left,0px)); --gr:max(1rem,env(safe-area-inset-right,0px));
-  --font-ui:"Plus Jakarta Sans","Avenir Next","Segoe UI",Helvetica,Arial,sans-serif;
+  --font-ui:"Zen Kaku Gothic New","Hiragino Sans","Avenir Next","Segoe UI",Helvetica,Arial,sans-serif;
   --font-serif:"Fraunces","Iowan Old Style",Georgia,serif;
   --font-display:"Teko","Anton",Impact,"Arial Narrow",sans-serif;
   --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -2593,3 +2593,27 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 .save-opts .opt b{font-size:1.02rem}
 .save-opts .opt span{font-size:.86rem;line-height:1.45}
 .save-opts .opt.on{border-color:var(--ink);box-shadow:var(--key-soft)}
+
+/* ---------- the title face: a brush script, like a quick sumi-ink signature (Mr Dafoe), on every page title, the Home
+   greeting, session and split names, the login and onboarding headings, the Coach title and a session's intensity.
+   Its letters run small, so it's set about a quarter larger than the face before it; it's slanted already, so it's
+   never made italic on top. Swashes reach past the letters, so lines get room on both sides ---------- */
+:root{--font-title:"Mr Dafoe","Fraunces",Georgia,serif}
+.h1,.ttl-c,.s-name,.sp-name,.auth-box h2,.ob h1,.co-tt,.display,.display em,.auth-box h2 em,.ob h1 em,.s-hero .bignum .n{
+  font-family:var(--font-title);font-style:normal;font-weight:400;font-variation-settings:normal;letter-spacing:.005em;text-transform:none}
+.h1,.ob h1,.auth-box h2,.sp-name{font-size:clamp(2.9rem,12vw,4rem);line-height:1.08}
+.ttl-c,.co-tt{font-size:2.1rem;line-height:1.1}
+.s-name{font-size:2.8rem;line-height:1.15;height:auto;padding-left:8px}
+.display{font-size:clamp(3.2rem,13.5vw,var(--t4));line-height:1.02}
+@media (max-width:47.99rem){.hero .display{font-size:clamp(2.1rem,9.4vw,2.75rem)}}
+.display em{font-size:1em}
+.display .ln{padding:0 .3em .16em .12em;margin:0 0 -.08em -.12em}
+.s-hero .bignum .n{line-height:.9;padding:0 .12em 0 .04em;font-size:clamp(5.4rem,24vw,9rem)}
+
+/* ---------- painted, not typed: the brush titles get dry-brush fibres (a mask of long, fine streaks along the stroke,
+   most of it solid ink) and ragged ink edges (an SVG displacement filter, #brush-edge in index.html). The fibres are
+   sized in em, so a small title gets finer ones. Lite devices keep the fibres but skip the edge filter ---------- */
+.h1,.ttl-c,.s-name,.sp-name,.auth-box h2,.ob h1,.co-tt,.display,.s-hero .bignum .n{
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='220'><filter id='s' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.005 .2' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -10 0 0 0 7.8'/></filter><rect width='100%' height='100%' filter='url(%23s)'/></svg>");mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='220'><filter id='s' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.005 .2' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -10 0 0 0 7.8'/></filter><rect width='100%' height='100%' filter='url(%23s)'/></svg>");
+  -webkit-mask-size:7.6em 2.6em;mask-size:7.6em 2.6em;filter:url(#brush-edge)}
+html.lite .h1,html.lite .ttl-c,html.lite .s-name,html.lite .sp-name,html.lite .auth-box h2,html.lite .ob h1,html.lite .co-tt,html.lite .display,html.lite .s-hero .bignum .n{filter:none}

@@ -17,13 +17,13 @@
 </p>
 
 <p align="center">
-  <img alt="Version 0.2.6 alpha" src="https://img.shields.io/badge/version-0.2.6--alpha-0E0E0F">
+  <img alt="Version 0.2.7 alpha" src="https://img.shields.io/badge/version-0.2.7--alpha-0E0E0F">
   <a href="https://github.com/CoolPersona420/Synergym-Tracker/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/CoolPersona420/Synergym-Tracker/actions/workflows/test.yml/badge.svg"></a>
 </p>
 
-**Version 0.2.6, alpha.** Everything below works and is tested, but it's early: features may change
+**Version 0.2.7, alpha.** Everything below works and is tested, but it's early: features may change
 and you may meet the odd bug. Please report problems in [Issues](https://github.com/CoolPersona420/Synergym-Tracker/issues).
-The version lives in `package.json` (`0.2.6-alpha`) and shows in Settings › About with the build it came from.
+The version lives in `package.json` (`0.2.7-alpha`) and shows in Settings › About with the build it came from.
 
 ## Highlights
 

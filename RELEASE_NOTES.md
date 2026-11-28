@@ -10,6 +10,18 @@ Each version is set in `package.json` and shows in **Settings › About**. Plann
 
 ---
 
+## 0.2.7-alpha · 28 November 2026
+
+**Brush-painted titles**
+
+- **Painted titles:** every title (Home's greeting, page titles, session and split names, the login, the Coach) is
+  set in a fast brush script with dry-brush fibres and ragged ink edges, as if painted with a sumi brush.
+- **A body font to match:** the rest of the app is set in Zen Kaku Gothic New, a calm Japanese gothic that lets the
+  brush titles lead.
+- **Numbers stay crisp:** weights, reps and scores keep their condensed figures; small labels stay monospaced.
+
+---
+
 ## 0.2.6-alpha · 28 November 2026
 
 **Clearer saving, and a clean background**
