@@ -165,6 +165,17 @@ and add the two variables with `vercel env add`.
 
 The links in confirmation and password-reset emails will now land on your site.
 
+## Releasing
+
+Every release is tested on **Dev** before it goes live.
+
+1. Work goes to the `dev` branch. Vercel deploys it to the Dev site,
+   https://synergym-tracker-log-git-dev-synergym.vercel.app (behind Vercel login). Dev uses the live Supabase project,
+   so test with a test account.
+2. Lint, the unit tests and the full browser suite pass.
+3. The release is tried on Dev, on a phone and a computer.
+4. Only then is `main` fast-forwarded to `dev`, and Vercel deploys the live site.
+
 ## Local development
 
 ```bash
