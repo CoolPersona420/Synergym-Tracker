@@ -1161,6 +1161,10 @@ function doneLines(done, nx, hi) {
   return [good, say(pick(['Workout done.', 'That’s a wrap.'], 7))];
 }
 
+/* how hot a session's intensity reads, 0 to 1: nothing under 50, warming through moderate and hard, full at 100.
+   The number and its dot are painted from ink towards the theme's brush colour by this much (style.css: #sint) */
+const heatOf = v => (Math.min(1, Math.max(0, ((+v || 0) - 50) / 50)) ** 1.3).toFixed(3);
+
 /* ---------- Home ---------- */
 function vToday() {
   const now = new Date(), a = activeSession(), list = sorted();
@@ -1847,7 +1851,7 @@ function vSession() {
     <button class="iconbtn" data-act="sess-menu" aria-label="Session options">${ICON.dots}</button></header>
   <div class="s-meta lbl rv"><span>${fmtDate(s.startedAt)} · ${fmtTime(s.startedAt)}${sp ? ` · ${esc(sp.name)} · ${dayLabel(sp.days, s.splitDay ?? 0)}` : ''} · ${live ? 'live' : ed ? '<b class="ed-tag">editing</b>' : 'completed'}</span>${live || ed ? deloadTog(s) : dlTag(s)}</div>${sessCoachBand(s)}
   <section class="s-hero rv"><div><div class="lbl">Session intensity</div>
-    <div class="bignum" id="sint" style="margin-top:10px">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
+    <div class="bignum" id="sint" style="margin-top:10px;--heat:${heatOf(a.int)}">${big(Math.round(a.int))}<span class="dot${live ? ' live' : ''}"></span></div>
     <div class="tier" id="stier">${tierText(a)}</div></div>
     <button class="fab magnet" data-act="add-ex" aria-label="Add exercise"><span class="fab-l" aria-hidden="true">Add exercise</span>${ICON.plus}</button></section>
   <div class="wave rv" id="wave">${wave(s)}</div>
@@ -2129,7 +2133,7 @@ const liveSoon = () => { clearTimeout(liveT); liveT = setTimeout(liveRefresh, 12
 function liveRefresh() {
   clearTimeout(liveT);
   const s = cur(); if (!s || S.view !== 'session') return; compute(); const a = S.A.sess.get(s.id);
-  const si = $('#sint'); if (si) { const n = si.querySelector('.n'); if (n) { n.textContent = Math.round(a.int); rollTo(n, Math.round(a.int), 'sint:' + S.arg); } }
+  const si = $('#sint'); if (si) { si.style.setProperty('--heat', heatOf(a.int)); const n = si.querySelector('.n'); if (n) { n.textContent = Math.round(a.int); rollTo(n, Math.round(a.int), 'sint:' + S.arg); } }
   const t = $('#stier'); if (t) t.innerHTML = tierText(a);
   const w = $('#wave'); if (w) w.innerHTML = wave(s);
   const sp = $('#strip'); if (sp) sp.innerHTML = stripHTML(a);
