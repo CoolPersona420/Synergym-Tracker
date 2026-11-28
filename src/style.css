@@ -2471,12 +2471,13 @@ input,.n,.v,.kv,.stat,.bignum,.sugg,.row .d,.ex .sets,.lb-d,.w{font-variant-nume
 .auth{grid-template-rows:1fr auto 1.618fr;place-items:start center}
 .auth > .auth-main{grid-row:2}
 
-/* ---------- fine grain: a still, even film of tiny specks over the page, no streaks or blotches. The tile is drawn at
-   twice its size and shown at half, so the specks stay finer than a pixel of text on every screen ---------- */
-body::after{animation:none;opacity:.05;top:0;left:0;width:100%;height:100%;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='g' x='0' y='0'><feTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/><feComponentTransfer><feFuncR type='linear' slope='1.6' intercept='-.3'/><feFuncG type='linear' slope='1.6' intercept='-.3'/><feFuncB type='linear' slope='1.6' intercept='-.3'/></feComponentTransfer></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
-  background-size:128px 128px}
-:root.is-dark body::after{opacity:.06}
+/* ---------- paper: a fine tooth with only a whisper of uneven tone, like good cotton paper (or black card in the
+   dark). The specks are a warm ink, light in the dark, and only their strength varies, so nothing streaks or
+   blotches. The tile is drawn at twice its size and shown at half, so the tooth stays fine on every screen ---------- */
+body::after{animation:none;opacity:.55;top:0;left:0;width:100%;height:100%;background-size:160px 160px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='p' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' seed='3' stitchTiles='stitch' result='f'/><feTurbulence type='fractalNoise' baseFrequency='.02' numOctaves='2' seed='11' stitchTiles='stitch' result='s'/><feComposite in='f' in2='s' operator='arithmetic' k1='0' k2='.85' k3='.15' k4='0' result='m'/><feColorMatrix in='m' type='matrix' values='0 0 0 0 .24  0 0 0 0 .2  0 0 0 0 .15  -.37 -.37 -.37 0 .68'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>")}
+:root.is-dark body::after{opacity:.4;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='p' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' seed='3' stitchTiles='stitch' result='f'/><feTurbulence type='fractalNoise' baseFrequency='.02' numOctaves='2' seed='11' stitchTiles='stitch' result='s'/><feComposite in='f' in2='s' operator='arithmetic' k1='0' k2='.85' k3='.15' k4='0' result='m'/><feColorMatrix in='m' type='matrix' values='0 0 0 0 .95  0 0 0 0 .93  0 0 0 0 .88  -.37 -.37 -.37 0 .68'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>")}
 
 /* ---------- Hokusai: the Great Wave, through the Kanagawa palette ---------- */
 :root[data-theme="kanagawa"]{
