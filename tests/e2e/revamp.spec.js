@@ -67,7 +67,9 @@ test('the session bar shows when the session started over its sets and volume, F
   await login(page, fake, 'A');
   await page.goto('/session/' + live.id);
   const bar = page.locator('.transport');
-  const started = await page.evaluate(id => { const d = new Date(Date.now() - (24 * 60 + 51) * 1000); return [d.getHours(), d.getMinutes()]; }, live.id);
+  /* the minute the seeded session started, read in the page's time zone (worked out from now again it can tick over
+     to the next minute and fail by one) */
+  const started = await page.evaluate(at => { const d = new Date(at); return [d.getHours(), d.getMinutes()]; }, live.started_at);
   await expect(bar.locator('.tsum .tl')).toContainText(/started \d{1,2}[.:]\d{2}/i);
   await expect(bar.locator('.tsum .tl time')).toContainText(String(started[1]).padStart(2, '0'));
   await expect(bar.locator('.tsum .tv')).toContainText('6 sets');
